@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -78,5 +79,5 @@ func RunGoose(db *gorm.DB, cfg *conf.Config, command string, args ...string) err
 	if err := setupGoose(cfg); err != nil {
 		return err
 	}
-	return goose.Run(command, sqlDB, ".", args...)
+	return goose.RunContext(context.Background(), command, sqlDB, ".", args...)
 }
