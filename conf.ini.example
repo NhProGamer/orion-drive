@@ -1,0 +1,45 @@
+; OrionDrive configuration.
+; Every key can be overridden with an environment variable: OD_CONF_<Section>_<Key>
+; e.g. OD_CONF_System_Listen=:8080  or  OD_CONF_OIDC_ClientSecret=xxx
+
+[System]
+; Listen address for the HTTP server.
+Listen = :5212
+; debug | release
+Mode = debug
+; Random secret used to sign sessions and JWTs. CHANGE THIS.
+SessionSecret = change-me-to-a-long-random-string
+; Public base URL of this instance (used to build the OIDC redirect URI).
+SiteURL = http://localhost:5212
+
+[Database]
+; sqlite | mysql | postgres | mssql
+Type = sqlite
+; For sqlite: path to the database file.
+DBFile = data/orion.db
+; For network databases:
+Host =
+Port =
+User =
+Password =
+Name = orion
+
+[OIDC]
+; OpenID Connect provider (Google, Keycloak, Authentik, Azure AD, ...).
+Issuer = https://accounts.google.com
+ClientID =
+ClientSecret =
+; Must match SiteURL + /api/v1/auth/oidc/callback in the provider config.
+RedirectURI = http://localhost:5212/api/v1/auth/oidc/callback
+; Space-separated scopes.
+Scopes = openid profile email
+
+[Storage]
+; Base directory for the default local storage policy.
+LocalBasePath = data/storage
+
+[Redis]
+; Leave Server empty to use the in-memory cache.
+Server =
+Password =
+DB = 0

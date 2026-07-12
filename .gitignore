@@ -1,0 +1,22 @@
+# Go
+/orion-drive
+/orion
+*.exe
+*.test
+*.out
+
+# Runtime data
+/data/
+conf.ini
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/application/statics/assets/
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
