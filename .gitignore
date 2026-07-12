@@ -12,8 +12,11 @@ conf.ini
 # Frontend
 /frontend/node_modules/
 /frontend/dist/
-/application/statics/assets/
 *.local
+
+# Built SPA assets (keep the committed placeholder index.html)
+/application/statics/dist/*
+!/application/statics/dist/index.html
 
 # Editor / OS
 .DS_Store

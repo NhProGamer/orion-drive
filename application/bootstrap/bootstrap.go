@@ -2,11 +2,17 @@
 package bootstrap
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/conf"
+	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager"
+	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local" // register the local storage backend
 	"github.com/NhProGamer/orion-drive/repository"
 	"gorm.io/gorm"
 )
@@ -18,6 +24,9 @@ type Dependency struct {
 	DB     *gorm.DB
 	Cache  cache.Store
 	Repo   *repository.Repository
+	Files  *filemanager.Manager
+	Auth   *auth.Authenticator
+	Signer *auth.Signer
 }
 
 // Init opens the database and assembles the dependency container. It does not
@@ -30,12 +39,29 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		return nil, err
 	}
 
+	c := cache.NewMemory()
+	repo := repository.New(db)
+	tmpDir := filepath.Join(filepath.Dir(cfg.Database.DBFile), "tmp", "uploads")
+
+	// OIDC discovery is best-effort: if the provider is unreachable or
+	// unconfigured, the server still boots (login just stays unavailable).
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	authn, err := auth.NewAuthenticator(ctx, cfg, c)
+	if err != nil {
+		logger.Warn("OIDC provider discovery failed; login disabled", "error", err)
+		authn = &auth.Authenticator{}
+	}
+
 	dep := &Dependency{
 		Config: cfg,
 		Logger: logger,
 		DB:     db,
-		Cache:  cache.NewMemory(),
-		Repo:   repository.New(db),
+		Cache:  c,
+		Repo:   repo,
+		Files:  filemanager.NewManager(repo, c, tmpDir),
+		Auth:   authn,
+		Signer: auth.NewSigner(cfg.System.SessionSecret),
 	}
 	return dep, nil
 }
