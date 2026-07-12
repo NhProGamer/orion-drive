@@ -192,23 +192,29 @@ func (ctl *Controller) Purge(c *gin.Context) {
 	respond(c, serializer.OK(nil))
 }
 
-// Download streams a file's content to the client.
+// Download delivers a file's content: it redirects to a direct provider URL
+// when the backend offers one, otherwise streams the (rate-limited) content.
 func (ctl *Controller) Download(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
 		return
 	}
-	rc, f, err := ctl.dep.Files.Download(c.Request.Context(), ctl.user(c), id)
+	target, err := ctl.dep.Files.Download(c.Request.Context(), ctl.user(c), id)
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	defer rc.Close()
 
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(f.Name)))
+	if target.URL != "" {
+		c.Redirect(http.StatusFound, target.URL)
+		return
+	}
+
+	defer target.Stream.Close()
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(target.File.Name)))
 	c.Header("Content-Type", "application/octet-stream")
-	http.ServeContent(c.Writer, c.Request, f.Name, f.UpdatedAt, rc)
+	http.ServeContent(c.Writer, c.Request, target.File.Name, target.File.UpdatedAt, target.Stream)
 }
 
 // Capacity returns the user's storage usage and quota.

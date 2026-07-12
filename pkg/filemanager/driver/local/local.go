@@ -70,6 +70,12 @@ func (d *Driver) Put(ctx context.Context, src string, r io.Reader, size int64) e
 	return nil
 }
 
+// Source has no direct URL for local storage; downloads are streamed by
+// OrionDrive itself via Open.
+func (d *Driver) Source(ctx context.Context, src string, opts driver.SourceOptions) (string, error) {
+	return "", nil
+}
+
 // Open returns a seekable reader for src.
 func (d *Driver) Open(ctx context.Context, src string) (driver.ReadSeekCloser, error) {
 	abs, err := d.resolve(src)

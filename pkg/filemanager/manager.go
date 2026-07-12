@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
@@ -213,32 +214,54 @@ func (m *Manager) Capacity(ctx context.Context, user *model.User) (used, total i
 	return used, total, nil
 }
 
-// Download opens the primary entity of a file for reading.
-func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (driver.ReadSeekCloser, *model.File, error) {
+// DownloadTarget is how a file's content should be delivered: either a direct
+// URL to redirect the client to (URL != ""), or a stream for OrionDrive to
+// serve itself (Stream != nil, already rate-limited).
+type DownloadTarget struct {
+	File   *model.File
+	URL    string
+	Stream driver.ReadSeekCloser
+}
+
+// Download resolves how to deliver a file. If the backend can hand out a direct
+// (e.g. presigned) URL, the client is sent there; otherwise the content is
+// streamed through OrionDrive, throttled to the group's download speed limit.
+func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (*DownloadTarget, error) {
 	f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if f.IsFolder() || f.PrimaryEntityID == nil {
-		return nil, nil, errors.New("file has no content")
+		return nil, errors.New("file has no content")
 	}
 	e, err := m.repo.Entity.GetByID(ctx, *f.PrimaryEntityID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	h, err := m.driverForPolicy(policy)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+
+	// Prefer a direct provider URL when the backend supports it.
+	opts := driver.SourceOptions{Expire: time.Hour, DownloadFilename: f.Name}
+	if url, err := h.Source(ctx, e.Source, opts); err == nil && url != "" {
+		return &DownloadTarget{File: f, URL: url}, nil
+	}
+
 	rc, err := h.Open(ctx, e.Source)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return rc, f, nil
+	var speed int64
+	if user.Group != nil {
+		speed = user.Group.SpeedLimit
+	}
+	return &DownloadTarget{File: f, Stream: newThrottledReader(rc, speed)}, nil
 }
 
 // ensureParent verifies that parentID (when set) is an existing folder.
