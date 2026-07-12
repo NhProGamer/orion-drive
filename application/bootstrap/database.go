@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/NhProGamer/orion-drive/conf"
-	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/migrations"
 	"github.com/glebarez/sqlite"
+	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -30,39 +31,52 @@ func OpenDatabase(cfg *conf.Config) (*gorm.DB, error) {
 	}
 }
 
-// Migrate creates or updates every table and seeds the default group and
-// local storage policy on first run.
-func Migrate(db *gorm.DB, cfg *conf.Config) error {
-	if err := db.AutoMigrate(model.All()...); err != nil {
-		return fmt.Errorf("automigrate: %w", err)
+// gooseDialect maps the configured database type to a goose dialect.
+func gooseDialect(dbType string) string {
+	switch dbType {
+	case "", "sqlite":
+		return "sqlite3"
+	case "mysql":
+		return "mysql"
+	case "postgres":
+		return "postgres"
+	case "mssql":
+		return "mssql"
+	default:
+		return "sqlite3"
 	}
-	return seed(db, cfg)
 }
 
-// seed inserts the baseline records needed for a usable install.
-func seed(db *gorm.DB, cfg *conf.Config) error {
-	var policyCount int64
-	if err := db.Model(&model.StoragePolicy{}).Count(&policyCount).Error; err != nil {
+// setupGoose points goose at the embedded migration files and selects the
+// dialect for the configured database.
+func setupGoose(cfg *conf.Config) error {
+	goose.SetBaseFS(migrations.FS)
+	return goose.SetDialect(gooseDialect(cfg.Database.Type))
+}
+
+// Migrate applies all pending migrations (schema + seed) silently. Called on
+// server startup so the database is always up to date.
+func Migrate(db *gorm.DB, cfg *conf.Config) error {
+	sqlDB, err := db.DB()
+	if err != nil {
 		return err
 	}
-	if policyCount == 0 {
-		policy := model.StoragePolicy{
-			Name:     "Default local",
-			Type:     model.PolicyTypeLocal,
-			BasePath: cfg.Storage.LocalBasePath,
-		}
-		if err := db.Create(&policy).Error; err != nil {
-			return err
-		}
-		group := model.Group{
-			Name:            "Default",
-			MaxStorage:      50 << 30, // 50 GiB
-			StoragePolicyID: policy.ID,
-			Permissions:     model.MustJSON(map[string]bool{"is_admin": true}),
-		}
-		if err := db.Create(&group).Error; err != nil {
-			return err
-		}
+	if err := setupGoose(cfg); err != nil {
+		return err
 	}
-	return nil
+	goose.SetLogger(goose.NopLogger())
+	return goose.Up(sqlDB, ".")
+}
+
+// RunGoose executes a goose command (up, down, status, version, reset, ...)
+// with visible output. Used by the `migrate` CLI command.
+func RunGoose(db *gorm.DB, cfg *conf.Config, command string, args ...string) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	if err := setupGoose(cfg); err != nil {
+		return err
+	}
+	return goose.Run(command, sqlDB, ".", args...)
 }

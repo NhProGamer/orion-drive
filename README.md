@@ -26,7 +26,7 @@ download, quota) with the "Nebula" design system.
 cp conf.ini.example conf.ini
 
 # 2. Backend
-go run . migrate        # create the database schema
+go run . migrate        # apply DB migrations (goose); `server` also runs these on startup
 go run . server         # start API + embedded SPA on :5212
 
 # 3. Frontend (dev, with hot reload proxying the API)
@@ -49,6 +49,7 @@ cd .. && go build -o orion-drive .
 cmd/            CLI commands (server, migrate)
 conf/           configuration (INI + env overrides)
 application/    bootstrap (DI) and embedded statics
+migrations/     goose SQL migrations (embedded)
 model/          GORM models
 repository/     data-access layer
 pkg/            auth, cache, serializer, filemanager (driver/fs/chunk)
