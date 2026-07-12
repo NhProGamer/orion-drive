@@ -15,6 +15,7 @@ import (
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local" // register the local storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"    // register the S3 storage backend
 	"github.com/NhProGamer/orion-drive/repository"
+	"github.com/NhProGamer/orion-drive/service/share"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +27,7 @@ type Dependency struct {
 	Cache  cache.Store
 	Repo   *repository.Repository
 	Files  *filemanager.Manager
+	Shares *share.Service
 	Auth   *auth.Authenticator
 	Signer *auth.Signer
 }
@@ -43,6 +45,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 	c := cache.NewMemory()
 	repo := repository.New(db)
 	tmpDir := filepath.Join(filepath.Dir(cfg.Database.DBFile), "tmp", "uploads")
+	files := filemanager.NewManager(repo, c, tmpDir)
 
 	// OIDC discovery is best-effort: if the provider is unreachable or
 	// unconfigured, the server still boots (login just stays unavailable).
@@ -60,7 +63,8 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		DB:     db,
 		Cache:  c,
 		Repo:   repo,
-		Files:  filemanager.NewManager(repo, c, tmpDir),
+		Files:  files,
+		Shares: share.New(repo, files),
 		Auth:   authn,
 		Signer: auth.NewSigner(cfg.System.SessionSecret),
 	}

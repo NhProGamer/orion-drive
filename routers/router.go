@@ -26,6 +26,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	api := r.Group(constants.APIPrefix)
 	registerAuthRoutes(api, ctl, dep)
 	registerFileRoutes(api, ctl)
+	registerShareRoutes(api, ctl)
 
 	if err := statics.Register(r); err != nil {
 		return nil, err
@@ -68,4 +69,15 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.DELETE("/upload/:sid", ctl.CancelUpload)
 
 	f.GET("/user/capacity", ctl.Capacity)
+}
+
+func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
+	// Authenticated: manage your own shares.
+	api.POST("/share", middleware.RequireAuth(), ctl.CreateShare)
+	api.GET("/share", middleware.RequireAuth(), ctl.ListShares)
+	api.DELETE("/share/:token", middleware.RequireAuth(), ctl.DeleteShare)
+
+	// Public: view and download a shared file (no authentication).
+	api.GET("/share/:token", ctl.ShareView)
+	api.GET("/share/:token/content", ctl.ShareDownload)
 }
