@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
   Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
-  Download, Pencil, Star, RotateCcw, Info,
+  Download, Pencil, Star, RotateCcw, Info, Share2,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -18,6 +18,7 @@ import StoragePanel from './StoragePanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
 import TweaksPanel from './TweaksPanel.vue'
 import Toasts from './Toasts.vue'
+import ShareDialog from './ShareDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
 const files = useFilesStore()
@@ -37,6 +38,7 @@ const dialog = ref<Dialog>(null)
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const newMenuOpen = ref(false)
 const dragDepth = ref(0)
+const shareNode = ref<FileNode | null>(null)
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -107,6 +109,9 @@ function ctxItems(): MenuItem[] {
   } else {
     items.push({ id: 'download', label: 'Télécharger', icon: Download })
   }
+  if (!multi && n && n.type === 'file') {
+    items.push({ id: 'share', label: 'Partager', icon: Share2 })
+  }
   if (!files.readOnly && n) {
     items.push({ sep: true })
     if (!multi) {
@@ -128,6 +133,7 @@ function menuAction(id: string) {
     case 'download': doDownload(sel); break
     case 'rename': startRename(); break
     case 'star': if (sel[0]) files.toggleStar(sel[0]); break
+    case 'share': if (sel[0]) shareNode.value = sel[0]; break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break
     case 'purge': dialog.value = { type: 'purge', ids: [...files.sel] }; break
@@ -311,6 +317,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                 </template>
                 <template v-else>
                   <button class="icon-btn" title="Télécharger" @click="doDownload(files.selNodes)"><Download :size="16" /></button>
+                  <button v-if="files.sel.length === 1 && files.selNodes[0]?.type === 'file'" class="icon-btn" title="Partager" @click="shareNode = files.selNodes[0]"><Share2 :size="16" /></button>
                   <button v-if="!files.readOnly && files.sel.length === 1" class="icon-btn" title="Renommer" @click="startRename"><Pencil :size="16" /></button>
                   <button v-if="!files.readOnly" class="icon-btn" title="Corbeille" @click="files.trash([...files.sel])"><Trash2 :size="16" /></button>
                 </template>
@@ -450,6 +457,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         </template>
       </div>
     </div>
+
+    <ShareDialog v-if="shareNode" :node="shareNode" @close="shareNode = null" />
 
     <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
     <Toasts />

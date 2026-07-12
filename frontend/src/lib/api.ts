@@ -96,5 +96,37 @@ export const api = {
   completeUpload: (sid: string) => post<FileNode>(`/upload/${sid}/complete`),
   cancelUpload: (sid: string) => http.delete(`/upload/${sid}`),
 
+  // Sharing
+  createShare: (input: { file_id: number; password?: string; expires_days?: number; max_downloads?: number }) =>
+    post<{ token: string; url: string }>('/share', input),
+  listShares: () => get<ShareInfo[]>('/share'),
+  deleteShare: (token: string) => http.delete(`/share/${token}`),
+  shareView: (token: string) => get<ShareView>(`/share/${token}`),
+  shareContentUrl: (token: string, password?: string) =>
+    `/api/v1/share/${token}/content` + (password ? `?password=${encodeURIComponent(password)}` : ''),
+
   logout: () => post('/auth/logout'),
+}
+
+export interface ShareInfo {
+  token: string
+  file_id: number
+  url: string
+  has_password: boolean
+  expires: string | null
+  remain_downloads: number | null
+  views: number
+  downloads: number
+  created_at: string
+}
+
+export interface ShareView {
+  token: string
+  name: string
+  size: number
+  has_password: boolean
+  expired: boolean
+  exhausted: boolean
+  downloads: number
+  owner: string
 }
