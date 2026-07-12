@@ -24,3 +24,7 @@ conf.ini
 .idea/
 .vscode/
 *.swp
+
+# TS build info
+/frontend/*.tsbuildinfo
+/frontend/node_modules/.tmp/
