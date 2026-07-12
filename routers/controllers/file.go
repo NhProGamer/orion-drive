@@ -37,6 +37,16 @@ func (ctl *Controller) ListFiles(c *gin.Context) {
 		return
 	}
 
+	if c.Query("all") == "1" {
+		files, err := ctl.dep.Files.ListAllFiles(ctx, u)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		respond(c, serializer.OK(toDTOs(files, owner)))
+		return
+	}
+
 	parentID, err := parseParentID(c.Query("parent"))
 	if err != nil {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))

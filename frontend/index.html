@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr" data-direction="nebula" data-theme="dark" data-density="confortable" data-halo="on" data-thumb="m">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OrionDrive</title>
+    <script>
+      // Restore the saved theme before paint to avoid a flash.
+      (function () {
+        try {
+          var t = localStorage.getItem('od-theme')
+          if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+          document.documentElement.dataset.theme = t
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

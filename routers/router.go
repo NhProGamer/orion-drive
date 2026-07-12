@@ -35,6 +35,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 
 func registerAuthRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *bootstrap.Dependency) {
 	auth := api.Group("/auth")
+	auth.GET("/config", ctl.AuthConfig)
 	auth.GET("/oidc/login", ctl.OIDCLogin)
 	auth.GET("/oidc/callback", ctl.OIDCCallback)
 	auth.POST("/logout", ctl.Logout)

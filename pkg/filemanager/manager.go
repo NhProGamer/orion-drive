@@ -60,6 +60,12 @@ func (m *Manager) ListTrashed(ctx context.Context, user *model.User) ([]model.Fi
 	return m.repo.File.ListTrashed(ctx, user.ID)
 }
 
+// ListAllFiles returns every non-trashed file owned by the user (for the
+// storage-usage view).
+func (m *Manager) ListAllFiles(ctx context.Context, user *model.User) ([]model.File, error) {
+	return m.repo.File.ListAllFiles(ctx, user.ID)
+}
+
 // Search returns non-trashed files matching query.
 func (m *Manager) Search(ctx context.Context, user *model.User, query string) ([]model.File, error) {
 	return m.repo.File.Search(ctx, user.ID, query)

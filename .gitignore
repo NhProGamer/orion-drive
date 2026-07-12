@@ -14,9 +14,10 @@ conf.ini
 /frontend/dist/
 *.local
 
-# Built SPA assets (keep the committed placeholder index.html)
+# Built SPA assets (a fresh checkout embeds only .gitkeep; the backend then
+# serves a placeholder page until `npm run build` fills this directory)
 /application/statics/dist/*
-!/application/statics/dist/index.html
+!/application/statics/dist/.gitkeep
 
 # Editor / OS
 .DS_Store

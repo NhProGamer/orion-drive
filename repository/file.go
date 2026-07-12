@@ -46,6 +46,16 @@ func (r *FileRepo) ListChildren(ctx context.Context, ownerID uint, parentID *uin
 	return files, err
 }
 
+// ListAllFiles returns every non-trashed file (not folders) owned by ownerID.
+// Used by the storage-usage view.
+func (r *FileRepo) ListAllFiles(ctx context.Context, ownerID uint) ([]model.File, error) {
+	var files []model.File
+	err := r.db.WithContext(ctx).
+		Where("owner_id = ? AND type = ?", ownerID, model.FileTypeFile).
+		Order("size desc").Find(&files).Error
+	return files, err
+}
+
 // ListTrashed returns every trashed file owned by ownerID.
 func (r *FileRepo) ListTrashed(ctx context.Context, ownerID uint) ([]model.File, error) {
 	var files []model.File

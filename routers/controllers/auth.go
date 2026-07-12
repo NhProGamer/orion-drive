@@ -44,6 +44,14 @@ func (ctl *Controller) OIDCCallback(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/")
 }
 
+// AuthConfig reports which login methods are available (used by the login page).
+func (ctl *Controller) AuthConfig(c *gin.Context) {
+	respond(c, serializer.OK(gin.H{
+		"oidc": ctl.dep.Auth.Enabled(),
+		"dev":  ctl.dep.Config.System.Mode == "debug",
+	}))
+}
+
 // Logout clears the session cookie.
 func (ctl *Controller) Logout(c *gin.Context) {
 	ctl.clearSession(c)
