@@ -20,3 +20,17 @@ func (r *GroupRepo) GetByID(ctx context.Context, id uint) (*model.Group, error) 
 	}
 	return &g, err
 }
+
+// List returns every group, oldest first.
+func (r *GroupRepo) List(ctx context.Context) ([]model.Group, error) {
+	var groups []model.Group
+	err := r.db.WithContext(ctx).Order("id asc").Find(&groups).Error
+	return groups, err
+}
+
+// SetStoragePolicy points a group at a storage policy.
+func (r *GroupRepo) SetStoragePolicy(ctx context.Context, groupID, policyID uint) error {
+	return r.db.WithContext(ctx).Model(&model.Group{}).
+		Where("id = ?", groupID).
+		Update("storage_policy_id", policyID).Error
+}

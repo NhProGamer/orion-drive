@@ -20,3 +20,15 @@ func (r *PolicyRepo) GetByID(ctx context.Context, id uint) (*model.StoragePolicy
 	}
 	return &p, err
 }
+
+// List returns every storage policy, oldest first.
+func (r *PolicyRepo) List(ctx context.Context) ([]model.StoragePolicy, error) {
+	var policies []model.StoragePolicy
+	err := r.db.WithContext(ctx).Order("id asc").Find(&policies).Error
+	return policies, err
+}
+
+// Create inserts a new storage policy.
+func (r *PolicyRepo) Create(ctx context.Context, p *model.StoragePolicy) error {
+	return r.db.WithContext(ctx).Create(p).Error
+}
