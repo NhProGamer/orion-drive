@@ -18,5 +18,24 @@ type Entity struct {
 	StoragePolicyID uint   `json:"storage_policy_id"`
 	UploadSessionID string `gorm:"size:64;index" json:"-"`
 	CreatedByID     uint   `json:"created_by_id"`
-	Props           JSON   `gorm:"type:json" json:"-"`
+	// FileID links a version entity to its file, giving the file a version history.
+	FileID *uint `gorm:"index" json:"file_id"`
+	Props  JSON  `gorm:"type:json" json:"-"`
 }
+
+// EntityProps is the typed content of Entity.Props.
+type EntityProps struct {
+	// IV is the base64 AES-CTR initialisation vector when the object is
+	// encrypted at rest; empty means the object is stored in the clear.
+	IV string `json:"iv,omitempty"`
+}
+
+// DecodeProps unmarshals the entity's Props into a typed struct.
+func (e *Entity) DecodeProps() EntityProps {
+	var p EntityProps
+	_ = e.Props.Unmarshal(&p)
+	return p
+}
+
+// Encrypted reports whether the stored object is encrypted at rest.
+func (e *Entity) Encrypted() bool { return e.DecodeProps().IV != "" }

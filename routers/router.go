@@ -73,6 +73,10 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.POST("/file/purge", ctl.Purge)
 	f.GET("/file/content/:id", ctl.Download)
 
+	f.GET("/file/versions/:id", ctl.ListVersions)
+	f.POST("/file/version/restore", ctl.RestoreVersion)
+	f.POST("/file/version/delete", ctl.DeleteVersion)
+
 	f.POST("/upload", ctl.InitUpload)
 	f.POST("/upload/:sid/chunk", ctl.PutChunk)
 	f.POST("/upload/:sid/complete", ctl.CompleteUpload)

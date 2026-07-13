@@ -24,6 +24,7 @@ var (
 	ErrQuota       = errors.New("storage quota exceeded")
 	ErrNotFound    = repository.ErrNotFound
 	ErrNotAFolder  = errors.New("destination is not a folder")
+	ErrLocked      = errors.New("file is locked")
 )
 
 // Manager coordinates logical files (repository) and physical storage (driver).
@@ -175,9 +176,16 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		if err != nil {
 			continue
 		}
-		if f.PrimaryEntityID != nil {
+		// Remove every stored version of the file.
+		versions, _ := m.repo.Entity.ListVersions(ctx, f.ID)
+		if len(versions) == 0 && f.PrimaryEntityID != nil {
 			m.removeEntity(ctx, *f.PrimaryEntityID)
 			user.StorageUsed -= f.Size
+			continue
+		}
+		for i := range versions {
+			m.removeEntity(ctx, versions[i].ID)
+			user.StorageUsed -= versions[i].Size
 		}
 	}
 	if user.StorageUsed < 0 {
@@ -202,11 +210,13 @@ func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
 	_ = m.repo.Entity.Delete(ctx, entityID)
 }
 
-// Capacity returns used and total bytes for the user's quota.
+// Capacity returns used and total bytes for the user's quota. Used is the
+// maintained StorageUsed counter, which reflects every stored version (and
+// trashed files still occupying space), not just the current version sizes.
 func (m *Manager) Capacity(ctx context.Context, user *model.User) (used, total int64, err error) {
-	used, err = m.repo.File.SumSize(ctx, user.ID)
-	if err != nil {
-		return 0, 0, err
+	used = user.StorageUsed
+	if used < 0 {
+		used = 0
 	}
 	if user.Group != nil {
 		total = user.Group.MaxStorage

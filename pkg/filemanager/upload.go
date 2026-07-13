@@ -33,6 +33,9 @@ type UploadSession struct {
 	PolicyID  uint   `json:"policy_id"`
 	TempPath  string `json:"temp_path"`
 	Received  []bool `json:"received"`
+	// FileID is set when the upload replaces an existing file, adding a new
+	// version to it instead of creating a new file.
+	FileID *uint `json:"file_id,omitempty"`
 }
 
 // NumChunks returns how many chunks the upload is split into.
@@ -67,8 +70,16 @@ func (m *Manager) InitUpload(ctx context.Context, user *model.User, parentID *ui
 	if err := m.ensureParent(ctx, user, parentID); err != nil {
 		return nil, err
 	}
-	if _, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err == nil {
-		return nil, ErrConflict
+
+	// If a file with this name already exists, the upload becomes a new version
+	// of it (folders still conflict).
+	var targetFileID *uint
+	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err == nil {
+		if existing.IsFolder() {
+			return nil, ErrConflict
+		}
+		id := existing.ID
+		targetFileID = &id
 	}
 
 	// Quota check.
@@ -101,6 +112,7 @@ func (m *Manager) InitUpload(ctx context.Context, user *model.User, parentID *ui
 		ChunkSize: DefaultChunkSize,
 		PolicyID:  policy.ID,
 		TempPath:  filepath.Join(m.tmpDir, id+".part"),
+		FileID:    targetFileID,
 	}
 	sess.Received = make([]bool, sess.NumChunks())
 	if err := m.saveSession(sess); err != nil {
@@ -211,17 +223,40 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		return nil, err
 	}
 
-	file := &model.File{
-		Name:            s.Name,
-		Type:            model.FileTypeFile,
-		OwnerID:         user.ID,
-		ParentID:        s.ParentID,
-		PrimaryEntityID: &entity.ID,
-		Size:            s.Size,
-		StoragePolicyID: policy.ID,
-	}
-	if err := m.repo.File.Create(ctx, file); err != nil {
-		return nil, err
+	var file *model.File
+	if s.FileID != nil {
+		// Add a new version to the existing file; the old versions are kept.
+		file, err = m.repo.File.GetByID(ctx, user.ID, *s.FileID)
+		if err != nil {
+			return nil, err
+		}
+		entity.FileID = &file.ID
+		if err := m.repo.Entity.Update(ctx, entity); err != nil {
+			return nil, err
+		}
+		file.PrimaryEntityID = &entity.ID
+		file.Size = s.Size
+		file.StoragePolicyID = policy.ID
+		if err := m.repo.File.Update(ctx, file); err != nil {
+			return nil, err
+		}
+	} else {
+		file = &model.File{
+			Name:            s.Name,
+			Type:            model.FileTypeFile,
+			OwnerID:         user.ID,
+			ParentID:        s.ParentID,
+			PrimaryEntityID: &entity.ID,
+			Size:            s.Size,
+			StoragePolicyID: policy.ID,
+		}
+		if err := m.repo.File.Create(ctx, file); err != nil {
+			return nil, err
+		}
+		entity.FileID = &file.ID
+		if err := m.repo.Entity.Update(ctx, entity); err != nil {
+			return nil, err
+		}
 	}
 
 	user.StorageUsed += s.Size
