@@ -119,9 +119,9 @@ function ctxItems(): MenuItem[] {
   if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
     items.push({ id: 'extract', label: 'Extraire ici', icon: FolderInput })
   }
-  if (!multi && n && n.type === 'file') {
+  if (!multi && n && auth.canShare) {
     items.push({ id: 'share', label: 'Partager', icon: Share2 })
-    items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
+    if (n.type === 'file') items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
   }
   if (!files.readOnly && n) {
     items.push({ sep: true })

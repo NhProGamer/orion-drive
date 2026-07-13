@@ -1013,6 +1013,77 @@ html[data-density='compact'] {
   padding: 1px 7px;
 }
 
+/* Public share folder browser */
+.share-browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 100%;
+}
+.share-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-size: 12.5px;
+}
+.crumb-btn {
+  background: none;
+  border: none;
+  color: var(--fg-1);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+}
+.crumb-btn:hover {
+  color: var(--fg-0);
+  background: var(--bg-2);
+}
+.share-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-0);
+}
+.share-row:last-child {
+  border-bottom: none;
+}
+.share-row:hover {
+  background: var(--bg-2);
+}
+.share-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.share-size {
+  font-size: 11px;
+  color: var(--fg-2);
+}
+.share-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--fg-2);
+  font-size: 12.5px;
+}
+
 /* Storage view */
 .storage {
   display: flex;

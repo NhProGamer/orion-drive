@@ -53,6 +53,7 @@ export interface Me {
   avatar: string
   storage_used: number
   oidc_enabled: boolean
+  can_share: boolean
 }
 
 export interface Capacity {
@@ -160,8 +161,22 @@ export const api = {
   listShares: () => get<ShareInfo[]>('/share'),
   deleteShare: (token: string) => http.delete(`/share/${token}`),
   shareView: (token: string) => get<ShareView>(`/share/${token}`),
-  shareContentUrl: (token: string, password?: string) =>
-    `/api/v1/share/${token}/content` + (password ? `?password=${encodeURIComponent(password)}` : ''),
+  shareList: (token: string, path: string, password?: string) =>
+    get<{ name: string; entries: ShareEntry[] }>(`/share/${token}/list`, { params: { path, password } }),
+  shareContentUrl: (token: string, path?: string, password?: string) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    if (password) q.set('password', password)
+    const s = q.toString()
+    return `/api/v1/share/${token}/content` + (s ? `?${s}` : '')
+  },
+  shareArchiveUrl: (token: string, path?: string, password?: string) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    if (password) q.set('password', password)
+    const s = q.toString()
+    return `/api/v1/share/${token}/archive` + (s ? `?${s}` : '')
+  },
 
   logout: () => post('/auth/logout'),
 }
@@ -181,10 +196,18 @@ export interface ShareInfo {
 export interface ShareView {
   token: string
   name: string
+  is_dir: boolean
   size: number
   has_password: boolean
   expired: boolean
   exhausted: boolean
   downloads: number
   owner: string
+}
+
+export interface ShareEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number
 }

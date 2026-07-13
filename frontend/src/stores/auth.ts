@@ -10,6 +10,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated: (s) => s.me !== null,
+    canShare: (s) => s.me?.can_share !== false,
     initials: (s) => {
       const name = s.me?.nick || s.me?.email || '?'
       return name
