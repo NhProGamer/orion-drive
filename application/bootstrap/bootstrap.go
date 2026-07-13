@@ -12,8 +12,9 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
-	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local" // register the local storage backend
-	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"    // register the S3 storage backend
+	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local"  // register the local storage backend
+	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote" // register the remote (slave) storage backend
+	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
 	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"gorm.io/gorm"
