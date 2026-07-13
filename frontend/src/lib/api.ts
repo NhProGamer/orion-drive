@@ -156,9 +156,10 @@ export const api = {
 
   initUpload: (parent: string, name: string, size: number) =>
     post<UploadInit>('/upload', { parent, name, size }),
-  putChunk: (sid: string, index: number, chunk: Blob) =>
+  putChunk: (sid: string, index: number, chunk: Blob, onProgress?: (sent: number) => void) =>
     http.post(`/upload/${sid}/chunk`, chunk, {
       headers: { 'X-Chunk-Index': String(index), 'Content-Type': 'application/octet-stream' },
+      onUploadProgress: onProgress ? (e) => onProgress(e.loaded ?? 0) : undefined,
     }),
   completeUpload: (sid: string) => post<FileNode>(`/upload/${sid}/complete`),
   cancelUpload: (sid: string) => http.delete(`/upload/${sid}`),

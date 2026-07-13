@@ -323,16 +323,23 @@ export const useFilesStore = defineStore('files', {
     },
 
     async uploadOne(file: File, parent: string) {
-      const up: Upload = { id: ++uploadSeq, name: file.name, size: file.size, progress: 0, done: false }
-      this.uploads.push(up)
+      this.uploads.push({ id: ++uploadSeq, name: file.name, size: file.size, progress: 0, done: false })
+      // Mutate the reactive array element (not the raw object we just pushed),
+      // otherwise Vue never sees the progress changes.
+      const up = this.uploads[this.uploads.length - 1]
+      const pct = (bytes: number) => (file.size ? Math.min(99, Math.round((bytes / file.size) * 100)) : 99)
       try {
         const init = await api.initUpload(parent, file.name, file.size)
         const { session_id, chunk_size, num_chunks } = init
+        let uploaded = 0
         for (let i = 0; i < num_chunks; i++) {
           const start = i * chunk_size
           const end = Math.min(file.size, start + chunk_size)
-          await api.putChunk(session_id, i, file.slice(start, end))
-          up.progress = Math.round(((i + 1) / num_chunks) * 100)
+          await api.putChunk(session_id, i, file.slice(start, end), (sent) => {
+            up.progress = pct(uploaded + sent)
+          })
+          uploaded = end
+          up.progress = pct(uploaded)
         }
         await api.completeUpload(session_id)
         up.progress = 100
