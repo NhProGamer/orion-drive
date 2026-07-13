@@ -11,24 +11,50 @@ services:
       - "5212:5212"
     volumes:
       - orion-data:/app/data
+    # Every setting maps to OD_CONF_<Section>_<Key>. Values below are the full set
+    # of supported variables; active ones are set, optional ones are commented
+    # with their defaults/examples.
     environment:
-      # Public URL of this instance (used to build OIDC redirect and share links).
-      OD_CONF_System_SiteURL: "http://localhost:5212"
-      # CHANGE THIS to a long random string (e.g. `openssl rand -hex 32`).
-      OD_CONF_System_SessionSecret: "change-me-to-a-long-random-string"
+      # ---- [System] ----
+      OD_CONF_System_SiteURL: "http://localhost:5212" # public URL (OIDC redirect + share/link URLs)
+      OD_CONF_System_SessionSecret: "change-me-to-a-long-random-string" # CHANGE (openssl rand -hex 32)
+      OD_CONF_System_Mode: "release" # release | debug (debug enables the dev-login endpoint)
+      # OD_CONF_System_Listen: ":5212"                # bind address (image default)
 
-      # --- OIDC / SSO login (required for real users; dev-login only works in Mode=debug) ---
+      # ---- [Database] ----
+      OD_CONF_Database_Type: "sqlite" # sqlite (only backend implemented so far)
+      # OD_CONF_Database_DBFile: "/app/data/orion.db" # sqlite file path (image default)
+      # Network DB fields below are parsed but NOT yet used (SQLite only for now):
+      # OD_CONF_Database_Host: ""
+      # OD_CONF_Database_Port: ""
+      # OD_CONF_Database_User: ""
+      # OD_CONF_Database_Password: ""
+      # OD_CONF_Database_Name: "orion"
+
+      # ---- [OIDC] (SSO login; the only real auth — dev-login only exists in Mode=debug) ----
       # OD_CONF_OIDC_Issuer: "https://accounts.google.com"
       # OD_CONF_OIDC_ClientID: ""
       # OD_CONF_OIDC_ClientSecret: ""
       # OD_CONF_OIDC_RedirectURI: "http://localhost:5212/api/v1/auth/oidc/callback"
+      # OD_CONF_OIDC_Scopes: "openid profile email"
 
-      # --- At-rest encryption key (64 hex chars) for policies created with --encrypt ---
+      # ---- [Storage] ----
+      # OD_CONF_Storage_LocalBasePath: "/app/data/storage" # local policy base dir (image default)
+      # 64-char hex (32-byte) AES-256 key for policies created with `policy add-local --encrypt`:
       # OD_CONF_Storage_EncryptionKey: ""
 
-      # --- Online Office editing via a WOPI client (Collabora / OnlyOffice) ---
+      # ---- [Slave] (set Secret to make this node a storage slave for a master) ----
+      # OD_CONF_Slave_Secret: ""
+      # OD_CONF_Slave_StoragePath: "/app/data/slave-storage"
+
+      # ---- [WOPI] (online Office editing via Collabora / OnlyOffice) ----
       # OD_CONF_WOPI_ServerURL: "https://collabora.example.com"
       # OD_CONF_WOPI_EditURLTemplate: "https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}"
+
+      # ---- [Redis] (parsed but NOT yet used — in-memory cache only for now) ----
+      # OD_CONF_Redis_Server: ""
+      # OD_CONF_Redis_Password: ""
+      # OD_CONF_Redis_DB: "0"
 
 volumes:
   orion-data:
