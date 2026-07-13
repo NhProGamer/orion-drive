@@ -54,6 +54,7 @@ export interface Me {
   storage_used: number
   oidc_enabled: boolean
   can_share: boolean
+  wopi: boolean
 }
 
 export interface Capacity {
@@ -124,6 +125,9 @@ export const api = {
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
   inlineUrl: (id: number) => `/api/v1/file/content/${id}?inline=1`,
   saveText: (id: number, content: string) => put<FileNode>('/file/text', { id, content }),
+  saveBlob: (id: number, blob: Blob) =>
+    put<FileNode>(`/file/blob/${id}`, blob, { headers: { 'Content-Type': 'application/octet-stream' } }),
+  officeLaunch: (id: number) => get<{ url: string; wopi_src: string }>(`/file/office/${id}`),
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Archives (background tasks)

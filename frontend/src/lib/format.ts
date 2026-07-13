@@ -31,10 +31,11 @@ export function isArchive(name: string): boolean {
   return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
 }
 
-export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'none'
+export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'none'
 
 /** How a file can be previewed inline in the browser. */
 export function previewKind(name: string): PreviewKind {
+  if (/\.epub$/i.test(String(name))) return 'epub'
   const k = kindFromName(name)
   if (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf') return k
   if (k === 'text' || k === 'code' || k === 'config') return 'text'
@@ -44,6 +45,11 @@ export function previewKind(name: string): PreviewKind {
 /** Whether the file's text content can be edited in the browser. */
 export function isMarkdown(name: string): boolean {
   return /\.(md|markdown)$/i.test(String(name))
+}
+
+/** Whether the file is an Office document editable via WOPI. */
+export function isOffice(name: string): boolean {
+  return /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(String(name))
 }
 
 /** Human-readable size, French style (comma decimal, narrow no-break space). */

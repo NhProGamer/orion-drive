@@ -291,6 +291,15 @@ export const useFilesStore = defineStore('files', {
       })
     },
 
+    async openOffice(node: FileNode) {
+      try {
+        const { url } = await api.officeLaunch(node.id)
+        window.open(url, '_blank')
+      } catch (e: any) {
+        this.ui().toast('Édition Office indisponible' + (e?.message ? ` : ${e.message}` : ''), 'x')
+      }
+    },
+
     async extract(node: FileNode) {
       const task = await api.extract(node.id, this.currentParentParam)
       this.ui().toast('Extraction en cours…', 'file-archive')

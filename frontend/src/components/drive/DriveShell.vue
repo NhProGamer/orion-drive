@@ -4,13 +4,13 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive, FolderInput,
+  Link as LinkIcon, FileArchive, FolderInput, FileText,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { FileNode } from '@/lib/api'
-import { fmtSize, isArchive } from '@/lib/format'
+import { fmtSize, isArchive, isOffice } from '@/lib/format'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -119,6 +119,9 @@ function ctxItems(): MenuItem[] {
   if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
     items.push({ id: 'extract', label: 'Extraire ici', icon: FolderInput })
   }
+  if (!files.readOnly && !multi && n && n.type === 'file' && isOffice(n.name) && auth.wopiEnabled) {
+    items.push({ id: 'office', label: 'Éditer avec Office', icon: FileText })
+  }
   if (!multi && n && auth.canShare) {
     items.push({ id: 'share', label: 'Partager', icon: Share2 })
     if (n.type === 'file') items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
@@ -150,6 +153,7 @@ function menuAction(id: string) {
     case 'archive': files.downloadArchive([...files.sel]); break
     case 'compress': files.compress([...files.sel]); break
     case 'extract': if (sel[0]) files.extract(sel[0]); break
+    case 'office': if (sel[0]) files.openOffice(sel[0]); break
     case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break
