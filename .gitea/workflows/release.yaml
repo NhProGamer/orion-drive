@@ -24,9 +24,9 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          # Forgejo auto-injects GITHUB_TOKEN (scoped to this repo); GoReleaser's
-          # gitea publisher is API-compatible with Forgejo.
-          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Manually-created Forgejo PAT; GoReleaser's gitea publisher is
+          # API-compatible with Forgejo.
+          GITEA_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           GORELEASER_FORCE_TOKEN: gitea
 
   # Build and push the container image to the Gitea package registry.
