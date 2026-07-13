@@ -12,10 +12,11 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
-	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local"  // register the local storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote" // register the remote (slave) storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
+	"github.com/NhProGamer/orion-drive/pkg/queue"
 	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"gorm.io/gorm"
@@ -30,6 +31,7 @@ type Dependency struct {
 	Repo   *repository.Repository
 	Files  *filemanager.Manager
 	Shares *share.Service
+	Tasks  *queue.Queue
 	Auth   *auth.Authenticator
 	Signer *auth.Signer
 }
@@ -54,7 +56,8 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 			return nil, err
 		}
 	}
-	files := filemanager.NewManager(repo, c, tmpDir, cipher)
+	tasks := queue.New(4)
+	files := filemanager.NewManager(repo, c, tmpDir, cipher, tasks)
 
 	// OIDC discovery is best-effort: if the provider is unreachable or
 	// unconfigured, the server still boots (login just stays unavailable).
@@ -74,6 +77,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		Repo:   repo,
 		Files:  files,
 		Shares: share.New(repo, files),
+		Tasks:  tasks,
 		Auth:   authn,
 		Signer: auth.NewSigner(cfg.System.SessionSecret),
 	}

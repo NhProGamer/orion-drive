@@ -88,6 +88,12 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.DELETE("/file/direct-link/:token", ctl.DeleteDirectLink)
 
 	f.GET("/file/archive", ctl.ArchiveDownload)
+	f.GET("/file/archive/entries/:id", ctl.ArchiveEntries)
+	f.POST("/file/archive/compress", ctl.CompressArchive)
+	f.POST("/file/archive/extract", ctl.ExtractArchive)
+
+	f.GET("/task", ctl.TaskList)
+	f.GET("/task/:id", ctl.TaskStatus)
 
 	f.POST("/upload", ctl.InitUpload)
 	f.POST("/upload/:sid/chunk", ctl.PutChunk)

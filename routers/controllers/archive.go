@@ -25,6 +25,83 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 	}
 }
 
+// CompressArchive schedules a background job that zips files into a new archive.
+func (ctl *Controller) CompressArchive(c *gin.Context) {
+	var req struct {
+		Parent string `json:"parent"`
+		IDs    []uint `json:"ids"`
+		Name   string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	parentID, err := parseParentID(req.Parent)
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
+		return
+	}
+	job, err := ctl.dep.Files.Compress(c.Request.Context(), ctl.user(c), parentID, req.IDs, req.Name)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(job))
+}
+
+// ExtractArchive schedules a background job that unpacks an archive file.
+func (ctl *Controller) ExtractArchive(c *gin.Context) {
+	var req struct {
+		ID     uint   `json:"id"`
+		Parent string `json:"parent"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	parentID, err := parseParentID(req.Parent)
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
+		return
+	}
+	job, err := ctl.dep.Files.Extract(c.Request.Context(), ctl.user(c), req.ID, parentID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(job))
+}
+
+// ArchiveEntries lists the contents of an archive file without extracting it.
+func (ctl *Controller) ArchiveEntries(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		return
+	}
+	entries, err := ctl.dep.Files.ListArchiveEntries(c.Request.Context(), ctl.user(c), id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(entries))
+}
+
+// TaskStatus returns one background job owned by the user.
+func (ctl *Controller) TaskStatus(c *gin.Context) {
+	job, ok := ctl.dep.Tasks.Get(ctl.user(c).ID, c.Param("id"))
+	if !ok {
+		respond(c, serializer.Err(serializer.CodeNotFound, "task not found"))
+		return
+	}
+	respond(c, serializer.OK(job))
+}
+
+// TaskList returns the user's background jobs.
+func (ctl *Controller) TaskList(c *gin.Context) {
+	respond(c, serializer.OK(ctl.dep.Tasks.ListByUser(ctl.user(c).ID)))
+}
+
 // parseIDList parses "1,2,3" into a slice of uints, skipping invalid entries.
 func parseIDList(s string) []uint {
 	var out []uint

@@ -16,6 +16,7 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
+	"github.com/NhProGamer/orion-drive/pkg/queue"
 	"github.com/NhProGamer/orion-drive/repository"
 )
 
@@ -35,12 +36,14 @@ type Manager struct {
 	cache  cache.Store
 	tmpDir string
 	cipher *encrypt.Cipher // nil when at-rest encryption is not configured
+	queue  *queue.Queue
 }
 
 // NewManager builds a Manager. tmpDir is where in-progress uploads are staged;
-// cipher, when non-nil, encrypts objects for policies that request it.
-func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, cipher *encrypt.Cipher) *Manager {
-	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher}
+// cipher, when non-nil, encrypts objects for policies that request it; queue
+// runs background archive jobs.
+func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, cipher *encrypt.Cipher, q *queue.Queue) *Manager {
+	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q}
 }
 
 // policySettings is the typed view of StoragePolicy.Settings used here.
