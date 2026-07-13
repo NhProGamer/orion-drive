@@ -65,6 +65,10 @@ func (ctl *Controller) Me(c *gin.Context) {
 		respond(c, serializer.Err(serializer.CodeUnauthorized, "not authenticated"))
 		return
 	}
+	canShare := true
+	if u.Group != nil {
+		canShare = u.Group.CanShare()
+	}
 	respond(c, serializer.OK(gin.H{
 		"id":           u.ID,
 		"email":        u.Email,
@@ -72,6 +76,7 @@ func (ctl *Controller) Me(c *gin.Context) {
 		"avatar":       u.Avatar,
 		"storage_used": u.StorageUsed,
 		"oidc_enabled": ctl.dep.Auth.Enabled(),
+		"can_share":    canShare,
 	}))
 }
 

@@ -1,10 +1,13 @@
-// Package share implements share-link creation and public, policy-enforced access.
+// Package share implements share-link creation and public, policy-enforced
+// access to shared files and folders.
 package share
 
 import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
@@ -20,7 +23,8 @@ var (
 	ErrExhausted        = errors.New("this share has reached its download limit")
 	ErrPasswordRequired = errors.New("a password is required")
 	ErrWrongPassword    = errors.New("incorrect password")
-	ErrFolderShare      = errors.New("folder sharing is not supported yet")
+	ErrNotAllowed       = errors.New("your group is not allowed to create shares")
+	ErrNotAFile         = errors.New("target is not a file")
 )
 
 // Service coordinates shares (repository) and file delivery (filemanager).
@@ -42,14 +46,14 @@ type CreateOptions struct {
 	MaxDownloads int           // 0 = unlimited
 }
 
-// Create makes a share link for a file owned by the user.
+// Create makes a share link for a file or folder owned by the user.
 func (s *Service) Create(ctx context.Context, user *model.User, opts CreateOptions) (*model.Share, error) {
+	if user.Group != nil && !user.Group.CanShare() {
+		return nil, ErrNotAllowed
+	}
 	f, err := s.repo.File.GetByID(ctx, user.ID, opts.FileID)
 	if err != nil {
 		return nil, err
-	}
-	if f.IsFolder() {
-		return nil, ErrFolderShare
 	}
 
 	share := &model.Share{
@@ -92,6 +96,7 @@ func (s *Service) Delete(ctx context.Context, user *model.User, token string) er
 type PublicView struct {
 	Token       string `json:"token"`
 	Name        string `json:"name"`
+	IsDir       bool   `json:"is_dir"`
 	Size        int64  `json:"size"`
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
@@ -119,6 +124,7 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 	return &PublicView{
 		Token:       share.Token,
 		Name:        f.Name,
+		IsDir:       f.IsFolder(),
 		Size:        f.Size,
 		HasPassword: share.HasPassword(),
 		Expired:     share.Expired(),
@@ -128,18 +134,106 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 	}, nil
 }
 
-// Download validates the share (expiry, download limit, password) and returns a
-// download target for the shared file, then records the download.
-func (s *Service) Download(ctx context.Context, token, password string) (*filemanager.DownloadTarget, error) {
+// Entry is one item inside a shared folder listing.
+type Entry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"` // path relative to the share root
+	IsDir bool   `json:"is_dir"`
+	Size  int64  `json:"size"`
+}
+
+// List returns the contents of a shared folder (or subfolder at subPath).
+func (s *Service) ListDir(ctx context.Context, token, subPath, password string) (string, []Entry, error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return "", nil, err
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return "", nil, err
+	}
+	if !target.IsFolder() {
+		return "", nil, ErrNotAFile
+	}
+	children, err := s.repo.File.ListChildren(ctx, share.UserID, &target.ID)
+	if err != nil {
+		return "", nil, err
+	}
+	rel := cleanPath(subPath)
+	entries := make([]Entry, 0, len(children))
+	for i := range children {
+		c := &children[i]
+		entries = append(entries, Entry{
+			Name:  c.Name,
+			Path:  strings.TrimPrefix(path.Join(rel, c.Name), "/"),
+			IsDir: c.IsFolder(),
+			Size:  c.Size,
+		})
+	}
+	return target.Name, entries, nil
+}
+
+// Download validates the share and returns a download target for a file at
+// subPath (empty for a file share's root), then records the download.
+func (s *Service) Download(ctx context.Context, token, subPath, password string) (*filemanager.DownloadTarget, error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return nil, err
+	}
+	if share.Exhausted() {
+		return nil, ErrExhausted
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, err
+	}
+	if target.IsFolder() {
+		return nil, ErrNotAFile
+	}
+	owner, err := s.repo.User.GetByID(ctx, share.UserID)
+	if err != nil {
+		return nil, err
+	}
+	dt, err := s.files.Download(ctx, owner, target.ID)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.Share.RegisterDownload(ctx, share)
+	return dt, nil
+}
+
+// ArchiveTarget authorizes a share, resolves the folder to archive at subPath,
+// records the download and returns the owner and target so the caller can stream
+// the ZIP itself (headers must be sent before the stream starts).
+func (s *Service) ArchiveTarget(ctx context.Context, token, subPath, password string) (*model.User, *model.File, error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return nil, nil, err
+	}
+	if share.Exhausted() {
+		return nil, nil, ErrExhausted
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	owner, err := s.repo.User.GetByID(ctx, share.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	_ = s.repo.Share.RegisterDownload(ctx, share)
+	return owner, target, nil
+}
+
+// authorize validates a share's expiry and password (but not its download limit,
+// which only gates actual downloads).
+func (s *Service) authorize(ctx context.Context, token, password string) (*model.Share, error) {
 	share, err := s.repo.Share.GetByToken(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 	if share.Expired() {
 		return nil, ErrExpired
-	}
-	if share.Exhausted() {
-		return nil, ErrExhausted
 	}
 	if share.HasPassword() {
 		if password == "" {
@@ -149,17 +243,34 @@ func (s *Service) Download(ctx context.Context, token, password string) (*filema
 			return nil, ErrWrongPassword
 		}
 	}
+	return share, nil
+}
 
-	owner, err := s.repo.User.GetByID(ctx, share.UserID)
+// resolve walks subPath from the share root, staying within the shared subtree.
+func (s *Service) resolve(ctx context.Context, share *model.Share, subPath string) (*model.File, error) {
+	cur, err := s.repo.File.GetByID(ctx, share.UserID, share.FileID)
 	if err != nil {
 		return nil, err
 	}
-	target, err := s.files.Download(ctx, owner, share.FileID)
-	if err != nil {
-		return nil, err
+	for _, part := range strings.Split(cleanPath(subPath), "/") {
+		if part == "" {
+			continue
+		}
+		if !cur.IsFolder() {
+			return nil, ErrNotFound
+		}
+		child, err := s.repo.File.FindChildByName(ctx, share.UserID, &cur.ID, part)
+		if err != nil {
+			return nil, ErrNotFound
+		}
+		cur = child
 	}
-	_ = s.repo.Share.RegisterDownload(ctx, share)
-	return target, nil
+	return cur, nil
+}
+
+// cleanPath normalises a subpath and strips any traversal.
+func cleanPath(p string) string {
+	return strings.Trim(path.Clean("/"+strings.ReplaceAll(p, "\\", "/")), "/")
 }
 
 const tokenAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

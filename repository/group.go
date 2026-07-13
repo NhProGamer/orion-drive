@@ -34,3 +34,10 @@ func (r *GroupRepo) SetStoragePolicy(ctx context.Context, groupID, policyID uint
 		Where("id = ?", groupID).
 		Update("storage_policy_id", policyID).Error
 }
+
+// SetPermissions replaces a group's permission flags.
+func (r *GroupRepo) SetPermissions(ctx context.Context, groupID uint, perms model.JSON) error {
+	return r.db.WithContext(ctx).Model(&model.Group{}).
+		Where("id = ?", groupID).
+		Update("permissions", perms).Error
+}

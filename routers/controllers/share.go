@@ -86,10 +86,21 @@ func (ctl *Controller) ShareView(c *gin.Context) {
 	respond(c, serializer.OK(view))
 }
 
+// ShareList returns the contents of a shared folder (no auth).
+func (ctl *Controller) ShareList(c *gin.Context) {
+	name, entries, err := ctl.dep.Shares.ListDir(c.Request.Context(), c.Param("token"), c.Query("path"), c.Query("password"))
+	if err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"name": name, "entries": entries}))
+}
+
 // ShareDownload delivers a shared file (no auth), enforcing password/expiry/limit.
+// For folder shares, the file within is selected by the `path` query param.
 func (ctl *Controller) ShareDownload(c *gin.Context) {
 	password := c.Query("password")
-	target, err := ctl.dep.Shares.Download(c.Request.Context(), c.Param("token"), password)
+	target, err := ctl.dep.Shares.Download(c.Request.Context(), c.Param("token"), c.Query("path"), password)
 	if err != nil {
 		failShare(c, err)
 		return
@@ -102,6 +113,20 @@ func (ctl *Controller) ShareDownload(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(target.File.Name)))
 	c.Header("Content-Type", "application/octet-stream")
 	http.ServeContent(c.Writer, c.Request, target.File.Name, target.File.UpdatedAt, target.Stream)
+}
+
+// ShareArchive streams a ZIP of a shared folder (or subfolder), no auth.
+func (ctl *Controller) ShareArchive(c *gin.Context) {
+	owner, target, err := ctl.dep.Shares.ArchiveTarget(c.Request.Context(), c.Param("token"), c.Query("path"), c.Query("password"))
+	if err != nil {
+		failShare(c, err)
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.zip", url.PathEscape(target.Name)))
+	c.Header("Content-Type", "application/zip")
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), owner, []uint{target.ID}, c.Writer); err != nil {
+		_ = c.Error(err)
+	}
 }
 
 // shareURL builds the public share page URL from the configured site URL.
@@ -120,8 +145,10 @@ func failShare(c *gin.Context, err error) {
 		respond(c, serializer.Err(serializer.CodeNotFound, "share not found"))
 	case errors.Is(err, share.ErrPasswordRequired), errors.Is(err, share.ErrWrongPassword):
 		respond(c, serializer.Err(serializer.CodeUnauthorized, err.Error()))
-	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrExhausted), errors.Is(err, share.ErrFolderShare):
+	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrExhausted), errors.Is(err, share.ErrNotAllowed):
 		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
+	case errors.Is(err, share.ErrNotAFile):
+		respond(c, serializer.Err(serializer.CodeBadRequest, err.Error()))
 	default:
 		respond(c, serializer.Err(serializer.CodeInternal, err.Error()))
 	}

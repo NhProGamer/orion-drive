@@ -10,3 +10,22 @@ type Group struct {
 	StoragePolicyID uint   `json:"storage_policy_id"`
 	Settings        JSON   `gorm:"type:json" json:"-"`
 }
+
+// GroupPermissions is the typed view of Group.Permissions. A nil flag means
+// "unset", which the Can* helpers treat as allowed (permissive default).
+type GroupPermissions struct {
+	Share *bool `json:"share,omitempty"`
+}
+
+// Perms decodes the group's permission flags.
+func (g *Group) Perms() GroupPermissions {
+	var p GroupPermissions
+	_ = g.Permissions.Unmarshal(&p)
+	return p
+}
+
+// CanShare reports whether members may create share links (default: allowed).
+func (g *Group) CanShare() bool {
+	p := g.Perms()
+	return p.Share == nil || *p.Share
+}
