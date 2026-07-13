@@ -2,9 +2,12 @@ package controllers
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
+	"strings"
 
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
@@ -212,9 +215,55 @@ func (ctl *Controller) Download(c *gin.Context) {
 	}
 
 	defer target.Stream.Close()
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(target.File.Name)))
-	c.Header("Content-Type", "application/octet-stream")
-	http.ServeContent(c.Writer, c.Request, target.File.Name, target.File.UpdatedAt, target.Stream)
+	name := target.File.Name
+	if c.Query("inline") != "" {
+		// Serve for in-browser preview (image/video/audio/pdf/text).
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename*=UTF-8''%s", url.PathEscape(name)))
+		c.Header("Content-Type", inlineContentType(name))
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(name)))
+		c.Header("Content-Type", "application/octet-stream")
+	}
+	http.ServeContent(c.Writer, c.Request, name, target.File.UpdatedAt, target.Stream)
+}
+
+// extraContentTypes covers extensions the stdlib mime package may not map.
+var extraContentTypes = map[string]string{
+	".md":  "text/markdown; charset=utf-8",
+	".txt": "text/plain; charset=utf-8",
+	".log": "text/plain; charset=utf-8",
+	".go":  "text/plain; charset=utf-8",
+	".csv": "text/csv; charset=utf-8",
+}
+
+// inlineContentType guesses a Content-Type for inline previews.
+func inlineContentType(name string) string {
+	ext := strings.ToLower(path.Ext(name))
+	if ct, ok := extraContentTypes[ext]; ok {
+		return ct
+	}
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
+// SaveText overwrites a text file's content, creating a new version.
+func (ctl *Controller) SaveText(c *gin.Context) {
+	var req struct {
+		ID      uint   `json:"id"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	f, err := ctl.dep.Files.SaveVersion(c.Request.Context(), ctl.user(c), req.ID, []byte(req.Content))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
 }
 
 // Capacity returns the user's storage usage and quota.
