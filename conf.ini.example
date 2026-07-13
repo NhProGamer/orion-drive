@@ -38,6 +38,14 @@ Scopes = openid profile email
 ; Base directory for the default local storage policy.
 LocalBasePath = data/storage
 
+[Slave]
+; Set Secret to turn this node into a storage slave: it then exposes the signed
+; slave storage API and stores objects under StoragePath. The master must hold a
+; matching "remote" storage policy (orion-drive policy add-remote) with the same
+; secret. Leave Secret empty on a normal (master) node.
+Secret =
+StoragePath = data/slave-storage
+
 [Redis]
 ; Leave Server empty to use the in-memory cache.
 Server =

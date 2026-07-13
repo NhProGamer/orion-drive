@@ -18,6 +18,7 @@ type Config struct {
 	Database Database
 	OIDC     OIDC
 	Storage  Storage
+	Slave    Slave
 	Redis    Redis
 }
 
@@ -54,6 +55,13 @@ type Storage struct {
 	LocalBasePath string `ini:"LocalBasePath"`
 }
 
+// Slave turns this node into a storage slave when Secret is set: it exposes the
+// signed slave storage API, backed by a local directory.
+type Slave struct {
+	Secret      string `ini:"Secret"`
+	StoragePath string `ini:"StoragePath"`
+}
+
 // Redis optionally replaces the in-memory cache.
 type Redis struct {
 	Server   string `ini:"Server"`
@@ -73,6 +81,7 @@ func Default() *Config {
 		Database: Database{Type: "sqlite", DBFile: "data/orion.db", Name: "orion"},
 		OIDC:     OIDC{Scopes: "openid profile email"},
 		Storage:  Storage{LocalBasePath: "data/storage"},
+		Slave:    Slave{StoragePath: "data/slave-storage"},
 	}
 }
 

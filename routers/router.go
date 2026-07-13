@@ -6,6 +6,9 @@ import (
 	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/application/statics"
 	"github.com/NhProGamer/orion-drive/middleware"
+	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote"
 	"github.com/NhProGamer/orion-drive/routers/controllers"
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +30,13 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	registerAuthRoutes(api, ctl, dep)
 	registerFileRoutes(api, ctl)
 	registerShareRoutes(api, ctl)
+
+	// When a slave secret is configured, this node also acts as a storage slave.
+	if dep.Config.Slave.Secret != "" {
+		if err := registerSlaveRoutes(r, dep); err != nil {
+			return nil, err
+		}
+	}
 
 	if err := statics.Register(r); err != nil {
 		return nil, err
@@ -69,6 +79,29 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.DELETE("/upload/:sid", ctl.CancelUpload)
 
 	f.GET("/user/capacity", ctl.Capacity)
+}
+
+// registerSlaveRoutes mounts the signed slave storage API backed by a local
+// directory. Every route is gated by a shared-secret signature.
+func registerSlaveRoutes(r *gin.Engine, dep *bootstrap.Dependency) error {
+	store, err := driver.New(&model.StoragePolicy{
+		Type:     model.PolicyTypeLocal,
+		BasePath: dep.Config.Slave.StoragePath,
+	})
+	if err != nil {
+		return err
+	}
+	slave := controllers.NewSlave(store)
+
+	g := r.Group(remote.APIPrefix)
+	g.Use(middleware.SlaveAuth(dep.Config.Slave.Secret))
+	g.POST("/upload", slave.Upload)
+	g.GET("/content", slave.Content)
+	g.GET("/download", slave.Download)
+	g.POST("/delete", slave.Delete)
+
+	dep.Logger.Info("slave storage enabled", "path", dep.Config.Slave.StoragePath)
+	return nil
 }
 
 func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
