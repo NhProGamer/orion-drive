@@ -93,6 +93,42 @@ var policyAddS3Cmd = &cobra.Command{
 }
 
 var (
+	remoteName     string
+	remoteServer   string
+	remoteSecret   string
+	remoteBasePath string
+)
+
+var policyAddRemoteCmd = &cobra.Command{
+	Use:   "add-remote",
+	Short: "Create a remote (slave node) storage policy",
+	RunE: func(*cobra.Command, []string) error {
+		if remoteServer == "" {
+			return fmt.Errorf("--server is required")
+		}
+		if remoteSecret == "" {
+			return fmt.Errorf("--secret is required")
+		}
+		repo, err := repoForCLI()
+		if err != nil {
+			return err
+		}
+		p := &model.StoragePolicy{
+			Name:      remoteName,
+			Type:      model.PolicyTypeRemote,
+			Server:    remoteServer,
+			BasePath:  remoteBasePath,
+			SecretKey: remoteSecret,
+		}
+		if err := repo.Policy.Create(context.Background(), p); err != nil {
+			return err
+		}
+		fmt.Printf("created remote policy #%d (%s)\n", p.ID, p.Name)
+		return nil
+	},
+}
+
+var (
 	assignGroup  uint
 	assignPolicy uint
 )
@@ -126,10 +162,15 @@ func init() {
 	policyAddS3Cmd.Flags().StringVar(&s3BasePath, "base-path", "", "key prefix within the bucket")
 	policyAddS3Cmd.Flags().BoolVar(&s3PathStyle, "path-style", false, "use path-style addressing (required by most S3-compatible servers)")
 
+	policyAddRemoteCmd.Flags().StringVar(&remoteName, "name", "Remote", "policy name")
+	policyAddRemoteCmd.Flags().StringVar(&remoteServer, "server", "", "slave node base URL, e.g. http://slave:5212 (required)")
+	policyAddRemoteCmd.Flags().StringVar(&remoteSecret, "secret", "", "shared signing secret matching the slave (required)")
+	policyAddRemoteCmd.Flags().StringVar(&remoteBasePath, "base-path", "", "key prefix within the slave storage")
+
 	policyAssignCmd.Flags().UintVar(&assignGroup, "group", 1, "group ID")
 	policyAssignCmd.Flags().UintVar(&assignPolicy, "policy", 0, "policy ID")
 	_ = policyAssignCmd.MarkFlagRequired("policy")
 
-	policyCmd.AddCommand(policyListCmd, policyAddS3Cmd, policyAssignCmd)
+	policyCmd.AddCommand(policyListCmd, policyAddS3Cmd, policyAddRemoteCmd, policyAssignCmd)
 	rootCmd.AddCommand(policyCmd)
 }
