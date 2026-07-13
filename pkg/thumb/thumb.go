@@ -31,6 +31,8 @@ func Kind(ext string) string {
 		return "image"
 	case "mp4", "mov", "webm", "mkv", "m4v", "avi":
 		return "video"
+	case "mp3", "flac", "m4a", "aac", "ogg", "opus":
+		return "audio"
 	default:
 		return ""
 	}
@@ -70,6 +72,27 @@ func Video(ctx context.Context, path string) ([]byte, error) {
 	}
 	if out.Len() == 0 {
 		return nil, fmt.Errorf("thumb: ffmpeg produced no frame")
+	}
+	return out.Bytes(), nil
+}
+
+// Audio extracts embedded cover art from the audio file at path and returns it
+// as a JPEG thumbnail. Fails when the file has no embedded artwork.
+func Audio(ctx context.Context, path string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-loglevel", "error",
+		"-i", path,
+		"-an", "-map", "0:v:0",
+		"-frames:v", "1",
+		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", MaxDim),
+		"-f", "image2", "-vcodec", "mjpeg",
+		"-",
+	)
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil || out.Len() == 0 {
+		return nil, fmt.Errorf("thumb: no cover art: %s", strings.TrimSpace(errBuf.String()))
 	}
 	return out.Bytes(), nil
 }

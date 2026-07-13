@@ -31,7 +31,8 @@ func (m *Manager) Thumbnail(ctx context.Context, user *model.User, id uint) ([]b
 		return nil, ErrNoThumbnail
 	}
 	kind := thumb.Kind(path.Ext(f.Name))
-	if kind == "" || (kind == "video" && !thumb.FFmpegAvailable()) {
+	needsFFmpeg := kind == "video" || kind == "audio"
+	if kind == "" || (needsFFmpeg && !thumb.FFmpegAvailable()) {
 		return nil, ErrNoThumbnail
 	}
 
@@ -66,12 +67,15 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return nil, err
 		}
 		return thumb.Image(data)
-	case "video":
+	case "video", "audio":
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
 			return nil, err
 		}
 		defer os.Remove(p)
+		if kind == "audio" {
+			return thumb.Audio(ctx, p)
+		}
 		return thumb.Video(ctx, p)
 	}
 	return nil, ErrNoThumbnail
