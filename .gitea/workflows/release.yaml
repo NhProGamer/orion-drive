@@ -15,6 +15,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+          cache: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -23,8 +24,9 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          # Gitea injects GITEA_TOKEN automatically, scoped to this repo.
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          # Forgejo auto-injects GITHUB_TOKEN (scoped to this repo); GoReleaser's
+          # gitea publisher is API-compatible with Forgejo.
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_FORCE_TOKEN: gitea
 
   # Build and push the container image to the Gitea package registry.
@@ -37,9 +39,8 @@ jobs:
         with:
           registry: git.nhsoul.fr
           username: ${{ github.actor }}
-          # A PAT secret (DOCKER_TOKEN) with package:write is more reliable than
-          # the auto GITEA_TOKEN if package pushes are denied.
-          password: ${{ secrets.DOCKER_TOKEN || secrets.GITEA_TOKEN }}
+          # Forgejo package registry token (PAT with package:write).
+          password: ${{ secrets.REGISTRY_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
           context: .
