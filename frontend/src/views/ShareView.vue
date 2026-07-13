@@ -35,7 +35,6 @@ const crumbs = computed(() => {
 })
 
 onMounted(async () => {
-  ui.init()
   try {
     data.value = await api.shareView(token)
     if (data.value.is_dir && !data.value.has_password && !unavailable.value) openList('')

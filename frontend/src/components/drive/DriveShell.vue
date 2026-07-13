@@ -18,7 +18,6 @@ import PreviewPanel from './PreviewPanel.vue'
 import PreviewOverlay from './PreviewOverlay.vue'
 import StoragePanel from './StoragePanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
-import TweaksPanel from './TweaksPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
@@ -249,7 +248,6 @@ const dropTargetName = computed(() => {
 })
 
 onMounted(() => {
-  ui.init()
   files.init()
   document.addEventListener('keydown', onKey)
 })
@@ -312,7 +310,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <button class="icon-btn" :title="ui.theme === 'dark' ? 'Thème clair' : 'Thème sombre'" @click="ui.toggleTheme">
             <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
           </button>
-          <button class="icon-btn" title="Réglages d'affichage" @click="ui.tweaksOpen = !ui.tweaksOpen"><Info :size="16" /></button>
           <div class="avatar" :title="auth.me?.nick">
             <img v-if="auth.me?.avatar" :src="auth.me.avatar" alt="" />
             <template v-else>{{ auth.initials }}</template>
@@ -482,7 +479,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 
     <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
     <Toasts />
-    <TweaksPanel v-if="ui.tweaksOpen" @close="ui.tweaksOpen = false" />
 
     <div v-if="dragDepth > 0" class="drop-overlay">
       <div class="drop-card">

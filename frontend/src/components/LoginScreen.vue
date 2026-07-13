@@ -8,7 +8,6 @@ const ui = useUiStore()
 const config = ref<{ oidc: boolean; dev: boolean }>({ oidc: true, dev: false })
 
 onMounted(async () => {
-  ui.init()
   try {
     const { data } = await axios.get('/api/v1/auth/config')
     config.value = data.data

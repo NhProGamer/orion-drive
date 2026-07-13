@@ -17,24 +17,12 @@ html[data-halo='off'] body::before {
   z-index: 1;
 }
 
-/* Tweak-driven variables */
+/* Layout metrics */
 :root {
   --thumb-h: 110px;
   --card-min: 200px;
   --row-h: 44px;
   --content-pad: var(--s-6) var(--s-7);
-}
-html[data-thumb='s'] {
-  --thumb-h: 84px;
-  --card-min: 168px;
-}
-html[data-thumb='l'] {
-  --thumb-h: 148px;
-  --card-min: 240px;
-}
-html[data-density='compact'] {
-  --row-h: 35px;
-  --content-pad: var(--s-4) var(--s-6);
 }
 
 /* Layout */
