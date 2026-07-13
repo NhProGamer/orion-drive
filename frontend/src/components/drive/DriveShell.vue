@@ -15,6 +15,7 @@ import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
 import PreviewPanel from './PreviewPanel.vue'
+import PreviewOverlay from './PreviewOverlay.vue'
 import StoragePanel from './StoragePanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
 import TweaksPanel from './TweaksPanel.vue'
@@ -141,7 +142,7 @@ function menuAction(id: string) {
   menu.value = null
   switch (id) {
     case 'open': if (sel[0]) files.openFolder(sel[0]); break
-    case 'preview': if (sel[0]) files.previewId = sel[0].id; break
+    case 'preview': if (sel[0]) files.openNode(sel[0]); break
     case 'download': doDownload(sel); break
     case 'rename': startRename(); break
     case 'star': if (sel[0]) files.toggleStar(sel[0]); break
@@ -442,6 +443,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         />
       </div>
     </div>
+
+    <PreviewOverlay v-if="files.overlayNode" :node="files.overlayNode" @close="files.closeOverlay()" />
 
     <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @action="menuAction" />
 

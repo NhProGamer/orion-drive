@@ -1084,6 +1084,150 @@ html[data-density='compact'] {
   font-size: 12.5px;
 }
 
+/* Full-screen content preview overlay */
+.ov-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in oklab, var(--bg-0) 70%, transparent);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3vh 3vw;
+}
+.ov-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 96vw);
+  height: min(92vh, 900px);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+.ov-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ov-title {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.ov-save {
+  height: 32px;
+  padding: 0 12px;
+}
+.ov-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-0);
+}
+.ov-media {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.ov-audio {
+  width: min(600px, 90%);
+}
+.ov-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+.ov-editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 20px 24px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.ov-markdown {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 32px;
+  color: var(--fg-0);
+  line-height: 1.65;
+}
+.ov-markdown h1,
+.ov-markdown h2,
+.ov-markdown h3 {
+  margin: 1.2em 0 0.5em;
+  line-height: 1.25;
+}
+.ov-markdown h1 {
+  font-size: 1.6em;
+}
+.ov-markdown h2 {
+  font-size: 1.3em;
+}
+.ov-markdown p {
+  margin: 0.6em 0;
+}
+.ov-markdown ul {
+  margin: 0.6em 0;
+  padding-left: 1.4em;
+}
+.ov-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.ov-markdown pre {
+  background: var(--bg-2);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+.ov-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.ov-markdown blockquote {
+  margin: 0.6em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--border);
+  color: var(--fg-2);
+}
+.ov-markdown a {
+  color: var(--accent);
+}
+.ov-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
 /* Storage view */
 .storage {
   display: flex;

@@ -31,6 +31,21 @@ export function isArchive(name: string): boolean {
   return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
 }
 
+export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'none'
+
+/** How a file can be previewed inline in the browser. */
+export function previewKind(name: string): PreviewKind {
+  const k = kindFromName(name)
+  if (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf') return k
+  if (k === 'text' || k === 'code' || k === 'config') return 'text'
+  return 'none'
+}
+
+/** Whether the file's text content can be edited in the browser. */
+export function isMarkdown(name: string): boolean {
+  return /\.(md|markdown)$/i.test(String(name))
+}
+
 /** Human-readable size, French style (comma decimal, narrow no-break space). */
 export function fmtSize(bytes: number): string {
   if (!bytes) return '—'

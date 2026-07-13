@@ -36,6 +36,7 @@ export const useFilesStore = defineStore('files', {
     sel: [] as number[],
     anchor: null as number | null,
     previewId: null as number | null,
+    overlayId: null as number | null, // full-screen content preview
     uploads: [] as Upload[],
     quota: { used: 0, total: 0 },
     trashCount: 0,
@@ -64,6 +65,9 @@ export const useFilesStore = defineStore('files', {
     },
     previewNode(): FileNode | null {
       return this.previewId ? this.nodes.find((n) => n.id === this.previewId) || null : null
+    },
+    overlayNode(): FileNode | null {
+      return this.overlayId ? this.nodes.find((n) => n.id === this.overlayId) || null : null
     },
     crumbs(): Crumb[] {
       const base: Crumb = { id: null, name: this.viewLabel }
@@ -139,7 +143,20 @@ export const useFilesStore = defineStore('files', {
 
     openNode(node: FileNode) {
       if (node.type === 'folder') this.openFolder(node)
-      else this.previewId = node.id
+      else {
+        this.previewId = node.id
+        this.overlayId = node.id
+      }
+    },
+
+    closeOverlay() {
+      this.overlayId = null
+    },
+
+    async saveText(id: number, content: string) {
+      await api.saveText(id, content)
+      await Promise.all([this.load(), this.loadCapacity()])
+      this.ui().toast('Fichier enregistré', 'check')
     },
 
     setQuery(q: string) {

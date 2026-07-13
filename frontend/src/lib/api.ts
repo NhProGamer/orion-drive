@@ -105,6 +105,7 @@ export class ApiError extends Error {
 type P = <T = any>(...a: any[]) => Promise<T>
 const get = http.get.bind(http) as P
 const post = http.post.bind(http) as P
+const put = http.put.bind(http) as P
 
 export const api = {
   me: () => get<Me>('/user/me'),
@@ -121,6 +122,8 @@ export const api = {
   restore: (ids: number[]) => post('/file/restore', { ids }),
   purge: (ids: number[]) => post('/file/purge', { ids }),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
+  inlineUrl: (id: number) => `/api/v1/file/content/${id}?inline=1`,
+  saveText: (id: number, content: string) => put<FileNode>('/file/text', { id, content }),
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Archives (background tasks)
