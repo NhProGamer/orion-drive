@@ -28,12 +28,17 @@ type File struct {
 	Starred         bool           `json:"starred"`
 	IsSymbolic      bool           `json:"is_symbolic"`
 	StoragePolicyID uint           `json:"storage_policy_id"`
-	Props           JSON           `gorm:"type:json" json:"-"`
-	TrashedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	// LockOwnerID, when set, marks the file as locked by that user.
+	LockOwnerID *uint          `json:"lock_owner_id"`
+	Props       JSON           `gorm:"type:json" json:"-"`
+	TrashedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // IsFolder reports whether the file is a directory.
 func (f *File) IsFolder() bool { return f.Type == FileTypeFolder }
+
+// IsLocked reports whether the file is currently locked.
+func (f *File) IsLocked() bool { return f.LockOwnerID != nil }
 
 // Ext returns the lower-cased extension (without the dot), or "".
 func (f *File) Ext() string {

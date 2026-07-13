@@ -78,6 +78,9 @@ func (m *Manager) InitUpload(ctx context.Context, user *model.User, parentID *ui
 		if existing.IsFolder() {
 			return nil, ErrConflict
 		}
+		if existing.IsLocked() {
+			return nil, ErrLocked
+		}
 		id := existing.ID
 		targetFileID = &id
 	}

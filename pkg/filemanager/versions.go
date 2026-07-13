@@ -43,6 +43,9 @@ func (m *Manager) RestoreVersion(ctx context.Context, user *model.User, fileID, 
 	if err != nil {
 		return nil, err
 	}
+	if f.IsLocked() {
+		return nil, ErrLocked
+	}
 	e, err := m.versionOf(ctx, f, entityID)
 	if err != nil {
 		return nil, err
@@ -60,6 +63,9 @@ func (m *Manager) DeleteVersion(ctx context.Context, user *model.User, fileID, e
 	f, err := m.repo.File.GetByID(ctx, user.ID, fileID)
 	if err != nil {
 		return err
+	}
+	if f.IsLocked() {
+		return ErrLocked
 	}
 	e, err := m.versionOf(ctx, f, entityID)
 	if err != nil {

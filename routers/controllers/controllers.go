@@ -38,6 +38,8 @@ func fail(c *gin.Context, err error) {
 		respond(c, serializer.Err(serializer.CodeBadRequest, err.Error()))
 	case errors.Is(err, filemanager.ErrQuota):
 		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
+	case errors.Is(err, filemanager.ErrLocked):
+		respond(c, serializer.Err(serializer.CodeConflict, err.Error()))
 	default:
 		respond(c, serializer.Err(serializer.CodeInternal, err.Error()))
 	}
@@ -51,6 +53,7 @@ type fileDTO struct {
 	Type     string    `json:"type"` // "file" | "folder"
 	Size     int64     `json:"size"`
 	Starred  bool      `json:"starred"`
+	Locked   bool      `json:"locked"`
 	Owner    string    `json:"owner"`
 	Modified time.Time `json:"modified"`
 }
@@ -67,6 +70,7 @@ func toDTO(f *model.File, owner string) fileDTO {
 		Type:     t,
 		Size:     f.Size,
 		Starred:  f.Starred,
+		Locked:   f.IsLocked(),
 		Owner:    owner,
 		Modified: f.UpdatedAt,
 	}

@@ -112,6 +112,9 @@ func (m *Manager) Rename(ctx context.Context, user *model.User, id uint, newName
 	if err != nil {
 		return nil, err
 	}
+	if f.IsLocked() {
+		return nil, ErrLocked
+	}
 	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, f.ParentID, newName); err == nil && existing.ID != id {
 		return nil, ErrConflict
 	}
@@ -131,6 +134,9 @@ func (m *Manager) Move(ctx context.Context, user *model.User, ids []uint, destPa
 		f, err := m.repo.File.GetByID(ctx, user.ID, id)
 		if err != nil {
 			return err
+		}
+		if f.IsLocked() {
+			return ErrLocked
 		}
 		if destParentID != nil && *destParentID == id {
 			return errors.New("cannot move a folder into itself")
@@ -159,8 +165,17 @@ func (m *Manager) ToggleStar(ctx context.Context, user *model.User, id uint) (*m
 	return f, nil
 }
 
-// Trash moves files to the recycle bin.
+// Trash moves files to the recycle bin. Locked files are refused.
 func (m *Manager) Trash(ctx context.Context, user *model.User, ids []uint) error {
+	for _, id := range ids {
+		f, err := m.repo.File.GetByID(ctx, user.ID, id)
+		if err != nil {
+			return err
+		}
+		if f.IsLocked() {
+			return ErrLocked
+		}
+	}
 	return m.repo.File.Trash(ctx, user.ID, ids)
 }
 
