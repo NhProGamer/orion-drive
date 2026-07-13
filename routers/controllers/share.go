@@ -98,8 +98,18 @@ func (ctl *Controller) ShareList(c *gin.Context) {
 
 // ShareDownload delivers a shared file (no auth), enforcing password/expiry/limit.
 // For folder shares, the file within is selected by the `path` query param.
+// With `check=1` it only validates the share (204) without streaming or counting
+// a download, so the public page can surface errors before navigating.
 func (ctl *Controller) ShareDownload(c *gin.Context) {
 	password := c.Query("password")
+	if c.Query("check") != "" {
+		if err := ctl.dep.Shares.Check(c.Request.Context(), c.Param("token"), c.Query("path"), password); err != nil {
+			failShare(c, err)
+			return
+		}
+		c.Status(http.StatusNoContent)
+		return
+	}
 	target, err := ctl.dep.Shares.Download(c.Request.Context(), c.Param("token"), c.Query("path"), password)
 	if err != nil {
 		failShare(c, err)

@@ -62,17 +62,23 @@ function downloadFolderArchive() {
   window.location.href = api.shareArchiveUrl(token, curPath.value, password.value || undefined)
 }
 
-// Single-file share download (with inline password probe).
-function download() {
+// Single-file share download. A lightweight `check=1` request validates the
+// share (204) and surfaces password/expiry errors inline; the actual download is
+// then a plain browser navigation — never a fetch of the whole (possibly large)
+// file, and it counts as exactly one download.
+async function download() {
   error.value = ''
   const url = api.shareContentUrl(token, undefined, password.value || undefined)
-  fetch(url, { redirect: 'manual' })
-    .then((r) => {
-      if (r.status === 401) return void (error.value = 'Mot de passe incorrect ou requis.')
-      if (r.status === 403) return void (error.value = 'Ce lien n’est plus disponible.')
-      window.location.href = url
-    })
-    .catch(() => (window.location.href = url))
+  const probe = url + (url.includes('?') ? '&' : '?') + 'check=1'
+  try {
+    const r = await fetch(probe)
+    if (r.status === 401) return void (error.value = 'Mot de passe incorrect ou requis.')
+    if (r.status === 403) return void (error.value = 'Ce lien n’est plus disponible.')
+    if (!r.ok) return void (error.value = 'Téléchargement impossible.')
+  } catch {
+    /* network hiccup on the probe — fall through and try the download anyway */
+  }
+  window.location.href = url
 }
 </script>
 

@@ -173,6 +173,28 @@ func (s *Service) ListDir(ctx context.Context, token, subPath, password string) 
 	return target.Name, entries, nil
 }
 
+// Check validates a share for download (expiry, password, download limit, and
+// that the target at subPath is a file) WITHOUT streaming or recording a
+// download. Used by the public page to surface errors before starting the
+// actual download (which is a plain browser navigation).
+func (s *Service) Check(ctx context.Context, token, subPath, password string) error {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return err
+	}
+	if share.Exhausted() {
+		return ErrExhausted
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return err
+	}
+	if target.IsFolder() {
+		return ErrNotAFile
+	}
+	return nil
+}
+
 // Download validates the share and returns a download target for a file at
 // subPath (empty for a file share's root), then records the download.
 func (s *Service) Download(ctx context.Context, token, subPath, password string) (*filemanager.DownloadTarget, error) {
