@@ -321,7 +321,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       </header>
 
       <div class="workspace">
-        <main class="content" @click.self="files.clearSel" @contextmenu.self.prevent="bgCtx">
+        <main class="content" @click.self="files.clearSel" @contextmenu.prevent="bgCtx">
           <!-- Header -->
           <div class="content-head">
             <template v-if="files.sel.length">

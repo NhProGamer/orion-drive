@@ -23,7 +23,7 @@ const dateLabel = computed(() => fmtDate(props.node.modified))
     :class="{ selected }"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
-    @contextmenu="$emit('menu', node, $event)"
+    @contextmenu.stop="$emit('menu', node, $event)"
   >
     <div class="row-name">
       <component :is="meta.icon" :size="16" :class="'tint-' + meta.tint" />

@@ -16,7 +16,7 @@ defineEmits<{
     :class="{ selected }"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
-    @contextmenu="$emit('menu', node, $event)"
+    @contextmenu.stop="$emit('menu', node, $event)"
   >
     <Folder :size="18" />
     <span class="name">{{ node.name }}</span>

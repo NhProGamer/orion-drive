@@ -28,7 +28,7 @@ const metaLine = computed(() => {
     :class="{ selected }"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
-    @contextmenu="$emit('menu', node, $event)"
+    @contextmenu.stop="$emit('menu', node, $event)"
   >
     <div class="card-thumb">
       <div v-if="isImage" class="thumb-img"><span>{{ extLabel }}</span></div>
