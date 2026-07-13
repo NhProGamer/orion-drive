@@ -31,3 +31,7 @@ conf.ini
 
 # GoReleaser output
 /dist/
+
+# Tooling caches / stray lockfiles
+.serena/
+/frontend/pnpm-lock.yaml
