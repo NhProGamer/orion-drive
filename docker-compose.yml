@@ -7,6 +7,8 @@ services:
     # build: .
     container_name: orion-drive
     restart: unless-stopped
+    depends_on:
+      - onlyoffice
     ports:
       - "5212:5212"
     volumes:
@@ -47,14 +49,37 @@ services:
       # OD_CONF_Slave_Secret: ""
       # OD_CONF_Slave_StoragePath: "/app/data/slave-storage"
 
-      # ---- [WOPI] (online Office editing via Collabora / OnlyOffice) ----
-      # OD_CONF_WOPI_ServerURL: "https://collabora.example.com"
-      # OD_CONF_WOPI_EditURLTemplate: "https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}"
+      # ---- [WOPI] online Office editing via the `onlyoffice` service below ----
+      # IMPORTANT: OnlyOffice (in its container) calls back to OrionDrive's WOPI
+      # endpoint, whose URL is derived from SiteURL. So SiteURL *and* the URLs
+      # below must all resolve to a host reachable by BOTH the browser and the
+      # onlyoffice container — a real LAN IP or domain, NOT `localhost`.
+      # Replace `office.example` (and set SiteURL accordingly) for a working setup.
+      OD_CONF_WOPI_ServerURL: "http://office.example:8080"
+      # Endpoint is per document type: use word for .docx, cell for .xlsx, slide for .pptx.
+      OD_CONF_WOPI_EditURLTemplate: "http://office.example:8080/hosting/wopi/word/edit?WOPISrc={src}"
 
       # ---- [Redis] (parsed but NOT yet used — in-memory cache only for now) ----
       # OD_CONF_Redis_Server: ""
       # OD_CONF_Redis_Password: ""
       # OD_CONF_Redis_DB: "0"
 
+  # OnlyOffice Document Server — the WOPI client that renders/edits Office files.
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice
+    restart: unless-stopped
+    environment:
+      WOPI_ENABLED: "true" # act as a WOPI client for OrionDrive's WOPI host
+      JWT_ENABLED: "true"
+      JWT_SECRET: "change-me-onlyoffice-jwt-secret" # CHANGE this
+    ports:
+      - "8080:80" # editor UI (browser-facing); must match the WOPI URLs above
+    volumes:
+      - onlyoffice-data:/var/www/onlyoffice/Data
+      - onlyoffice-logs:/var/log/onlyoffice
+
 volumes:
   orion-data:
+  onlyoffice-data:
+  onlyoffice-logs:
