@@ -1,0 +1,58 @@
+# GoReleaser — build tagged SemVer releases (https://goreleaser.com).
+# Usage: tag a version (git tag -a v0.6.0 -m ...) then `goreleaser release --clean`.
+version: 2
+project_name: orion-drive
+
+before:
+  hooks:
+    - go mod tidy
+    # Build the Vue SPA so it is embedded (application/statics/dist) into the binary.
+    - sh -c "cd frontend && npm ci && npm run build"
+
+builds:
+  - id: orion-drive
+    main: .
+    binary: orion-drive
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/NhProGamer/orion-drive/application/constants.Version={{ .Version }}
+      - -X github.com/NhProGamer/orion-drive/application/constants.Commit={{ .ShortCommit }}
+      - -X github.com/NhProGamer/orion-drive/application/constants.Date={{ .CommitDate }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - conf.ini.example
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Publish releases to the self-hosted Gitea instance (needs GITEA_TOKEN).
+release:
+  gitea:
+    owner: nhpro
+    name: orion-drive
+
+gitea_urls:
+  api: https://git.nhsoul.fr/api/v1
+  download: https://git.nhsoul.fr

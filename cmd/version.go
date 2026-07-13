@@ -12,7 +12,7 @@ var versionCmd = &cobra.Command{
 	Short:             "Print the OrionDrive version",
 	PersistentPreRunE: func(*cobra.Command, []string) error { return nil }, // no config needed
 	Run: func(*cobra.Command, []string) {
-		fmt.Printf("OrionDrive %s\n", constants.Version)
+		fmt.Printf("OrionDrive %s (commit %s, built %s)\n", constants.Version, constants.Commit, constants.Date)
 	},
 }
 

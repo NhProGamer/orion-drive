@@ -19,8 +19,15 @@ RUN go mod download
 # Copy the source, then drop in the freshly built SPA before compiling (go:embed).
 COPY . .
 COPY --from=frontend /src/application/statics/dist ./application/statics/dist
+# Stamp the version at build time: docker build --build-arg VERSION=v0.6.0
+ARG VERSION=docker
+ARG COMMIT=none
 # Pure-Go build (glebarez/sqlite needs no CGO) → a static binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /orion-drive .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags "-s -w \
+      -X github.com/NhProGamer/orion-drive/application/constants.Version=${VERSION} \
+      -X github.com/NhProGamer/orion-drive/application/constants.Commit=${COMMIT}" \
+    -o /orion-drive .
 
 # ---- Stage 3: minimal runtime ----
 FROM alpine:3.20
