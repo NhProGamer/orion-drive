@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Star, X, Download, Lock, Unlock, Link as LinkIcon, History, RotateCcw, Trash2 } from 'lucide-vue-next'
-import { api, type FileNode, type Version } from '@/lib/api'
-import { kindFromName, ext, fmtSize, fmtDate } from '@/lib/format'
+import { Star, X, Download, Lock, Unlock, Link as LinkIcon, History, RotateCcw, Trash2, FolderInput, Folder, FileText } from 'lucide-vue-next'
+import { api, type FileNode, type Version, type ArchiveEntry } from '@/lib/api'
+import { kindFromName, ext, fmtSize, fmtDate, isArchive } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
 
@@ -17,6 +17,9 @@ const sizeLabel = computed(() => (props.node.type === 'folder' ? '—' : fmtSize
 const dateLabel = computed(() => fmtDate(props.node.modified))
 
 const versions = ref<Version[]>([])
+const entries = ref<ArchiveEntry[]>([])
+const archive = computed(() => props.node.type === 'file' && isArchive(props.node.name))
+
 async function loadVersions() {
   versions.value = []
   if (props.node.type !== 'file') return
@@ -26,7 +29,16 @@ async function loadVersions() {
     versions.value = []
   }
 }
-watch(() => props.node.id, loadVersions, { immediate: true })
+async function loadEntries() {
+  entries.value = []
+  if (!archive.value) return
+  try {
+    entries.value = await api.archiveEntries(props.node.id)
+  } catch {
+    entries.value = []
+  }
+}
+watch(() => props.node.id, () => { loadVersions(); loadEntries() }, { immediate: true })
 
 async function restore(v: Version) {
   await api.restoreVersion(props.node.id, v.id)
@@ -81,8 +93,20 @@ async function toggleLock() {
       </div>
     </div>
 
+    <div v-if="archive && entries.length" class="preview-versions">
+      <div class="pv-head"><FolderInput :size="14" />Contenu de l’archive <span class="pv-count">{{ entries.length }}</span></div>
+      <div v-for="(e, i) in entries.slice(0, 50)" :key="i" class="pv-item">
+        <component :is="e.is_dir ? Folder : FileText" :size="14" class="tint-neutral" />
+        <div class="pv-meta">
+          <span class="pv-name">{{ e.name }}</span>
+        </div>
+        <span v-if="!e.is_dir" class="mono pv-date">{{ fmtSize(e.size) }}</span>
+      </div>
+    </div>
+
     <div class="preview-actions">
       <button class="btn btn-secondary" @click="$emit('download')"><Download :size="15" />Télécharger</button>
+      <button v-if="archive" class="btn btn-secondary" @click="files.extract(node)"><FolderInput :size="15" />Extraire</button>
       <button v-if="node.type === 'file'" class="btn btn-secondary" @click="files.createDirectLink(node)">
         <LinkIcon :size="15" />Lien direct
       </button>

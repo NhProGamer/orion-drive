@@ -26,6 +26,11 @@ export function ext(name: string): string {
   return m ? m[1].toUpperCase() : ''
 }
 
+/** Whether the file name is a supported archive (zip, tar, tar.gz, tgz, 7z). */
+export function isArchive(name: string): boolean {
+  return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
+}
+
 /** Human-readable size, French style (comma decimal, narrow no-break space). */
 export function fmtSize(bytes: number): string {
   if (!bytes) return '—'

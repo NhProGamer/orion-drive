@@ -4,13 +4,13 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive,
+  Link as LinkIcon, FileArchive, FolderInput,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { FileNode } from '@/lib/api'
-import { fmtSize } from '@/lib/format'
+import { fmtSize, isArchive } from '@/lib/format'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -113,6 +113,12 @@ function ctxItems(): MenuItem[] {
   if (!files.readOnly && n && (multi || n.type === 'folder')) {
     items.push({ id: 'archive', label: 'Télécharger en archive', icon: FileArchive })
   }
+  if (!files.readOnly && n) {
+    items.push({ id: 'compress', label: 'Compresser en .zip', icon: FileArchive })
+  }
+  if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
+    items.push({ id: 'extract', label: 'Extraire ici', icon: FolderInput })
+  }
   if (!multi && n && n.type === 'file') {
     items.push({ id: 'share', label: 'Partager', icon: Share2 })
     items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
@@ -142,6 +148,8 @@ function menuAction(id: string) {
     case 'share': if (sel[0]) shareNode.value = sel[0]; break
     case 'directlink': if (sel[0]) files.createDirectLink(sel[0]); break
     case 'archive': files.downloadArchive([...files.sel]); break
+    case 'compress': files.compress([...files.sel]); break
+    case 'extract': if (sel[0]) files.extract(sel[0]); break
     case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break

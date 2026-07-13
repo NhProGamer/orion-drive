@@ -28,6 +28,24 @@ export interface DirectLink {
   created: string
 }
 
+export interface ArchiveEntry {
+  name: string
+  size: number
+  is_dir: boolean
+}
+
+export interface Task {
+  id: string
+  type: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  progress: number
+  message: string
+  error?: string
+  result?: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
 export interface Me {
   id: number
   email: string
@@ -103,6 +121,13 @@ export const api = {
   purge: (ids: number[]) => post('/file/purge', { ids }),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
+
+  // Archives (background tasks)
+  compress: (parent: string, ids: number[], name?: string) =>
+    post<Task>('/file/archive/compress', { parent, ids, name }),
+  extract: (id: number, parent: string) => post<Task>('/file/archive/extract', { id, parent }),
+  archiveEntries: (id: number) => get<ArchiveEntry[]>(`/file/archive/entries/${id}`),
+  taskStatus: (id: string) => get<Task>(`/task/${id}`),
 
   // Locking
   lock: (id: number) => post<FileNode>('/file/lock', { id }),

@@ -245,6 +245,44 @@ export const useFilesStore = defineStore('files', {
       window.open(api.archiveUrl(ids), '_blank')
     },
 
+    // Poll a background task until it finishes, then run onDone.
+    pollTask(id: string, onDone: () => void) {
+      const started = Date.now()
+      const tick = async () => {
+        try {
+          const t = await api.taskStatus(id)
+          if (t.status === 'done') return onDone()
+          if (t.status === 'failed') {
+            this.ui().toast('Tâche échouée' + (t.error ? ` : ${t.error}` : ''), 'x')
+            return
+          }
+        } catch {
+          /* keep polling */
+        }
+        if (Date.now() - started < 120000) setTimeout(tick, 500)
+      }
+      setTimeout(tick, 300)
+    },
+
+    async compress(ids: number[]) {
+      if (!ids.length) return
+      const task = await api.compress(this.currentParentParam, ids)
+      this.ui().toast('Compression en cours…', 'file-archive')
+      this.pollTask(task.id, async () => {
+        await Promise.all([this.load(), this.loadCapacity()])
+        this.ui().toast('Archive créée', 'file-archive')
+      })
+    },
+
+    async extract(node: FileNode) {
+      const task = await api.extract(node.id, this.currentParentParam)
+      this.ui().toast('Extraction en cours…', 'file-archive')
+      this.pollTask(task.id, async () => {
+        await Promise.all([this.load(), this.loadCapacity()])
+        this.ui().toast('Archive extraite', 'file-archive')
+      })
+    },
+
     /* Chunked resumable upload */
     async upload(files: File[]) {
       const parent = this.view === 'drive' ? this.currentParentParam : 'root'

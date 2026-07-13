@@ -995,6 +995,13 @@ html[data-density='compact'] {
   font-size: 10.5px;
   color: var(--fg-2);
 }
+.pv-name {
+  font-size: 12px;
+  color: var(--fg-0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pv-item.current .pv-meta .mono {
   color: var(--accent);
 }
