@@ -1,5 +1,7 @@
 # OrionDrive
 
+[![CI](https://git.nhsoul.fr/nhpro/orion-drive/actions/workflows/ci.yaml/badge.svg)](https://git.nhsoul.fr/nhpro/orion-drive/actions)
+
 Self-hosted file management platform. Go backend, Vue 3 frontend.
 
 OrionDrive is a clean-room project inspired by the feature set of self-hosted drives

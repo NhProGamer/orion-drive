@@ -28,3 +28,6 @@ conf.ini
 # TS build info
 /frontend/*.tsbuildinfo
 /frontend/node_modules/.tmp/
+
+# GoReleaser output
+/dist/
