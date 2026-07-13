@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -246,6 +247,30 @@ func inlineContentType(name string) string {
 		return ct
 	}
 	return "application/octet-stream"
+}
+
+// maxBlobSize caps an in-place binary save (e.g. an edited image).
+const maxBlobSize = 100 << 20
+
+// SaveBlob overwrites a file's binary content (raw request body), creating a new
+// version. Used by the in-browser image editor.
+func (ctl *Controller) SaveBlob(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBlobSize))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "read error"))
+		return
+	}
+	f, err := ctl.dep.Files.SaveVersion(c.Request.Context(), ctl.user(c), id, body)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
 }
 
 // SaveText overwrites a text file's content, creating a new version.

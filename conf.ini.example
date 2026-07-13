@@ -50,6 +50,17 @@ EncryptionKey =
 Secret =
 StoragePath = data/slave-storage
 
+[WOPI]
+; Online Office editing via a WOPI client (Collabora Online, OnlyOffice Docs).
+; ServerURL is the Office server base; EditURLTemplate builds the editor URL from
+; the WOPI source and must contain {src} (the URL-encoded WOPISrc). Both empty
+; disables Office editing. SiteURL must be reachable by the Office server.
+; Collabora example:
+;   ServerURL = https://collabora.example.com
+;   EditURLTemplate = https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}
+ServerURL =
+EditURLTemplate =
+
 [Redis]
 ; Leave Server empty to use the in-memory cache.
 Server =

@@ -17,6 +17,7 @@ import (
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
+	"github.com/NhProGamer/orion-drive/pkg/wopi"
 	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"gorm.io/gorm"
@@ -34,6 +35,7 @@ type Dependency struct {
 	Tasks  *queue.Queue
 	Auth   *auth.Authenticator
 	Signer *auth.Signer
+	WOPI   *wopi.Token
 }
 
 // Init opens the database and assembles the dependency container. It does not
@@ -80,6 +82,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		Tasks:  tasks,
 		Auth:   authn,
 		Signer: auth.NewSigner(cfg.System.SessionSecret),
+		WOPI:   wopi.NewToken(cfg.System.SessionSecret),
 	}
 	return dep, nil
 }

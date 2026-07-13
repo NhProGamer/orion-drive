@@ -19,6 +19,7 @@ type Config struct {
 	OIDC     OIDC
 	Storage  Storage
 	Slave    Slave
+	WOPI     WOPI
 	Redis    Redis
 }
 
@@ -64,6 +65,19 @@ type Slave struct {
 	Secret      string `ini:"Secret"`
 	StoragePath string `ini:"StoragePath"`
 }
+
+// WOPI configures online Office editing via a WOPI client (Collabra Online,
+// OnlyOffice Docs, ...). When ServerURL is empty, Office editing is disabled.
+// EditURLTemplate builds the editor URL from the WOPI source; it must contain
+// the {src} placeholder (URL-encoded WOPISrc), e.g. for Collabora:
+// https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}
+type WOPI struct {
+	ServerURL       string `ini:"ServerURL"`
+	EditURLTemplate string `ini:"EditURLTemplate"`
+}
+
+// Enabled reports whether online Office editing is configured.
+func (w WOPI) Enabled() bool { return w.ServerURL != "" && w.EditURLTemplate != "" }
 
 // Redis optionally replaces the in-memory cache.
 type Redis struct {

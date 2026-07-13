@@ -77,6 +77,7 @@ func (ctl *Controller) Me(c *gin.Context) {
 		"storage_used": u.StorageUsed,
 		"oidc_enabled": ctl.dep.Auth.Enabled(),
 		"can_share":    canShare,
+		"wopi":         ctl.dep.Config.WOPI.Enabled(),
 	}))
 }
 

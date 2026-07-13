@@ -34,6 +34,12 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	// Public direct-link content (no authentication).
 	api.GET("/link/:token", ctl.DirectLinkContent)
 
+	// WOPI host endpoints (called by the Office editor; authorised by token).
+	wopi := r.Group("/wopi/files")
+	wopi.GET("/:id", ctl.WopiCheckFileInfo)
+	wopi.GET("/:id/contents", ctl.WopiGetFile)
+	wopi.POST("/:id/contents", ctl.WopiPutFile)
+
 	// When a slave secret is configured, this node also acts as a storage slave.
 	if dep.Config.Slave.Secret != "" {
 		if err := registerSlaveRoutes(r, dep); err != nil {
@@ -76,6 +82,8 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.POST("/file/purge", ctl.Purge)
 	f.GET("/file/content/:id", ctl.Download)
 	f.PUT("/file/text", ctl.SaveText)
+	f.PUT("/file/blob/:id", ctl.SaveBlob)
+	f.GET("/file/office/:id", ctl.OfficeLaunch)
 
 	f.GET("/file/versions/:id", ctl.ListVersions)
 	f.POST("/file/version/restore", ctl.RestoreVersion)

@@ -29,6 +29,23 @@ func (m *Manager) SaveVersion(ctx context.Context, user *model.User, fileID uint
 	return f, nil
 }
 
+// OpenFileContent returns a plain (decrypted) reader for a user's file, plus the
+// file record. Callers must Close the reader. Used by the WOPI host.
+func (m *Manager) OpenFileContent(ctx context.Context, user *model.User, fileID uint) (io.ReadCloser, *model.File, error) {
+	f, err := m.repo.File.GetByID(ctx, user.ID, fileID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if f.IsFolder() {
+		return nil, nil, errors.New("not a file")
+	}
+	rc, err := m.openContent(ctx, f)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rc, f, nil
+}
+
 // storeVersion writes r as a new primary version of file, encrypting at rest
 // when the policy requires it, and adjusts the user's used storage.
 func (m *Manager) storeVersion(ctx context.Context, user *model.User, file *model.File, r io.Reader, size int64) error {
