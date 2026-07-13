@@ -1,0 +1,32 @@
+services:
+  orion-drive:
+    build: .
+    # Or use a prebuilt image once published:
+    # image: ghcr.io/nhprogamer/orion-drive:latest
+    container_name: orion-drive
+    restart: unless-stopped
+    ports:
+      - "5212:5212"
+    volumes:
+      - orion-data:/app/data
+    environment:
+      # Public URL of this instance (used to build OIDC redirect and share links).
+      OD_CONF_System_SiteURL: "http://localhost:5212"
+      # CHANGE THIS to a long random string (e.g. `openssl rand -hex 32`).
+      OD_CONF_System_SessionSecret: "change-me-to-a-long-random-string"
+
+      # --- OIDC / SSO login (required for real users; dev-login only works in Mode=debug) ---
+      # OD_CONF_OIDC_Issuer: "https://accounts.google.com"
+      # OD_CONF_OIDC_ClientID: ""
+      # OD_CONF_OIDC_ClientSecret: ""
+      # OD_CONF_OIDC_RedirectURI: "http://localhost:5212/api/v1/auth/oidc/callback"
+
+      # --- At-rest encryption key (64 hex chars) for policies created with --encrypt ---
+      # OD_CONF_Storage_EncryptionKey: ""
+
+      # --- Online Office editing via a WOPI client (Collabora / OnlyOffice) ---
+      # OD_CONF_WOPI_ServerURL: "https://collabora.example.com"
+      # OD_CONF_WOPI_EditURLTemplate: "https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}"
+
+volumes:
+  orion-data:

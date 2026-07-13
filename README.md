@@ -43,6 +43,26 @@ cd .. && go build -o orion-drive .
 ./orion-drive server
 ```
 
+## Docker
+
+The multi-stage `Dockerfile` builds the frontend, compiles a static Go binary with
+the SPA embedded, and ships a minimal Alpine runtime (with `ffmpeg` for thumbnails).
+
+```bash
+# Build and run with compose (data persists in the `orion-data` volume):
+docker compose up --build        # http://localhost:5212
+
+# Or plain docker:
+docker build -t orion-drive .
+docker run -p 5212:5212 -v orion-data:/app/data \
+  -e OD_CONF_System_SessionSecret="$(openssl rand -hex 32)" \
+  orion-drive
+```
+
+Configure via `OD_CONF_<Section>_<Key>` environment variables (see `conf.ini.example`).
+Set at least `OD_CONF_System_SessionSecret` and the `OD_CONF_OIDC_*` values for real logins;
+the image runs in `release` mode, so the debug dev-login is disabled.
+
 ## Layout
 
 ```
