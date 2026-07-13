@@ -10,9 +10,10 @@ type Repository struct {
 	User   *UserRepo
 	Group  *GroupRepo
 	Policy *PolicyRepo
-	File   *FileRepo
-	Entity *EntityRepo
-	Share  *ShareRepo
+	File       *FileRepo
+	Entity     *EntityRepo
+	Share      *ShareRepo
+	DirectLink *DirectLinkRepo
 }
 
 // New builds a Repository bound to db.
@@ -22,8 +23,9 @@ func New(db *gorm.DB) *Repository {
 		User:   &UserRepo{db: db},
 		Group:  &GroupRepo{db: db},
 		Policy: &PolicyRepo{db: db},
-		File:   &FileRepo{db: db},
-		Entity: &EntityRepo{db: db},
-		Share:  &ShareRepo{db: db},
+		File:       &FileRepo{db: db},
+		Entity:     &EntityRepo{db: db},
+		Share:      &ShareRepo{db: db},
+		DirectLink: &DirectLinkRepo{db: db},
 	}
 }

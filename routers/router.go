@@ -31,6 +31,9 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	registerFileRoutes(api, ctl)
 	registerShareRoutes(api, ctl)
 
+	// Public direct-link content (no authentication).
+	api.GET("/link/:token", ctl.DirectLinkContent)
+
 	// When a slave secret is configured, this node also acts as a storage slave.
 	if dep.Config.Slave.Secret != "" {
 		if err := registerSlaveRoutes(r, dep); err != nil {
@@ -79,6 +82,10 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 
 	f.POST("/file/lock", ctl.Lock)
 	f.POST("/file/unlock", ctl.Unlock)
+
+	f.POST("/file/direct-link", ctl.CreateDirectLink)
+	f.GET("/file/direct-links/:id", ctl.ListDirectLinks)
+	f.DELETE("/file/direct-link/:token", ctl.DeleteDirectLink)
 
 	f.POST("/upload", ctl.InitUpload)
 	f.POST("/upload/:sid/chunk", ctl.PutChunk)
