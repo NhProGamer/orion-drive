@@ -124,6 +124,7 @@ export const api = {
   purge: (ids: number[]) => post('/file/purge', { ids }),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
   inlineUrl: (id: number) => `/api/v1/file/content/${id}?inline=1`,
+  thumbUrl: (id: number) => `/api/v1/file/thumb/${id}`,
   saveText: (id: number, content: string) => put<FileNode>('/file/text', { id, content }),
   saveBlob: (id: number, blob: Blob) =>
     put<FileNode>(`/file/blob/${id}`, blob, { headers: { 'Content-Type': 'application/octet-stream' } }),

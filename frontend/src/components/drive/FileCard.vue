@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Star } from 'lucide-vue-next'
-import type { FileNode } from '@/lib/api'
-import { kindFromName, ext, fmtSize, fmtDate } from '@/lib/format'
+import { api, type FileNode } from '@/lib/api'
+import { kindFromName, fmtSize, fmtDate } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 
 const props = defineProps<{ node: FileNode; selected: boolean }>()
@@ -14,8 +14,11 @@ defineEmits<{
 
 const kind = computed(() => kindFromName(props.node.name))
 const meta = computed(() => metaFor(kind.value))
-const isImage = computed(() => kind.value === 'image')
-const extLabel = computed(() => ext(props.node.name) || 'IMG')
+const canThumb = computed(() => ['image', 'video', 'audio'].includes(kind.value))
+const thumbUrl = computed(() => api.thumbUrl(props.node.id))
+const thumbFailed = ref(false)
+// Reset the fallback when the file (or its content) changes.
+watch(() => [props.node.id, props.node.modified], () => (thumbFailed.value = false))
 const metaLine = computed(() => {
   const size = props.node.size ? fmtSize(props.node.size) + ' · ' : ''
   return size + fmtDate(props.node.modified)
@@ -31,7 +34,14 @@ const metaLine = computed(() => {
     @contextmenu.stop="$emit('menu', node, $event)"
   >
     <div class="card-thumb">
-      <div v-if="isImage" class="thumb-img"><span>{{ extLabel }}</span></div>
+      <img
+        v-if="canThumb && !thumbFailed"
+        :src="thumbUrl"
+        class="thumb-real"
+        loading="lazy"
+        alt=""
+        @error="thumbFailed = true"
+      />
       <component :is="meta.icon" v-else :size="34" />
     </div>
     <div class="card-body">
