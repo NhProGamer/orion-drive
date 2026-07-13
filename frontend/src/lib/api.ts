@@ -102,6 +102,7 @@ export const api = {
   restore: (ids: number[]) => post('/file/restore', { ids }),
   purge: (ids: number[]) => post('/file/purge', { ids }),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
+  archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Locking
   lock: (id: number) => post<FileNode>('/file/lock', { id }),

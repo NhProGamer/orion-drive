@@ -240,6 +240,11 @@ export const useFilesStore = defineStore('files', {
       window.open(api.contentUrl(node.id), '_blank')
     },
 
+    downloadArchive(ids: number[]) {
+      if (!ids.length) return
+      window.open(api.archiveUrl(ids), '_blank')
+    },
+
     /* Chunked resumable upload */
     async upload(files: File[]) {
       const parent = this.view === 'drive' ? this.currentParentParam : 'root'

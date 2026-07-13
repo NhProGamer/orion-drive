@@ -4,7 +4,7 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon,
+  Link as LinkIcon, FileArchive,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -110,6 +110,9 @@ function ctxItems(): MenuItem[] {
   } else {
     items.push({ id: 'download', label: 'Télécharger', icon: Download })
   }
+  if (!files.readOnly && n && (multi || n.type === 'folder')) {
+    items.push({ id: 'archive', label: 'Télécharger en archive', icon: FileArchive })
+  }
   if (!multi && n && n.type === 'file') {
     items.push({ id: 'share', label: 'Partager', icon: Share2 })
     items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
@@ -138,6 +141,7 @@ function menuAction(id: string) {
     case 'star': if (sel[0]) files.toggleStar(sel[0]); break
     case 'share': if (sel[0]) shareNode.value = sel[0]; break
     case 'directlink': if (sel[0]) files.createDirectLink(sel[0]); break
+    case 'archive': files.downloadArchive([...files.sel]); break
     case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break
