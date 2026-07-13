@@ -28,6 +28,9 @@ type EntityProps struct {
 	// IV is the base64 AES-CTR initialisation vector when the object is
 	// encrypted at rest; empty means the object is stored in the clear.
 	IV string `json:"iv,omitempty"`
+	// ThumbOf is the source (version) entity a thumbnail was generated from, so a
+	// stale thumbnail can be detected after the file changes.
+	ThumbOf uint `json:"thumb_of,omitempty"`
 }
 
 // DecodeProps unmarshals the entity's Props into a typed struct.

@@ -31,6 +31,18 @@ func (r *EntityRepo) Update(ctx context.Context, e *model.Entity) error {
 	return r.db.WithContext(ctx).Save(e).Error
 }
 
+// GetThumb returns a file's thumbnail entity, if any.
+func (r *EntityRepo) GetThumb(ctx context.Context, fileID uint) (*model.Entity, error) {
+	var e model.Entity
+	err := r.db.WithContext(ctx).
+		Where("file_id = ? AND type = ?", fileID, model.EntityTypeThumb).
+		First(&e).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &e, err
+}
+
 // ListVersions returns a file's version entities, newest first.
 func (r *EntityRepo) ListVersions(ctx context.Context, fileID uint) ([]model.Entity, error) {
 	var es []model.Entity

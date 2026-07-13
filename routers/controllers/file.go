@@ -273,6 +273,23 @@ func (ctl *Controller) SaveBlob(c *gin.Context) {
 	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
 }
 
+// Thumbnail serves a JPEG thumbnail for a file (generated and cached on first
+// request). Returns 404 when the file type has no thumbnail.
+func (ctl *Controller) Thumbnail(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	data, err := ctl.dep.Files.Thumbnail(c.Request.Context(), ctl.user(c), id)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=86400")
+	c.Data(http.StatusOK, "image/jpeg", data)
+}
+
 // SaveText overwrites a text file's content, creating a new version.
 func (ctl *Controller) SaveText(c *gin.Context) {
 	var req struct {

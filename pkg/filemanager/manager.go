@@ -210,6 +210,10 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		if err != nil {
 			continue
 		}
+		// Remove the file's thumbnail, if any (not counted against quota).
+		if t, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil {
+			m.removeEntity(ctx, t.ID)
+		}
 		// Remove every stored version of the file.
 		versions, _ := m.repo.Entity.ListVersions(ctx, f.ID)
 		if len(versions) == 0 && f.PrimaryEntityID != nil {
