@@ -12,6 +12,7 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local"  // register the local storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote" // register the remote (slave) storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
@@ -46,7 +47,14 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 	c := cache.NewMemory()
 	repo := repository.New(db)
 	tmpDir := filepath.Join(filepath.Dir(cfg.Database.DBFile), "tmp", "uploads")
-	files := filemanager.NewManager(repo, c, tmpDir)
+	var cipher *encrypt.Cipher
+	if cfg.Storage.EncryptionKey != "" {
+		cipher, err = encrypt.NewCipherHex(cfg.Storage.EncryptionKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	files := filemanager.NewManager(repo, c, tmpDir, cipher)
 
 	// OIDC discovery is best-effort: if the provider is unreachable or
 	// unconfigured, the server still boots (login just stays unavailable).

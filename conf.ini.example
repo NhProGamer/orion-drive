@@ -37,6 +37,10 @@ Scopes = openid profile email
 [Storage]
 ; Base directory for the default local storage policy.
 LocalBasePath = data/storage
+; 64-char hex (32-byte) AES-256 key enabling at-rest encryption for storage
+; policies created with --encrypt. Generate with: openssl rand -hex 32
+; Leave empty to disable encryption. Losing this key makes encrypted files unrecoverable.
+EncryptionKey =
 
 [Slave]
 ; Set Secret to turn this node into a storage slave: it then exposes the signed

@@ -3,6 +3,7 @@ package filemanager
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -210,6 +211,25 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		defer tmp.Close()
 		reader = io.LimitReader(tmp, s.Size)
 	}
+
+	// Encrypt at rest when the policy requests it (local-serve backends only,
+	// since encrypted bytes must be decrypted by OrionDrive on the way out).
+	var entityProps model.JSON
+	if m.policyEncrypts(policy) {
+		if m.cipher == nil {
+			return nil, errors.New("policy requests encryption but no encryption key is configured")
+		}
+		if !h.Capabilities().LocalServe {
+			return nil, errors.New("encryption is only supported on local-serve storage policies")
+		}
+		enc, iv, err := m.cipher.EncryptReader(reader)
+		if err != nil {
+			return nil, err
+		}
+		reader = enc
+		entityProps = model.MustJSON(model.EntityProps{IV: base64.StdEncoding.EncodeToString(iv)})
+	}
+
 	if err := h.Put(ctx, source, reader, s.Size); err != nil {
 		return nil, err
 	}
@@ -221,6 +241,7 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		ReferenceCount:  1,
 		StoragePolicyID: policy.ID,
 		CreatedByID:     user.ID,
+		Props:           entityProps,
 	}
 	if err := m.repo.Entity.Create(ctx, entity); err != nil {
 		return nil, err

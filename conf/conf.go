@@ -53,6 +53,9 @@ type OIDC struct {
 // Storage configures storage backends.
 type Storage struct {
 	LocalBasePath string `ini:"LocalBasePath"`
+	// EncryptionKey is a 64-char hex (32-byte) AES-256 key enabling at-rest
+	// encryption for storage policies that request it. Empty disables encryption.
+	EncryptionKey string `ini:"EncryptionKey"`
 }
 
 // Slave turns this node into a storage slave when Secret is set: it exposes the

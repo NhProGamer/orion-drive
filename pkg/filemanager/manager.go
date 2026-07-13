@@ -5,6 +5,7 @@ package filemanager
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	"github.com/NhProGamer/orion-drive/repository"
 )
 
@@ -32,11 +34,25 @@ type Manager struct {
 	repo   *repository.Repository
 	cache  cache.Store
 	tmpDir string
+	cipher *encrypt.Cipher // nil when at-rest encryption is not configured
 }
 
-// NewManager builds a Manager. tmpDir is where in-progress uploads are staged.
-func NewManager(repo *repository.Repository, c cache.Store, tmpDir string) *Manager {
-	return &Manager{repo: repo, cache: c, tmpDir: tmpDir}
+// NewManager builds a Manager. tmpDir is where in-progress uploads are staged;
+// cipher, when non-nil, encrypts objects for policies that request it.
+func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, cipher *encrypt.Cipher) *Manager {
+	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher}
+}
+
+// policySettings is the typed view of StoragePolicy.Settings used here.
+type policySettings struct {
+	Encrypt bool `json:"encrypt"`
+}
+
+// policyEncrypts reports whether a policy stores its objects encrypted.
+func (m *Manager) policyEncrypts(p *model.StoragePolicy) bool {
+	var s policySettings
+	_ = p.Settings.Unmarshal(&s)
+	return s.Encrypt
 }
 
 // policyForUser resolves the storage policy that applies to a user.
@@ -272,6 +288,33 @@ func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (*Dow
 		return nil, err
 	}
 
+	var speed int64
+	if user.Group != nil {
+		speed = user.Group.SpeedLimit
+	}
+
+	// Encrypted objects must be decrypted by OrionDrive as it streams them, so
+	// they never use a direct provider URL.
+	if e.Encrypted() {
+		if m.cipher == nil {
+			return nil, errors.New("cannot decrypt: no encryption key configured")
+		}
+		iv, err := base64.StdEncoding.DecodeString(e.DecodeProps().IV)
+		if err != nil {
+			return nil, err
+		}
+		rc, err := h.Open(ctx, e.Source)
+		if err != nil {
+			return nil, err
+		}
+		dec, err := m.cipher.DecryptReadSeeker(rc, iv)
+		if err != nil {
+			_ = rc.Close()
+			return nil, err
+		}
+		return &DownloadTarget{File: f, Stream: newThrottledReader(dec, speed)}, nil
+	}
+
 	// Prefer a direct provider URL when the backend supports it.
 	opts := driver.SourceOptions{Expire: time.Hour, DownloadFilename: f.Name}
 	if url, err := h.Source(ctx, e.Source, opts); err == nil && url != "" {
@@ -281,10 +324,6 @@ func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (*Dow
 	rc, err := h.Open(ctx, e.Source)
 	if err != nil {
 		return nil, err
-	}
-	var speed int64
-	if user.Group != nil {
-		speed = user.Group.SpeedLimit
 	}
 	return &DownloadTarget{File: f, Stream: newThrottledReader(rc, speed)}, nil
 }

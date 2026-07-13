@@ -93,6 +93,39 @@ var policyAddS3Cmd = &cobra.Command{
 }
 
 var (
+	localName     string
+	localBasePath string
+	localEncrypt  bool
+)
+
+var policyAddLocalCmd = &cobra.Command{
+	Use:   "add-local",
+	Short: "Create a local-disk storage policy",
+	RunE: func(*cobra.Command, []string) error {
+		repo, err := repoForCLI()
+		if err != nil {
+			return err
+		}
+		var settings model.JSON
+		if localEncrypt {
+			raw, _ := json.Marshal(map[string]any{"encrypt": true})
+			settings = model.JSON(raw)
+		}
+		p := &model.StoragePolicy{
+			Name:     localName,
+			Type:     model.PolicyTypeLocal,
+			BasePath: localBasePath,
+			Settings: settings,
+		}
+		if err := repo.Policy.Create(context.Background(), p); err != nil {
+			return err
+		}
+		fmt.Printf("created local policy #%d (%s, encrypt=%v)\n", p.ID, p.Name, localEncrypt)
+		return nil
+	},
+}
+
+var (
 	remoteName     string
 	remoteServer   string
 	remoteSecret   string
@@ -162,6 +195,10 @@ func init() {
 	policyAddS3Cmd.Flags().StringVar(&s3BasePath, "base-path", "", "key prefix within the bucket")
 	policyAddS3Cmd.Flags().BoolVar(&s3PathStyle, "path-style", false, "use path-style addressing (required by most S3-compatible servers)")
 
+	policyAddLocalCmd.Flags().StringVar(&localName, "name", "Local", "policy name")
+	policyAddLocalCmd.Flags().StringVar(&localBasePath, "base-path", "data/storage", "base directory on disk")
+	policyAddLocalCmd.Flags().BoolVar(&localEncrypt, "encrypt", false, "encrypt stored objects at rest (requires [Storage] EncryptionKey)")
+
 	policyAddRemoteCmd.Flags().StringVar(&remoteName, "name", "Remote", "policy name")
 	policyAddRemoteCmd.Flags().StringVar(&remoteServer, "server", "", "slave node base URL, e.g. http://slave:5212 (required)")
 	policyAddRemoteCmd.Flags().StringVar(&remoteSecret, "secret", "", "shared signing secret matching the slave (required)")
@@ -171,6 +208,6 @@ func init() {
 	policyAssignCmd.Flags().UintVar(&assignPolicy, "policy", 0, "policy ID")
 	_ = policyAssignCmd.MarkFlagRequired("policy")
 
-	policyCmd.AddCommand(policyListCmd, policyAddS3Cmd, policyAddRemoteCmd, policyAssignCmd)
+	policyCmd.AddCommand(policyListCmd, policyAddLocalCmd, policyAddS3Cmd, policyAddRemoteCmd, policyAssignCmd)
 	rootCmd.AddCommand(policyCmd)
 }
