@@ -51,14 +51,17 @@ The multi-stage `Dockerfile` builds the frontend, compiles a static Go binary wi
 the SPA embedded, and ships a minimal Alpine runtime (with `ffmpeg` for thumbnails).
 
 ```bash
-# Build and run with compose (data persists in the `orion-data` volume):
-docker compose up --build        # http://localhost:5212
+# Run the published image with compose (pulls it; data persists in the volume):
+docker compose up -d             # http://localhost:5212
 
-# Or plain docker:
-docker build -t orion-drive .
+# Or plain docker with the published image:
+docker pull git.nhsoul.fr/nhpro/orion-drive:latest
 docker run -p 5212:5212 -v orion-data:/app/data \
   -e OD_CONF_System_SessionSecret="$(openssl rand -hex 32)" \
-  orion-drive
+  git.nhsoul.fr/nhpro/orion-drive:latest
+
+# Build locally from source instead:
+docker build -t orion-drive .
 ```
 
 Configure via `OD_CONF_<Section>_<Key>` environment variables (see `conf.ini.example`).

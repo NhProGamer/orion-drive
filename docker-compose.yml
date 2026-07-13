@@ -1,8 +1,10 @@
 services:
   orion-drive:
-    build: .
-    # Or use a prebuilt image once published:
-    # image: ghcr.io/nhprogamer/orion-drive:latest
+    # Prebuilt image from the Forgejo registry (docker pull git.nhsoul.fr/nhpro/orion-drive:latest).
+    image: git.nhsoul.fr/nhpro/orion-drive:latest
+    pull_policy: always
+    # For local development from source, comment `image` above and uncomment:
+    # build: .
     container_name: orion-drive
     restart: unless-stopped
     ports:
