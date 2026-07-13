@@ -191,6 +191,24 @@ export const useFilesStore = defineStore('files', {
       await this.load()
     },
 
+    async setLock(node: FileNode, lock: boolean) {
+      if (lock) await api.lock(node.id)
+      else await api.unlock(node.id)
+      await this.load()
+      this.ui().toast(lock ? `« ${node.name} » verrouillé` : `« ${node.name} » déverrouillé`, lock ? 'lock' : 'unlock')
+    },
+
+    async createDirectLink(node: FileNode) {
+      const link = await api.createDirectLink(node.id)
+      try {
+        await navigator.clipboard.writeText(link.url)
+        this.ui().toast('Lien direct copié dans le presse-papiers', 'link')
+      } catch {
+        this.ui().toast(`Lien direct : ${link.url}`, 'link')
+      }
+      return link
+    },
+
     async trash(ids: number[]) {
       await api.trash(ids)
       if (this.previewId && ids.includes(this.previewId)) this.previewId = null

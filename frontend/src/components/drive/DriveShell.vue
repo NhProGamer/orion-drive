@@ -3,7 +3,8 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
   Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
-  Download, Pencil, Star, RotateCcw, Info, Share2,
+  Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
+  Link as LinkIcon,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -111,12 +112,14 @@ function ctxItems(): MenuItem[] {
   }
   if (!multi && n && n.type === 'file') {
     items.push({ id: 'share', label: 'Partager', icon: Share2 })
+    items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
   }
   if (!files.readOnly && n) {
     items.push({ sep: true })
     if (!multi) {
       items.push({ id: 'rename', label: 'Renommer', icon: Pencil })
       items.push({ id: 'star', label: n.starred ? 'Ne plus suivre' : 'Suivre', icon: Star })
+      items.push({ id: 'lock', label: n.locked ? 'Déverrouiller' : 'Verrouiller', icon: n.locked ? Unlock : Lock })
     }
     items.push({ sep: true })
     items.push({ id: 'trash', label: 'Déplacer vers la corbeille', icon: Trash2, danger: true })
@@ -134,6 +137,8 @@ function menuAction(id: string) {
     case 'rename': startRename(); break
     case 'star': if (sel[0]) files.toggleStar(sel[0]); break
     case 'share': if (sel[0]) shareNode.value = sel[0]; break
+    case 'directlink': if (sel[0]) files.createDirectLink(sel[0]); break
+    case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break
     case 'purge': dialog.value = { type: 'purge', ids: [...files.sel] }; break

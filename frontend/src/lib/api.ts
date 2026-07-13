@@ -8,8 +8,24 @@ export interface FileNode {
   type: 'file' | 'folder'
   size: number
   starred: boolean
+  locked: boolean
   owner: string
   modified: string
+}
+
+export interface Version {
+  id: number
+  size: number
+  created: string
+  current: boolean
+  encrypted: boolean
+}
+
+export interface DirectLink {
+  token: string
+  url: string
+  downloads: number
+  created: string
 }
 
 export interface Me {
@@ -86,6 +102,22 @@ export const api = {
   restore: (ids: number[]) => post('/file/restore', { ids }),
   purge: (ids: number[]) => post('/file/purge', { ids }),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
+
+  // Locking
+  lock: (id: number) => post<FileNode>('/file/lock', { id }),
+  unlock: (id: number) => post<FileNode>('/file/unlock', { id }),
+
+  // Versioning
+  listVersions: (id: number) => get<Version[]>(`/file/versions/${id}`),
+  restoreVersion: (file_id: number, entity_id: number) =>
+    post<FileNode>('/file/version/restore', { file_id, entity_id }),
+  deleteVersion: (file_id: number, entity_id: number) =>
+    post('/file/version/delete', { file_id, entity_id }),
+
+  // Direct links
+  createDirectLink: (id: number) => post<DirectLink>('/file/direct-link', { id }),
+  listDirectLinks: (id: number) => get<DirectLink[]>(`/file/direct-links/${id}`),
+  deleteDirectLink: (token: string) => http.delete(`/file/direct-link/${token}`),
 
   initUpload: (parent: string, name: string, size: number) =>
     post<UploadInit>('/upload', { parent, name, size }),
