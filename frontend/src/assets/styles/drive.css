@@ -1014,6 +1014,116 @@ html[data-halo='off'] body::before {
   padding: 1px 7px;
 }
 
+/* Admin panel */
+.admin {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-7);
+  position: relative;
+  z-index: 1;
+}
+.admin-top {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.admin-top h1 {
+  font-size: 22px;
+  margin: 0;
+}
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--s-5);
+}
+.admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  font-size: 13px;
+}
+.admin-tab.active {
+  color: var(--fg-0);
+  border-bottom-color: var(--accent);
+}
+.admin-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--s-4);
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.stat-num {
+  font-size: 24px;
+  font-weight: 600;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.admin-actions {
+  margin-bottom: var(--s-3);
+}
+.admin-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.admin-table th {
+  text-align: left;
+  color: var(--fg-2);
+  font-weight: 500;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.admin-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+.admin-table select.input {
+  height: 30px;
+  padding: 0 8px;
+  min-width: 120px;
+}
+.row-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+}
+.form-grid label.chk {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
 /* My shares view */
 .shares {
   display: flex;

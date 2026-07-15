@@ -55,6 +55,49 @@ export interface Me {
   oidc_enabled: boolean
   can_share: boolean
   wopi: boolean
+  admin: boolean
+}
+
+export interface AdminStats {
+  users: number
+  files: number
+  shares: number
+  groups: number
+  policies: number
+  storage_used: number
+}
+
+export interface AdminUser {
+  id: number
+  email: string
+  nick: string
+  status: number
+  storage_used: number
+  group_id: number
+  group_name: string
+  admin: boolean
+  created_at: string
+}
+
+export interface AdminGroup {
+  id: number
+  name: string
+  max_storage: number
+  speed_limit: number
+  storage_policy_id: number
+  can_share: boolean
+  can_admin: boolean
+  user_count: number
+}
+
+export interface AdminPolicy {
+  id: number
+  name: string
+  type: string
+  server: string
+  bucket_name: string
+  base_path: string
+  settings: any
 }
 
 export interface Capacity {
@@ -192,6 +235,19 @@ export const api = {
   },
 
   logout: () => post('/auth/logout'),
+
+  // Admin
+  adminStats: () => get<AdminStats>('/admin/stats'),
+  adminUsers: () => get<AdminUser[]>('/admin/users'),
+  adminUpdateUser: (id: number, input: { group_id?: number; status?: number }) =>
+    http.patch(`/admin/users/${id}`, input),
+  adminGroups: () => get<AdminGroup[]>('/admin/groups'),
+  adminCreateGroup: (g: Partial<AdminGroup>) => post<{ id: number }>('/admin/groups', g),
+  adminUpdateGroup: (id: number, g: Partial<AdminGroup>) => http.patch(`/admin/groups/${id}`, g),
+  adminDeleteGroup: (id: number) => http.delete(`/admin/groups/${id}`),
+  adminPolicies: () => get<AdminPolicy[]>('/admin/policies'),
+  adminCreatePolicy: (p: any) => post<{ id: number }>('/admin/policies', p),
+  adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
 }
 
 export interface ShareInfo {

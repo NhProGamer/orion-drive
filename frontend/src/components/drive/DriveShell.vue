@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
-  Plus, FolderPlus, Upload, HardDrive, Trash2, Database,
+  Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText,
@@ -313,6 +313,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <button class="icon-btn" :class="{ active: ui.mode === 'grid' }" title="Grille" @click="ui.setMode('grid')"><Grid3x3 :size="16" /></button>
             <button class="icon-btn" :class="{ active: ui.mode === 'list' }" title="Liste" @click="ui.setMode('list')"><List :size="16" /></button>
           </div>
+          <button v-if="auth.isAdmin" class="icon-btn" title="Administration" @click="$router.push('/admin')"><Shield :size="16" /></button>
           <button class="icon-btn" :title="ui.theme === 'dark' ? 'Thème clair' : 'Thème sombre'" @click="ui.toggleTheme">
             <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
           </button>
