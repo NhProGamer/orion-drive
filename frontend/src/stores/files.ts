@@ -42,12 +42,15 @@ export const useFilesStore = defineStore('files', {
     trashCount: 0,
     storageFiles: [] as FileNode[], // full non-trashed file list for the storage view
     shares: [] as ShareInfo[], // the user's own share links (My shares view)
+    dragIds: [] as number[], // ids currently being drag-moved
+    dragOverId: null as number | null, // folder highlighted as a drop target
   }),
 
   getters: {
     viewLabel: (s) => VIEW_LABEL[s.view],
     searching: (s) => s.q.trim().length > 0,
     readOnly: (s) => s.view === 'shares',
+    dndEnabled: (s) => s.view === 'drive', // drag-to-move only in Mon Drive
     folderId: (s) => (s.path.length ? s.path[s.path.length - 1].id : null),
     currentParentParam(): string {
       const id = this.folderId
@@ -269,6 +272,30 @@ export const useFilesStore = defineStore('files', {
       this.clearSel()
       await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
       this.ui().toast(ids.length > 1 ? `${ids.length} éléments restaurés` : 'Élément restauré', 'restore')
+    },
+
+    /* Drag & drop move: pick up an item (or the whole selection if it is part of
+       it) and drop it onto a folder to move it there. */
+    beginDrag(node: FileNode) {
+      this.dragIds = this.sel.includes(node.id) && this.sel.length ? [...this.sel] : [node.id]
+    },
+    endDrag() {
+      this.dragIds = []
+      this.dragOverId = null
+    },
+    canDropInto(folder: FileNode): boolean {
+      return (
+        this.dndEnabled &&
+        folder.type === 'folder' &&
+        this.dragIds.length > 0 &&
+        !this.dragIds.includes(folder.id)
+      )
+    },
+    async dropInto(folder: FileNode) {
+      const ids = this.dragIds.filter((id) => id !== folder.id)
+      this.endDrag()
+      if (!ids.length || folder.type !== 'folder') return
+      await this.move(ids, String(folder.id))
     },
 
     async move(ids: number[], parent: string) {

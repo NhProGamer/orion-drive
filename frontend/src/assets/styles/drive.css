@@ -977,6 +977,15 @@ html[data-halo='off'] body::before {
   font-family: var(--font-mono);
   font-size: 11px;
 }
+/* Drag-and-drop move target */
+.card.drop-target,
+.folder-chip.drop-target,
+.list-row.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-bg);
+}
+
 /* Move-to-folder dialog */
 .move-crumbs {
   display: flex;
