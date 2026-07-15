@@ -49,14 +49,26 @@ func (ctl *Controller) ListShares(c *gin.Context) {
 		failShare(c, err)
 		return
 	}
+	ctx := c.Request.Context()
+	uid := ctl.user(c).ID
 	out := make([]gin.H, 0, len(shares))
 	for i := range shares {
 		s := &shares[i]
+		// Enrich with the shared file's name/type (best-effort; a purged file
+		// leaves the share pointing at nothing).
+		name, isDir := "(supprimé)", false
+		if f, err := ctl.dep.Repo.File.GetByIDUnscoped(ctx, uid, s.FileID); err == nil {
+			name, isDir = f.Name, f.IsFolder()
+		}
 		out = append(out, gin.H{
 			"token":            s.Token,
 			"file_id":          s.FileID,
+			"name":             name,
+			"is_dir":           isDir,
 			"url":              ctl.shareURL(c, s.Token),
 			"has_password":     s.HasPassword(),
+			"expired":          s.Expired(),
+			"exhausted":        s.Exhausted(),
 			"expires":          s.Expires,
 			"remain_downloads": s.RemainDownloads,
 			"views":            s.Views,

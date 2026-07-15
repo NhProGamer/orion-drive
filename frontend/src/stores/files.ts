@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
-import { api, type FileNode } from '@/lib/api'
+import { api, type FileNode, type ShareInfo } from '@/lib/api'
 import { useUiStore } from './ui'
 
-export type View = 'drive' | 'shared' | 'trash' | 'storage'
+export type View = 'drive' | 'shares' | 'trash' | 'storage'
 
 export interface Upload {
   id: number
@@ -19,7 +19,7 @@ interface Crumb {
 
 const VIEW_LABEL: Record<View, string> = {
   drive: 'Mon Drive',
-  shared: 'Partagés avec moi',
+  shares: 'Mes partages',
   trash: 'Corbeille',
   storage: 'Stockage',
 }
@@ -41,12 +41,13 @@ export const useFilesStore = defineStore('files', {
     quota: { used: 0, total: 0 },
     trashCount: 0,
     storageFiles: [] as FileNode[], // full non-trashed file list for the storage view
+    shares: [] as ShareInfo[], // the user's own share links (My shares view)
   }),
 
   getters: {
     viewLabel: (s) => VIEW_LABEL[s.view],
     searching: (s) => s.q.trim().length > 0,
-    readOnly: (s) => s.view === 'shared',
+    readOnly: (s) => s.view === 'shares',
     folderId: (s) => (s.path.length ? s.path[s.path.length - 1].id : null),
     currentParentParam(): string {
       const id = this.folderId
@@ -71,7 +72,7 @@ export const useFilesStore = defineStore('files', {
     },
     crumbs(): Crumb[] {
       const base: Crumb = { id: null, name: this.viewLabel }
-      if (this.view === 'trash' || this.view === 'storage') return [base]
+      if (this.view === 'trash' || this.view === 'storage' || this.view === 'shares') return [base]
       return [base, ...this.path]
     },
     quotaPct: (s) => (s.quota.total ? Math.min(100, Math.round((s.quota.used / s.quota.total) * 100)) : 0),
@@ -88,6 +89,11 @@ export const useFilesStore = defineStore('files', {
         if (this.view === 'storage') {
           // Storage view needs every non-trashed file to compute the breakdown.
           this.storageFiles = await api.list({ all: '1' })
+          return
+        }
+        if (this.view === 'shares') {
+          // My shares view lists the share links the user created.
+          this.shares = await api.listShares()
           return
         }
         const params: { parent?: string; view?: string; q?: string } = {}
@@ -203,6 +209,12 @@ export const useFilesStore = defineStore('files', {
       this.sel = []
       this.anchor = null
       this.previewId = null
+    },
+
+    async revokeShare(token: string) {
+      await api.deleteShare(token)
+      this.shares = this.shares.filter((s) => s.token !== token)
+      this.ui().toast('Partage révoqué', 'trash')
     },
 
     /* Mutations */

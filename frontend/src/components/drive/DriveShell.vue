@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
-  Plus, FolderPlus, Upload, HardDrive, Users, Trash2, Database,
+  Plus, FolderPlus, Upload, HardDrive, Trash2, Database,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText,
@@ -17,6 +17,7 @@ import FileRow from './FileRow.vue'
 import PreviewPanel from './PreviewPanel.vue'
 import PreviewOverlay from './PreviewOverlay.vue'
 import StoragePanel from './StoragePanel.vue'
+import SharesPanel from './SharesPanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
@@ -49,7 +50,7 @@ watch(searchTerm, (v) => {
 })
 
 const locationOf = (n: FileNode) => {
-  if (n.parent_id == null) return files.view === 'shared' ? 'Partagés avec moi' : 'Mon Drive'
+  if (n.parent_id == null) return 'Mon Drive'
   const crumb = files.path.find((c) => c.id === n.parent_id)
   return crumb ? crumb.name : 'Mon Drive'
 }
@@ -285,7 +286,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       </div>
       <nav aria-label="Navigation principale">
         <button class="nav-item" :class="{ active: files.view === 'drive' }" @click="gotoView('drive')"><HardDrive :size="18" />Mon Drive</button>
-        <button class="nav-item" :class="{ active: files.view === 'shared' }" @click="gotoView('shared')"><Users :size="18" />Partagés avec moi</button>
+        <button class="nav-item" :class="{ active: files.view === 'shares' }" @click="gotoView('shares')"><Share2 :size="18" />Mes partages</button>
         <button class="nav-item" :class="{ active: files.view === 'trash' }" @click="gotoView('trash')">
           <Trash2 :size="18" />Corbeille<span v-if="files.trashCount" class="nav-count">{{ files.trashCount }}</span>
         </button>
@@ -352,12 +353,15 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                   <button class="crumb" :class="{ current: i === files.crumbs.length - 1 }" @click="files.crumbTo(i)">{{ c.name }}</button>
                 </template>
               </div>
-              <span v-if="files.view !== 'storage'" class="head-count">{{ files.nodes.length }} élément{{ files.nodes.length > 1 ? 's' : '' }}</span>
+              <span v-if="files.view !== 'storage' && files.view !== 'shares'" class="head-count">{{ files.nodes.length }} élément{{ files.nodes.length > 1 ? 's' : '' }}</span>
             </template>
           </div>
 
           <!-- Storage view -->
           <StoragePanel v-if="files.view === 'storage'" :files="files.storageFiles" :total="files.quota.total" @open="files.previewId = $event.id" />
+
+          <!-- My shares view -->
+          <SharesPanel v-else-if="files.view === 'shares'" :shares="files.shares" />
 
           <template v-else>
             <div v-if="files.view === 'trash' && files.nodes.length" class="notice">
@@ -400,7 +404,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <div v-else-if="files.nodes.length" class="listing">
               <div class="list-head">
                 <span>Nom</span>
-                <span>{{ files.view === 'shared' ? 'Partagé par' : 'Propriétaire' }}</span>
+                <span>Propriétaire</span>
                 <span>Modifié</span>
                 <span>Taille</span>
                 <span></span>
@@ -418,17 +422,15 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 
             <!-- Empty -->
             <div v-if="!files.nodes.length && !files.loading" class="empty">
-              <component :is="files.searching ? Search : files.view === 'trash' ? Trash2 : files.view === 'shared' ? Users : Upload" :size="36" />
+              <component :is="files.searching ? Search : files.view === 'trash' ? Trash2 : Upload" :size="36" />
               <span class="empty-title">
                 <template v-if="files.searching">Aucun résultat pour « {{ files.q.trim() }} »</template>
                 <template v-else-if="files.view === 'trash'">La corbeille est vide</template>
-                <template v-else-if="files.view === 'shared'">Rien de partagé pour l'instant</template>
                 <template v-else>Dossier vide</template>
               </span>
               <span class="empty-sub">
                 <template v-if="files.searching">Essaie un autre terme ou change de vue.</template>
                 <template v-else-if="files.view === 'trash'">Les éléments supprimés apparaîtront ici.</template>
-                <template v-else-if="files.view === 'shared'">Les fichiers partagés avec toi apparaîtront ici.</template>
                 <template v-else>Glisse-dépose des fichiers ici, ou utilise le bouton Nouveau.</template>
               </span>
             </div>

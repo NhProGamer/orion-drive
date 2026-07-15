@@ -1008,6 +1008,79 @@ html[data-halo='off'] body::before {
   padding: 1px 7px;
 }
 
+/* My shares view */
+.shares {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.share-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 12px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.share-card.inactive {
+  opacity: 0.6;
+}
+.share-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.share-line1 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.share-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.share-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.share-created {
+  color: var(--fg-3);
+}
+.share-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--fg-2);
+}
+.badge.danger {
+  color: var(--danger);
+  border-color: color-mix(in oklab, var(--danger) 40%, transparent);
+}
+
 /* Public share folder browser */
 .share-browser {
   display: flex;

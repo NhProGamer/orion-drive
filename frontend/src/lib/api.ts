@@ -193,8 +193,12 @@ export const api = {
 export interface ShareInfo {
   token: string
   file_id: number
+  name: string
+  is_dir: boolean
   url: string
   has_password: boolean
+  expired: boolean
+  exhausted: boolean
   expires: string | null
   remain_downloads: number | null
   views: number
