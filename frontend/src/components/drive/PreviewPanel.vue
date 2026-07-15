@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Star, X, Download, Lock, Unlock, Link as LinkIcon, History, RotateCcw, Trash2, FolderInput, Folder, FileText } from 'lucide-vue-next'
 import { api, type FileNode, type Version, type ArchiveEntry } from '@/lib/api'
-import { kindFromName, ext, fmtSize, fmtDate, isArchive } from '@/lib/format'
+import { kindFromName, fmtSize, fmtDate, isArchive, canThumbnail } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
 
@@ -12,7 +12,10 @@ defineEmits<{ close: []; download: []; star: [] }>()
 const files = useFilesStore()
 const kind = computed(() => (props.node.type === 'folder' ? 'folder' : kindFromName(props.node.name)))
 const meta = computed(() => metaFor(kind.value))
-const isImage = computed(() => kind.value === 'image')
+const showThumb = computed(() => props.node.type === 'file' && canThumbnail(props.node.name))
+const thumbUrl = computed(() => api.thumbUrl(props.node.id))
+const thumbFailed = ref(false)
+watch(() => [props.node.id, props.node.modified], () => (thumbFailed.value = false))
 const sizeLabel = computed(() => (props.node.type === 'folder' ? '—' : fmtSize(props.node.size)))
 const dateLabel = computed(() => fmtDate(props.node.modified))
 
@@ -66,7 +69,13 @@ async function toggleLock() {
       <button class="icon-btn" title="Fermer" @click="$emit('close')"><X :size="15" /></button>
     </div>
     <div class="preview-visual">
-      <div v-if="isImage" class="thumb-img" style="height: 100%"><span>aperçu · {{ ext(node.name) }}</span></div>
+      <img
+        v-if="showThumb && !thumbFailed"
+        :src="thumbUrl"
+        class="preview-thumb"
+        alt=""
+        @error="thumbFailed = true"
+      />
       <component :is="meta.icon" v-else :size="44" />
     </div>
     <dl class="preview-details">

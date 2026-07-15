@@ -899,6 +899,12 @@ html[data-halo='off'] body::before {
   overflow: hidden;
   flex: none;
 }
+.preview-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 .preview-details {
   display: flex;
   flex-direction: column;
