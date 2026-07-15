@@ -63,6 +63,9 @@ type OIDC struct {
 	ClientSecret string `ini:"ClientSecret"`
 	RedirectURI  string `ini:"RedirectURI"`
 	Scopes       string `ini:"Scopes"`
+	// GroupsClaim is the ID-token claim carrying the user's SSO groups/roles,
+	// mapped onto OrionDrive groups. Defaults to "groups".
+	GroupsClaim string `ini:"GroupsClaim"`
 }
 
 // Storage configures storage backends.

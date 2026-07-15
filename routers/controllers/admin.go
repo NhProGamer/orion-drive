@@ -116,6 +116,7 @@ type adminGroupDTO struct {
 	StoragePolicyID uint   `json:"storage_policy_id"`
 	CanShare        bool   `json:"can_share"`
 	CanAdmin        bool   `json:"can_admin"`
+	SSOGroups       string `json:"sso_groups"`
 	UserCount       int64  `json:"user_count"`
 }
 
@@ -134,7 +135,7 @@ func (ctl *Controller) AdminListGroups(c *gin.Context) {
 		out = append(out, adminGroupDTO{
 			ID: g.ID, Name: g.Name, MaxStorage: g.MaxStorage, SpeedLimit: g.SpeedLimit,
 			StoragePolicyID: g.StoragePolicyID, CanShare: g.CanShare(), CanAdmin: g.CanAdmin(),
-			UserCount: n,
+			SSOGroups: g.SSOGroups, UserCount: n,
 		})
 	}
 	respond(c, serializer.OK(out))
@@ -147,6 +148,7 @@ type groupReq struct {
 	StoragePolicyID uint   `json:"storage_policy_id"`
 	CanShare        bool   `json:"can_share"`
 	CanAdmin        bool   `json:"can_admin"`
+	SSOGroups       string `json:"sso_groups"`
 }
 
 func (r groupReq) apply(g *model.Group) {
@@ -154,6 +156,7 @@ func (r groupReq) apply(g *model.Group) {
 	g.MaxStorage = r.MaxStorage
 	g.SpeedLimit = r.SpeedLimit
 	g.StoragePolicyID = r.StoragePolicyID
+	g.SSOGroups = r.SSOGroups
 	share, admin := r.CanShare, r.CanAdmin
 	g.Permissions = model.MustJSON(model.GroupPermissions{Share: &share, Admin: &admin})
 }

@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // Group is a permission and quota tier shared by many users.
 type Group struct {
 	Base
@@ -8,7 +10,34 @@ type Group struct {
 	SpeedLimit      int64  `json:"speed_limit"` // bytes/s for downloads; 0 means unlimited
 	Permissions     JSON   `gorm:"type:json" json:"permissions"`
 	StoragePolicyID uint   `json:"storage_policy_id"`
-	Settings        JSON   `gorm:"type:json" json:"-"`
+	// SSOGroups is a comma-separated list of SSO group/role names that map onto
+	// this group: a user carrying any of them is assigned here at login.
+	SSOGroups string `gorm:"size:1024" json:"sso_groups"`
+	Settings  JSON   `gorm:"type:json" json:"-"`
+}
+
+// SSOGroupList returns the group's SSO group names, trimmed and non-empty.
+func (g *Group) SSOGroupList() []string {
+	var out []string
+	for _, s := range strings.Split(g.SSOGroups, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// MatchesSSO reports whether any of the user's SSO groups map to this group.
+func (g *Group) MatchesSSO(userGroups []string) bool {
+	mine := g.SSOGroupList()
+	for _, ug := range userGroups {
+		for _, m := range mine {
+			if strings.EqualFold(ug, m) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GroupPermissions is the typed view of Group.Permissions. A nil flag means

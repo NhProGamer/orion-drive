@@ -118,6 +118,10 @@ func (ctl *Controller) upsertUser(ctx context.Context, claims *auth.Claims) (*mo
 	if err != nil {
 		return nil, err
 	}
+	// SSO group mapping overrides the default group for new users.
+	if g, ok := repo.Group.FindBySSOGroups(ctx, claims.Groups); ok {
+		groupID = g.ID
+	}
 	u := &model.User{
 		Email:   claims.Email,
 		Subject: claims.Subject,
@@ -144,7 +148,14 @@ func (ctl *Controller) syncUser(ctx context.Context, u *model.User, claims *auth
 	if u.Subject == "" && claims.Subject != "" {
 		u.Subject, changed = claims.Subject, true
 	}
+	// Re-sync the group from SSO on each login (SSO is the source of truth when a
+	// mapping matches); leave the group unchanged when nothing maps.
+	if g, ok := ctl.dep.Repo.Group.FindBySSOGroups(ctx, claims.Groups); ok && u.GroupID != g.ID {
+		u.GroupID, u.Group, changed = g.ID, nil, true
+	}
 	if changed {
+		// Detach the preloaded association so GORM writes group_id from the field.
+		u.Group = nil
 		if err := ctl.dep.Repo.User.Update(ctx, u); err != nil {
 			return nil, err
 		}

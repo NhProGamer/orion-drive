@@ -33,6 +33,24 @@ func (r *GroupRepo) Create(ctx context.Context, g *model.Group) error {
 	return r.db.WithContext(ctx).Create(g).Error
 }
 
+// FindBySSOGroups returns the first group (by id) whose SSO mapping matches any
+// of the user's SSO groups, or false when none map.
+func (r *GroupRepo) FindBySSOGroups(ctx context.Context, ssoGroups []string) (*model.Group, bool) {
+	if len(ssoGroups) == 0 {
+		return nil, false
+	}
+	groups, err := r.List(ctx)
+	if err != nil {
+		return nil, false
+	}
+	for i := range groups {
+		if groups[i].MatchesSSO(ssoGroups) {
+			return &groups[i], true
+		}
+	}
+	return nil, false
+}
+
 // Update persists changes to a group.
 func (r *GroupRepo) Update(ctx context.Context, g *model.Group) error {
 	return r.db.WithContext(ctx).Save(g).Error

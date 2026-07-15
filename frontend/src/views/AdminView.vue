@@ -65,7 +65,7 @@ async function toggleBan(u: AdminUser) {
 /* Groups */
 const gForm = ref<Partial<AdminGroup> | null>(null)
 function newGroup() {
-  gForm.value = { name: '', max_storage: 0, speed_limit: 0, storage_policy_id: policies.value[0]?.id ?? 1, can_share: true, can_admin: false }
+  gForm.value = { name: '', max_storage: 0, speed_limit: 0, storage_policy_id: policies.value[0]?.id ?? 1, can_share: true, can_admin: false, sso_groups: '' }
 }
 function editGroup(g: AdminGroup) {
   gForm.value = { ...g }
@@ -79,6 +79,7 @@ async function saveGroup() {
     storage_policy_id: Number(g.storage_policy_id) || 0,
     can_share: !!g.can_share,
     can_admin: !!g.can_admin,
+    sso_groups: g.sso_groups || '',
   }
   if (g.id) await api.adminUpdateGroup(g.id, body)
   else await api.adminCreateGroup(body)
@@ -180,7 +181,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
     <section v-else-if="tab === 'groups'" class="admin-table">
       <div class="admin-actions"><button class="btn btn-primary" @click="newGroup"><Plus :size="15" />Nouveau groupe</button></div>
       <table>
-        <thead><tr><th>Nom</th><th>Quota</th><th>Débit max</th><th>Partage</th><th>Admin</th><th>Membres</th><th></th></tr></thead>
+        <thead><tr><th>Nom</th><th>Quota</th><th>Débit max</th><th>Partage</th><th>Admin</th><th>Groupes SSO</th><th>Membres</th><th></th></tr></thead>
         <tbody>
           <tr v-for="g in groups" :key="g.id">
             <td>{{ g.name }}</td>
@@ -188,6 +189,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
             <td class="mono">{{ g.speed_limit ? fmtSize(g.speed_limit) + '/s' : '∞' }}</td>
             <td>{{ g.can_share ? 'oui' : 'non' }}</td>
             <td>{{ g.can_admin ? 'oui' : 'non' }}</td>
+            <td class="mono">{{ g.sso_groups || '—' }}</td>
             <td class="mono">{{ g.user_count }}</td>
             <td class="row-actions">
               <button class="icon-btn" title="Modifier" @click="editGroup(g)"><Shield :size="15" /></button>
@@ -229,6 +231,9 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
         </label>
         <label>Quota (octets, 0 = illimité)<input v-model="gForm.max_storage" class="input" type="number" min="0" /></label>
         <label>Débit max download (o/s, 0 = illimité)<input v-model="gForm.speed_limit" class="input" type="number" min="0" /></label>
+        <label>Groupes SSO (séparés par des virgules)
+          <input v-model="gForm.sso_groups" class="input" placeholder="engineering, ops" />
+        </label>
         <label class="chk"><input v-model="gForm.can_share" type="checkbox" />Autoriser le partage</label>
         <label class="chk"><input v-model="gForm.can_admin" type="checkbox" />Accès administrateur</label>
       </div>

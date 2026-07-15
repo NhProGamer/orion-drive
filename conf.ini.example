@@ -34,8 +34,12 @@ ClientID =
 ClientSecret =
 ; Must match SiteURL + /api/v1/auth/oidc/callback in the provider config.
 RedirectURI = http://localhost:5212/api/v1/auth/oidc/callback
-; Space-separated scopes.
+; Space-separated scopes. Include the scope that returns groups/roles if you use
+; SSO group mapping (e.g. "groups" for Keycloak, "roles" for Authentik).
 Scopes = openid profile email
+; ID-token claim carrying the user's SSO groups/roles, mapped onto OrionDrive
+; groups (configure the mapping per group in the admin panel). Default: groups.
+GroupsClaim = groups
 
 [Storage]
 ; Base directory for the default local storage policy.

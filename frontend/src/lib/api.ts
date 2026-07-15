@@ -87,6 +87,7 @@ export interface AdminGroup {
   storage_policy_id: number
   can_share: boolean
   can_admin: boolean
+  sso_groups: string
   user_count: number
 }
 

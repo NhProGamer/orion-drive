@@ -22,15 +22,19 @@ type Claims struct {
 	Email   string `json:"email"`
 	Name    string `json:"name"`
 	Picture string `json:"picture"`
+	// Groups are the SSO groups/roles from the configured claim (used to map the
+	// user onto an OrionDrive group).
+	Groups []string `json:"-"`
 }
 
 // Authenticator wraps OIDC discovery, the OAuth2 config and the token verifier,
 // and manages short-lived login states in the cache.
 type Authenticator struct {
-	oauth    *oauth2.Config
-	verifier *oidc.IDTokenVerifier
-	cache    cache.Store
-	enabled  bool
+	oauth       *oauth2.Config
+	verifier    *oidc.IDTokenVerifier
+	cache       cache.Store
+	enabled     bool
+	groupsClaim string
 }
 
 // NewAuthenticator performs provider discovery. If OIDC is not configured (no
@@ -50,11 +54,16 @@ func NewAuthenticator(ctx context.Context, cfg *conf.Config, c cache.Store) (*Au
 		RedirectURL:  cfg.OIDC.RedirectURI,
 		Scopes:       cfg.OIDC.ScopeList(),
 	}
+	groupsClaim := cfg.OIDC.GroupsClaim
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
 	return &Authenticator{
-		oauth:    oauthCfg,
-		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
-		cache:    c,
-		enabled:  true,
+		oauth:       oauthCfg,
+		verifier:    provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
+		cache:       c,
+		enabled:     true,
+		groupsClaim: groupsClaim,
 	}, nil
 }
 
@@ -107,5 +116,32 @@ func (a *Authenticator) Exchange(ctx context.Context, state, code string) (*Clai
 	if c.Subject == "" {
 		c.Subject = idToken.Subject
 	}
+	// Extract SSO groups from the configured claim (name varies by provider:
+	// "groups", "roles", ...). Accept an array of strings or a single string.
+	var raw map[string]any
+	if err := idToken.Claims(&raw); err == nil {
+		c.Groups = extractStrings(raw[a.groupsClaim])
+	}
 	return &c, nil
+}
+
+// extractStrings coerces a JSON claim value into a string slice.
+func extractStrings(v any) []string {
+	switch t := v.(type) {
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return t
+	case string:
+		if t != "" {
+			return []string{t}
+		}
+	}
+	return nil
 }
