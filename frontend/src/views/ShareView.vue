@@ -6,6 +6,7 @@ import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api
 import { kindFromName, fmtSize } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
+import { bannerFor } from '@/lib/branding'
 
 const route = useRoute()
 const ui = useUiStore()
@@ -89,10 +90,7 @@ async function download() {
     </button>
 
     <div class="login-card" :style="{ gap: '20px', maxWidth: opened ? '620px' : undefined, width: opened ? '92vw' : undefined }">
-      <div class="logo">
-        <span class="glyph">◆</span>
-        <span class="logo-word"><em>Orion</em><strong>Drive</strong></span>
-      </div>
+      <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
 
       <template v-if="notFound">
         <TriangleAlert :size="40" style="color: var(--danger)" />

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { Sun, Moon } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
+import { bannerFor } from '@/lib/branding'
 
 const ui = useUiStore()
 const config = ref<{ oidc: boolean; dev: boolean }>({ oidc: true, dev: false })
@@ -28,10 +29,7 @@ function loginDev() {
       <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
     </button>
     <div class="login-card">
-      <div class="logo">
-        <span class="glyph">◆</span>
-        <span class="logo-word"><em>Orion</em><strong>Drive</strong></span>
-      </div>
+      <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
       <h1>Bienvenue</h1>
       <p>Connecte-toi pour accéder à ton espace de stockage.</p>
       <button v-if="config.oidc" class="btn btn-primary" style="width: 100%; height: 42px" @click="loginOidc">
