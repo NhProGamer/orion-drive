@@ -234,12 +234,22 @@ func (m *Manager) Trash(ctx context.Context, user *model.User, ids []uint) error
 			return ErrLocked
 		}
 	}
-	return m.repo.File.Trash(ctx, user.ID, ids)
+	// Trashing a folder trashes its whole subtree, so nothing is left orphaned
+	// (unreachable but not in the recycle bin).
+	all, err := m.expandSubtrees(ctx, user.ID, ids, false)
+	if err != nil {
+		return err
+	}
+	return m.repo.File.Trash(ctx, user.ID, all)
 }
 
 // Restore returns files from the recycle bin.
 func (m *Manager) Restore(ctx context.Context, user *model.User, ids []uint) error {
-	return m.repo.File.Restore(ctx, user.ID, ids)
+	all, err := m.expandSubtrees(ctx, user.ID, ids, true)
+	if err != nil {
+		return err
+	}
+	return m.repo.File.Restore(ctx, user.ID, all)
 }
 
 // EmptyTrash permanently deletes every trashed file the user owns and returns
@@ -265,7 +275,11 @@ func (m *Manager) EmptyTrash(ctx context.Context, user *model.User) (int, error)
 
 // Purge permanently deletes files and their physical entities.
 func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error {
-	for _, id := range ids {
+	all, err := m.expandSubtrees(ctx, user.ID, ids, true)
+	if err != nil {
+		return err
+	}
+	for _, id := range all {
 		f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)
 		if err != nil {
 			continue
@@ -293,7 +307,7 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		user.StorageUsed = 0
 	}
 	_ = m.repo.User.Update(ctx, user)
-	return m.repo.File.Purge(ctx, user.ID, ids)
+	return m.repo.File.Purge(ctx, user.ID, all)
 }
 
 // removeEntity deletes the physical object and its entity row.
@@ -309,6 +323,57 @@ func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
 		}
 	}
 	_ = m.repo.Entity.Delete(ctx, entityID)
+}
+
+// collectSubtree returns id plus the ids of everything nested under it. With
+// unscoped=true it also descends through trashed rows (for restore/purge of a
+// tree already in the recycle bin).
+func (m *Manager) collectSubtree(ctx context.Context, ownerID, id uint, unscoped bool) ([]uint, error) {
+	ids := []uint{id}
+	var (
+		children []model.File
+		err      error
+	)
+	if unscoped {
+		children, err = m.repo.File.ListChildrenUnscoped(ctx, ownerID, &id)
+	} else {
+		children, err = m.repo.File.ListChildren(ctx, ownerID, &id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	for i := range children {
+		if children[i].IsFolder() {
+			sub, err := m.collectSubtree(ctx, ownerID, children[i].ID, unscoped)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, sub...)
+		} else {
+			ids = append(ids, children[i].ID)
+		}
+	}
+	return ids, nil
+}
+
+// expandSubtrees turns a set of ids into that set plus every descendant, with
+// duplicates removed.
+func (m *Manager) expandSubtrees(ctx context.Context, ownerID uint, ids []uint, unscoped bool) ([]uint, error) {
+	seen := map[uint]bool{}
+	var out []uint
+	for _, id := range ids {
+		sub, err := m.collectSubtree(ctx, ownerID, id, unscoped)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range sub {
+			if !seen[s] {
+				seen[s] = true
+				out = append(out, s)
+			}
+		}
+	}
+	return out, nil
 }
 
 // Capacity returns used and total bytes for the user's quota. Used is the

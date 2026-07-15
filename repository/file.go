@@ -47,6 +47,20 @@ func (r *FileRepo) ListChildren(ctx context.Context, ownerID uint, parentID *uin
 	return files, err
 }
 
+// ListChildrenUnscoped is like ListChildren but also returns trashed children,
+// used to walk a subtree that is itself in the recycle bin.
+func (r *FileRepo) ListChildrenUnscoped(ctx context.Context, ownerID uint, parentID *uint) ([]model.File, error) {
+	q := r.db.WithContext(ctx).Unscoped().Where("owner_id = ?", ownerID)
+	if parentID == nil {
+		q = q.Where("parent_id IS NULL")
+	} else {
+		q = q.Where("parent_id = ?", *parentID)
+	}
+	var files []model.File
+	err := q.Order("type desc, name asc").Find(&files).Error
+	return files, err
+}
+
 // ListAllFiles returns every non-trashed file (not folders) owned by ownerID.
 // Used by the storage-usage view.
 func (r *FileRepo) ListAllFiles(ctx context.Context, ownerID uint) ([]model.File, error) {
@@ -59,9 +73,16 @@ func (r *FileRepo) ListAllFiles(ctx context.Context, ownerID uint) ([]model.File
 
 // ListTrashed returns every trashed file owned by ownerID.
 func (r *FileRepo) ListTrashed(ctx context.Context, ownerID uint) ([]model.File, error) {
+	// Only the top-most trashed items are "trash roots" — a trashed item whose
+	// parent is also trashed was removed as part of its ancestor and must not
+	// clutter the recycle bin (it is restored/purged with the ancestor).
+	trashedIDs := r.db.Model(&model.File{}).Unscoped().
+		Select("id").
+		Where("owner_id = ? AND trashed_at IS NOT NULL", ownerID)
 	var files []model.File
 	err := r.db.WithContext(ctx).Unscoped().
 		Where("owner_id = ? AND trashed_at IS NOT NULL", ownerID).
+		Where("parent_id IS NULL OR parent_id NOT IN (?)", trashedIDs).
 		Order("type desc, name asc").Find(&files).Error
 	return files, err
 }
