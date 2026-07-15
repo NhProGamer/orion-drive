@@ -4,7 +4,7 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive, FolderInput, FileText, Server,
+  Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -31,6 +31,7 @@ const auth = useAuthStore()
 
 const searchInput = ref<HTMLInputElement>()
 const fileInput = ref<HTMLInputElement>()
+const dirInput = ref<HTMLInputElement>()
 const dialogInput = ref<HTMLInputElement>()
 
 type Dialog =
@@ -92,6 +93,7 @@ function bgCtx(ev: MouseEvent) {
     items: [
       { id: 'newfolder', label: 'Nouveau dossier', icon: FolderPlus },
       { id: 'import', label: 'Importer des fichiers', icon: Upload },
+      { id: 'importfolder', label: 'Importer un dossier', icon: FolderUp },
     ],
   }
 }
@@ -165,6 +167,7 @@ function menuAction(id: string) {
     case 'purge': dialog.value = { type: 'purge', ids: [...files.sel] }; break
     case 'newfolder': openNewFolder(); break
     case 'import': triggerUpload(); break
+    case 'importfolder': triggerFolderUpload(); break
   }
 }
 
@@ -214,6 +217,20 @@ function onFileInput(e: Event) {
   input.value = ''
   if (list.length) files.upload(list)
 }
+function triggerFolderUpload() {
+  closeMenus()
+  dirInput.value?.click()
+}
+function onDirInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  // A directory <input> reports each file's path in webkitRelativePath.
+  const entries = Array.from(input.files || []).map((file) => ({
+    file,
+    path: (file as any).webkitRelativePath || file.name,
+  }))
+  input.value = ''
+  if (entries.length) files.uploadTree(entries)
+}
 
 /* Drag & drop */
 function hasFiles(e: DragEvent) {
@@ -227,8 +244,42 @@ function onDragLeave(e: DragEvent) {
 }
 function onDrop(e: DragEvent) {
   dragDepth.value = 0
-  const list = Array.from(e.dataTransfer?.files || [])
+  const dt = e.dataTransfer
+  if (!dt) return
+  // Capture directory entries synchronously (the items list is cleared once the
+  // handler returns), then walk them asynchronously.
+  const roots = dt.items
+    ? Array.from(dt.items)
+        .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+        .filter(Boolean)
+    : []
+  if (roots.some((r: any) => r?.isDirectory)) {
+    collectEntries(roots as any[]).then((entries) => {
+      if (entries.length) files.uploadTree(entries)
+    })
+    return
+  }
+  const list = Array.from(dt.files || [])
   if (list.length) files.upload(list)
+}
+
+// Recursively read dropped FileSystemEntry roots into {file, path} pairs.
+async function collectEntries(roots: any[]): Promise<{ file: File; path: string }[]> {
+  const out: { file: File; path: string }[] = []
+  const walk = async (entry: any, prefix: string): Promise<void> => {
+    if (entry.isFile) {
+      const file: File = await new Promise((res, rej) => entry.file(res, rej))
+      out.push({ file, path: prefix + entry.name })
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader()
+      const readBatch = (): Promise<any[]> => new Promise((res, rej) => reader.readEntries(res, rej))
+      for (let batch = await readBatch(); batch.length; batch = await readBatch()) {
+        for (const child of batch) await walk(child, prefix + entry.name + '/')
+      }
+    }
+  }
+  for (const r of roots) await walk(r, '')
+  return out
 }
 
 /* Keyboard */
@@ -284,6 +335,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         <div v-if="newMenuOpen" class="menu new-menu" @click.stop>
           <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />Nouveau dossier</button>
           <button class="menu-item" @click="triggerUpload"><Upload :size="16" />Importer des fichiers</button>
+          <button class="menu-item" @click="triggerFolderUpload"><FolderUp :size="16" />Importer un dossier</button>
         </div>
       </div>
       <nav aria-label="Navigation principale">
@@ -501,5 +553,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     </div>
 
     <input ref="fileInput" type="file" multiple style="display: none" @change="onFileInput" />
+    <input ref="dirInput" type="file" webkitdirectory multiple style="display: none" @change="onDirInput" />
   </div>
 </template>

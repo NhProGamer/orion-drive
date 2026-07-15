@@ -180,6 +180,8 @@ export const api = {
     get<FileNode[]>('/file', { params }),
   createFolder: (parent: string, name: string) =>
     post<FileNode>('/file/folder', { parent, name }),
+  ensureFolderPath: (parent: string, path: string) =>
+    post<FileNode>('/file/folder-path', { parent, path }),
   rename: (id: number, name: string) => post<FileNode>('/file/rename', { id, name }),
   star: (id: number) => post<FileNode>('/file/star', { id }),
   move: (ids: number[], parent: string) => post('/file/move', { ids, parent }),

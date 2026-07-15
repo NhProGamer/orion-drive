@@ -345,6 +345,45 @@ export const useFilesStore = defineStore('files', {
       }, 2400)
     },
 
+    /* Folder upload: recreate the directory tree, then upload each file into it.
+       Each entry's `path` is the file's full relative path (e.g. "docs/sub/a.txt"). */
+    async uploadTree(entries: { file: File; path: string }[]) {
+      if (!entries.length) return
+      const base = this.view === 'drive' ? this.currentParentParam : 'root'
+      if (this.view !== 'drive') this.ui().toast('Importation dans la racine de Mon Drive', 'info')
+
+      const dirOf = (p: string) => {
+        const i = p.lastIndexOf('/')
+        return i < 0 ? '' : p.slice(0, i)
+      }
+      const dirParam = new Map<string, string>([['', base]])
+
+      // Create each distinct directory once, ancestors before descendants (sorted)
+      // and sequentially, so concurrent files never race on a shared parent folder.
+      const dirs = [...new Set(entries.map((e) => dirOf(e.path)))].filter(Boolean).sort()
+      for (const dir of dirs) {
+        if (dirParam.has(dir)) continue
+        try {
+          const leaf = await api.ensureFolderPath(base, dir)
+          dirParam.set(dir, String(leaf.id))
+        } catch (e: any) {
+          this.ui().toast(`Échec du dossier « ${dir} »` + (e?.message ? ` : ${e.message}` : ''), 'x')
+        }
+      }
+
+      await Promise.all(
+        entries.map((e) => {
+          const parent = dirParam.get(dirOf(e.path))
+          return parent ? this.uploadOne(e.file, parent) : Promise.resolve()
+        }),
+      )
+
+      await Promise.all([this.load(), this.loadCapacity()])
+      setTimeout(() => {
+        if (this.uploads.length && this.uploads.every((u) => u.done)) this.uploads = []
+      }, 2400)
+    },
+
     async uploadOne(file: File, parent: string) {
       this.uploads.push({ id: ++uploadSeq, name: file.name, size: file.size, progress: 0, done: false })
       // Mutate the reactive array element (not the raw object we just pushed),
