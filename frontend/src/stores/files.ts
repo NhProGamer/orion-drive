@@ -291,13 +291,10 @@ export const useFilesStore = defineStore('files', {
       })
     },
 
-    async openOffice(node: FileNode) {
-      try {
-        const { url } = await api.officeLaunch(node.id)
-        window.open(url, '_blank')
-      } catch (e: any) {
-        this.ui().toast('Édition Office indisponible' + (e?.message ? ` : ${e.message}` : ''), 'x')
-      }
+    openOffice(node: FileNode) {
+      // The launch page auto-submits the WOPI POST form and hosts the editor in
+      // an iframe; opening it as a top-level navigation carries the session cookie.
+      window.open(api.officeUrl(node.id), '_blank')
     },
 
     async extract(node: FileNode) {

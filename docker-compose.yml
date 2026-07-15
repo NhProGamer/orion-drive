@@ -56,8 +56,10 @@ services:
       # onlyoffice container — a real LAN IP or domain, NOT `localhost`.
       # Replace `office.example` (and set SiteURL accordingly) for a working setup.
       OD_CONF_WOPI_ServerURL: "http://office.example:8080"
-      # Endpoint is per document type: use word for .docx, cell for .xlsx, slide for .pptx.
-      OD_CONF_WOPI_EditURLTemplate: "http://office.example:8080/hosting/wopi/word/edit?WOPISrc={src}"
+      # {type} is replaced per document (word/cell/slide) so .docx/.xlsx/.pptx all work;
+      # {src} is the WOPISrc. OrionDrive serves an auto-submitting POST launch page
+      # (the editor is opened via a WOPI form POST + iframe, not a plain GET).
+      OD_CONF_WOPI_EditURLTemplate: "http://office.example:8080/hosting/wopi/{type}/edit?WOPISrc={src}"
 
       # ---- [Redis] (parsed but NOT yet used — in-memory cache only for now) ----
       # OD_CONF_Redis_Server: ""

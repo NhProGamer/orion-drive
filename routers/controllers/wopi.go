@@ -2,13 +2,14 @@ package controllers
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
-	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 
@@ -109,38 +110,69 @@ func (ctl *Controller) WopiPutFile(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// OfficeLaunch returns the URL of the Office editor for a file (authenticated).
+// officeType maps a file extension to the OnlyOffice WOPI editor type segment
+// (word | cell | slide) used in the action URL.
+func officeType(name string) string {
+	switch strings.ToLower(strings.TrimPrefix(path.Ext(name), ".")) {
+	case "xlsx", "xls", "ods", "csv", "xlsm", "xlt":
+		return "cell"
+	case "pptx", "ppt", "odp", "pps":
+		return "slide"
+	default: // docx, doc, odt, rtf, txt, ...
+		return "word"
+	}
+}
+
+// OfficeLaunch serves an HTML page that opens the file in the online Office
+// editor. A WOPI editor is launched by POSTing a form (access_token in the body)
+// to the editor's action URL and hosting it in an iframe — a plain browser GET to
+// that URL returns 404. This page performs that auto-submitting POST.
 func (ctl *Controller) OfficeLaunch(c *gin.Context) {
 	if !ctl.dep.Config.WOPI.Enabled() {
-		respond(c, serializer.Err(serializer.CodeBadRequest, "online Office editing is not configured"))
+		c.String(http.StatusBadRequest, "online Office editing is not configured")
 		return
 	}
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
-		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		c.String(http.StatusBadRequest, "invalid id")
 		return
 	}
 	u := ctl.user(c)
-	if rc, _, err := ctl.dep.Files.OpenFileContent(c.Request.Context(), u, id); err != nil {
-		fail(c, err)
+	f, err := ctl.dep.Repo.File.GetByID(c.Request.Context(), u.ID, id)
+	if err != nil || f.IsFolder() {
+		c.String(http.StatusNotFound, "file not found")
 		return
-	} else {
-		_ = rc.Close()
 	}
 	token, err := ctl.dep.WOPI.Sign(id, u.ID, wopiTokenTTL)
 	if err != nil {
-		fail(c, err)
+		c.String(http.StatusInternalServerError, "cannot start the editor")
 		return
 	}
+
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
 	wopiSrc := fmt.Sprintf("%s/wopi/files/%d", base, id)
-	editor := strings.ReplaceAll(ctl.dep.Config.WOPI.EditURLTemplate, "{src}", url.QueryEscape(wopiSrc))
-	sep := "?"
-	if strings.Contains(editor, "?") {
-		sep = "&"
-	}
-	respond(c, serializer.OK(gin.H{
-		"url":      editor + sep + "access_token=" + url.QueryEscape(token),
-		"wopi_src": wopiSrc,
-	}))
+	// {type} (if present) → word/cell/slide by file kind; {src} → encoded WOPISrc.
+	action := strings.ReplaceAll(ctl.dep.Config.WOPI.EditURLTemplate, "{type}", officeType(f.Name))
+	action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
+	ttlMs := time.Now().Add(wopiTokenTTL).UnixMilli()
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, officeLauncherHTML(f.Name, action, token, ttlMs))
+}
+
+// officeLauncherHTML builds the auto-submitting WOPI launch page.
+func officeLauncherHTML(name, action, token string, ttlMs int64) string {
+	e := html.EscapeString
+	return `<!doctype html><html lang="fr"><head><meta charset="utf-8">` +
+		`<meta name="viewport" content="width=device-width,initial-scale=1">` +
+		`<title>` + e(name) + `</title>` +
+		`<style>html,body{margin:0;height:100%;background:#1a1a1a}iframe{border:0;width:100%;height:100%;display:block}</style>` +
+		`</head><body>` +
+		`<form id="wopi" method="post" target="office_frame" action="` + e(action) + `">` +
+		`<input type="hidden" name="access_token" value="` + e(token) + `">` +
+		`<input type="hidden" name="access_token_ttl" value="` + fmt.Sprintf("%d", ttlMs) + `">` +
+		`</form>` +
+		`<iframe name="office_frame" allowfullscreen allow="autoplay; camera; microphone; display-capture"></iframe>` +
+		`<script>document.getElementById('wopi').submit()</script>` +
+		`</body></html>`
 }

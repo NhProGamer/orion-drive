@@ -51,10 +51,16 @@ Secret =
 StoragePath = data/slave-storage
 
 [WOPI]
-; Online Office editing via a WOPI client (Collabora Online, OnlyOffice Docs).
-; ServerURL is the Office server base; EditURLTemplate builds the editor URL from
-; the WOPI source and must contain {src} (the URL-encoded WOPISrc). Both empty
-; disables Office editing. SiteURL must be reachable by the Office server.
+; Online Office editing via a WOPI client (OnlyOffice Docs, Collabora Online).
+; ServerURL is the Office server base. EditURLTemplate builds the editor action URL:
+;   {src}  -> the URL-encoded WOPISrc (required)
+;   {type} -> word|cell|slide per document (optional; lets .docx/.xlsx/.pptx all work)
+; OrionDrive opens the editor via a WOPI form POST + iframe (a plain GET on the
+; action URL returns 404 — this is expected). SiteURL must be reachable by the
+; Office server (for its WOPI callbacks). Both empty disables Office editing.
+; OnlyOffice example:
+;   ServerURL = https://office.example.com
+;   EditURLTemplate = https://office.example.com/hosting/wopi/{type}/edit?WOPISrc={src}
 ; Collabora example:
 ;   ServerURL = https://collabora.example.com
 ;   EditURLTemplate = https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}

@@ -128,7 +128,7 @@ export const api = {
   saveText: (id: number, content: string) => put<FileNode>('/file/text', { id, content }),
   saveBlob: (id: number, blob: Blob) =>
     put<FileNode>(`/file/blob/${id}`, blob, { headers: { 'Content-Type': 'application/octet-stream' } }),
-  officeLaunch: (id: number) => get<{ url: string; wopi_src: string }>(`/file/office/${id}`),
+  officeUrl: (id: number) => `/api/v1/file/office/${id}`,
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Archives (background tasks)
