@@ -106,6 +106,26 @@ export interface Capacity {
   total: number
 }
 
+export interface WebdavAccount {
+  id: number
+  label: string
+  username: string
+  read_only: boolean
+  last_used_at: string | null
+  created_at: string
+}
+
+export interface WebdavAccountList {
+  accounts: WebdavAccount[]
+  url: string
+}
+
+export interface WebdavCreated {
+  account: WebdavAccount
+  password: string
+  url: string
+}
+
 export interface UploadInit {
   session_id: string
   chunk_size: number
@@ -234,6 +254,12 @@ export const api = {
     const s = q.toString()
     return `/api/v1/share/${token}/archive` + (s ? `?${s}` : '')
   },
+
+  // WebDAV credentials
+  webdavAccounts: () => get<WebdavAccountList>('/webdav/accounts'),
+  createWebdavAccount: (input: { label?: string; read_only?: boolean }) =>
+    post<WebdavCreated>('/webdav/accounts', input),
+  deleteWebdavAccount: (id: number) => http.delete(`/webdav/accounts/${id}`),
 
   logout: () => post('/auth/logout'),
 

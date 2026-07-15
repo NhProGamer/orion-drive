@@ -4,7 +4,7 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive, FolderInput, FileText,
+  Link as LinkIcon, FileArchive, FolderInput, FileText, Server,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -22,6 +22,7 @@ import SharesPanel from './SharesPanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
+import WebdavDialog from './WebdavDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
 const files = useFilesStore()
@@ -42,6 +43,7 @@ const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const newMenuOpen = ref(false)
 const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
+const webdavOpen = ref(false)
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -292,6 +294,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         </button>
         <div class="nav-sep"></div>
         <button class="nav-item" :class="{ active: files.view === 'storage' }" @click="gotoView('storage')"><Database :size="18" />Stockage</button>
+        <button class="nav-item" @click="webdavOpen = true"><Server :size="18" />Accès WebDAV</button>
       </nav>
       <div class="quota">
         <div class="quota-bar"><div class="quota-fill" :style="{ width: files.quotaPct + '%' }"></div></div>
@@ -484,6 +487,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     </div>
 
     <ShareDialog v-if="shareNode" :node="shareNode" @close="shareNode = null" />
+    <WebdavDialog v-if="webdavOpen" @close="webdavOpen = false" />
 
     <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
     <Toasts />
