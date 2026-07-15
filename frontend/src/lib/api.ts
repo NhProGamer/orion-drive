@@ -188,6 +188,7 @@ export const api = {
   trash: (ids: number[]) => post('/file/trash', { ids }),
   restore: (ids: number[]) => post('/file/restore', { ids }),
   purge: (ids: number[]) => post('/file/purge', { ids }),
+  emptyTrash: () => post<{ purged: number }>('/file/trash/empty'),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
   inlineUrl: (id: number) => `/api/v1/file/content/${id}?inline=1`,
   thumbUrl: (id: number) => `/api/v1/file/thumb/${id}`,

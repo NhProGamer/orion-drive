@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Info, Trash2, RotateCcw, FolderPlus, Download, X } from 'lucide-vue-next'
+import { Info, Trash2, RotateCcw, FolderPlus, Download, X, FolderInput } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import type { LucideIcon } from 'lucide-vue-next'
 
@@ -12,6 +12,7 @@ const ICONS: Record<string, LucideIcon> = {
   restore: RotateCcw,
   'folder-plus': FolderPlus,
   download: Download,
+  move: FolderInput,
   x: X,
 }
 const iconFor = computed(() => (name: string) => ICONS[name] || Info)

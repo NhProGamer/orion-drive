@@ -271,6 +271,20 @@ export const useFilesStore = defineStore('files', {
       this.ui().toast(ids.length > 1 ? `${ids.length} éléments restaurés` : 'Élément restauré', 'restore')
     },
 
+    async move(ids: number[], parent: string) {
+      await api.move(ids, parent)
+      this.clearSel()
+      await this.load()
+      this.ui().toast(ids.length > 1 ? `${ids.length} éléments déplacés` : 'Élément déplacé', 'move')
+    },
+
+    async emptyTrash() {
+      const r = await api.emptyTrash()
+      this.clearSel()
+      await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
+      this.ui().toast(r.purged ? `Corbeille vidée (${r.purged})` : 'La corbeille est déjà vide', 'trash')
+    },
+
     async purge(ids: number[]) {
       await api.purge(ids)
       this.clearSel()

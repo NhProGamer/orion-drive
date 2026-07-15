@@ -977,6 +977,59 @@ html[data-halo='off'] body::before {
   font-family: var(--font-mono);
   font-size: 11px;
 }
+/* Move-to-folder dialog */
+.move-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-size: 12.5px;
+}
+.crumb-btn.current {
+  color: var(--fg-0);
+  font-weight: 600;
+}
+.move-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  max-height: 44vh;
+  overflow-y: auto;
+}
+.move-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-0);
+}
+.move-row:last-child {
+  border-bottom: none;
+}
+.move-row:hover {
+  background: var(--bg-2);
+}
+.move-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.move-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--fg-2);
+  font-size: 12.5px;
+}
+
 /* WebDAV access dialog */
 .dav-list {
   display: flex;

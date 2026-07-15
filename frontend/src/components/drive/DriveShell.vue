@@ -23,6 +23,7 @@ import UploadsPanel from './UploadsPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
 import WebdavDialog from './WebdavDialog.vue'
+import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
 const files = useFilesStore()
@@ -38,6 +39,7 @@ type Dialog =
   | { type: 'rename'; id: number; value: string }
   | { type: 'folder'; value: string }
   | { type: 'purge'; ids: number[] }
+  | { type: 'emptytrash' }
   | null
 const dialog = ref<Dialog>(null)
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
@@ -45,6 +47,7 @@ const newMenuOpen = ref(false)
 const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
 const webdavOpen = ref(false)
+const moveNodes = ref<FileNode[] | null>(null)
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -135,6 +138,7 @@ function ctxItems(): MenuItem[] {
   }
   if (!files.readOnly && n) {
     items.push({ sep: true })
+    items.push({ id: 'move', label: 'Déplacer vers…', icon: FolderInput })
     if (!multi) {
       items.push({ id: 'rename', label: 'Renommer', icon: Pencil })
       items.push({ id: 'star', label: n.starred ? 'Ne plus suivre' : 'Suivre', icon: Star })
@@ -162,6 +166,7 @@ function menuAction(id: string) {
     case 'extract': if (sel[0]) files.extract(sel[0]); break
     case 'office': if (sel[0]) files.openOffice(sel[0]); break
     case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
+    case 'move': if (sel.length) moveNodes.value = [...sel]; break
     case 'trash': files.trash([...files.sel]); break
     case 'restore': files.restore([...files.sel]); break
     case 'purge': dialog.value = { type: 'purge', ids: [...files.sel] }; break
@@ -202,6 +207,8 @@ async function confirmDialog() {
     await files.createFolder(d.value.trim() || 'Nouveau dossier')
   } else if (d.type === 'purge') {
     await files.purge(d.ids)
+  } else if (d.type === 'emptytrash') {
+    await files.emptyTrash()
   }
   dialog.value = null
 }
@@ -396,6 +403,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                   <button class="icon-btn" title="Télécharger" @click="doDownload(files.selNodes)"><Download :size="16" /></button>
                   <button v-if="files.sel.length === 1 && files.selNodes[0]?.type === 'file'" class="icon-btn" title="Partager" @click="shareNode = files.selNodes[0]"><Share2 :size="16" /></button>
                   <button v-if="!files.readOnly && files.sel.length === 1" class="icon-btn" title="Renommer" @click="startRename"><Pencil :size="16" /></button>
+                  <button v-if="!files.readOnly" class="icon-btn" title="Déplacer vers…" @click="moveNodes = [...files.selNodes]"><FolderInput :size="16" /></button>
                   <button v-if="!files.readOnly" class="icon-btn" title="Corbeille" @click="files.trash([...files.sel])"><Trash2 :size="16" /></button>
                 </template>
               </div>
@@ -410,6 +418,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                 </template>
               </div>
               <span v-if="files.view !== 'storage' && files.view !== 'shares'" class="head-count">{{ files.nodes.length }} élément{{ files.nodes.length > 1 ? 's' : '' }}</span>
+              <button
+                v-if="files.view === 'trash' && files.nodes.length"
+                class="btn btn-secondary"
+                style="margin-left: auto"
+                @click="dialog = { type: 'emptytrash' }"
+              >
+                <Trash2 :size="15" />Vider la corbeille
+              </button>
             </template>
           </div>
 
@@ -535,11 +551,20 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <button class="btn btn-danger" @click="confirmDialog">Supprimer</button>
           </div>
         </template>
+        <template v-else-if="dialog.type === 'emptytrash'">
+          <h2>Vider la corbeille ?</h2>
+          <p>Tous les éléments de la corbeille seront supprimés définitivement. Cette action est irréversible.</p>
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="dialog = null">Annuler</button>
+            <button class="btn btn-danger" @click="confirmDialog">Vider la corbeille</button>
+          </div>
+        </template>
       </div>
     </div>
 
     <ShareDialog v-if="shareNode" :node="shareNode" @close="shareNode = null" />
     <WebdavDialog v-if="webdavOpen" @close="webdavOpen = false" />
+    <MoveDialog v-if="moveNodes" :nodes="moveNodes" @close="moveNodes = null" @moved="moveNodes = null" />
 
     <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
     <Toasts />
