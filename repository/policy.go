@@ -32,3 +32,20 @@ func (r *PolicyRepo) List(ctx context.Context) ([]model.StoragePolicy, error) {
 func (r *PolicyRepo) Create(ctx context.Context, p *model.StoragePolicy) error {
 	return r.db.WithContext(ctx).Create(p).Error
 }
+
+// Update persists changes to a storage policy.
+func (r *PolicyRepo) Update(ctx context.Context, p *model.StoragePolicy) error {
+	return r.db.WithContext(ctx).Save(p).Error
+}
+
+// Delete removes a storage policy by ID.
+func (r *PolicyRepo) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.StoragePolicy{}, id).Error
+}
+
+// GroupsUsing returns how many groups reference a storage policy.
+func (r *PolicyRepo) GroupsUsing(ctx context.Context, policyID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.Group{}).Where("storage_policy_id = ?", policyID).Count(&n).Error
+	return n, err
+}

@@ -132,3 +132,11 @@ func (r *FileRepo) SumSize(ctx context.Context, ownerID uint) (int64, error) {
 	}
 	return *total, err
 }
+
+// CountAll returns the number of (non-trashed) files across all users.
+func (r *FileRepo) CountAll(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.File{}).
+		Where("type = ?", model.FileTypeFile).Count(&n).Error
+	return n, err
+}

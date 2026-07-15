@@ -78,6 +78,7 @@ func (ctl *Controller) Me(c *gin.Context) {
 		"oidc_enabled": ctl.dep.Auth.Enabled(),
 		"can_share":    canShare,
 		"wopi":         ctl.dep.Config.WOPI.Enabled(),
+		"admin":        middleware.IsAdmin(u, ctl.dep.Config.System.AdminEmailSet()),
 	}))
 }
 

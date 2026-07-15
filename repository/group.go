@@ -28,6 +28,28 @@ func (r *GroupRepo) List(ctx context.Context) ([]model.Group, error) {
 	return groups, err
 }
 
+// Create inserts a new group.
+func (r *GroupRepo) Create(ctx context.Context, g *model.Group) error {
+	return r.db.WithContext(ctx).Create(g).Error
+}
+
+// Update persists changes to a group.
+func (r *GroupRepo) Update(ctx context.Context, g *model.Group) error {
+	return r.db.WithContext(ctx).Save(g).Error
+}
+
+// Delete removes a group by ID.
+func (r *GroupRepo) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.Group{}, id).Error
+}
+
+// CountUsers returns how many users belong to a group.
+func (r *GroupRepo) CountUsers(ctx context.Context, groupID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).Where("group_id = ?", groupID).Count(&n).Error
+	return n, err
+}
+
 // SetStoragePolicy points a group at a storage policy.
 func (r *GroupRepo) SetStoragePolicy(ctx context.Context, groupID, policyID uint) error {
 	return r.db.WithContext(ctx).Model(&model.Group{}).

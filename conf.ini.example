@@ -11,6 +11,9 @@ Mode = debug
 SessionSecret = change-me-to-a-long-random-string
 ; Public base URL of this instance (used to build the OIDC redirect URI).
 SiteURL = http://localhost:5212
+; Comma-separated emails always granted admin access (bootstrap; independent of
+; group permissions so you can't lock yourself out). e.g. admin@example.com,ops@example.com
+AdminEmails =
 
 [Database]
 ; sqlite | mysql | postgres | mssql

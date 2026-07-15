@@ -29,6 +29,20 @@ type System struct {
 	Mode          string `ini:"Mode"`
 	SessionSecret string `ini:"SessionSecret"`
 	SiteURL       string `ini:"SiteURL"`
+	// AdminEmails is a comma-separated allowlist of emails always granted admin
+	// access (bootstrap, independent of group permissions).
+	AdminEmails string `ini:"AdminEmails"`
+}
+
+// AdminEmailSet returns the lower-cased admin emails as a lookup set.
+func (s System) AdminEmailSet() map[string]bool {
+	set := map[string]bool{}
+	for _, e := range strings.Split(s.AdminEmails, ",") {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			set[e] = true
+		}
+	}
+	return set
 }
 
 // Database selects and configures the backing store.

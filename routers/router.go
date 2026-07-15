@@ -30,6 +30,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	registerAuthRoutes(api, ctl, dep)
 	registerFileRoutes(api, ctl)
 	registerShareRoutes(api, ctl)
+	registerAdminRoutes(api, ctl, dep)
 
 	// Public direct-link content (no authentication).
 	api.GET("/link/:token", ctl.DirectLinkContent)
@@ -134,6 +135,26 @@ func registerSlaveRoutes(r *gin.Engine, dep *bootstrap.Dependency) error {
 
 	dep.Logger.Info("slave storage enabled", "path", dep.Config.Slave.StoragePath)
 	return nil
+}
+
+// registerAdminRoutes mounts the admin panel API, gated by admin access.
+func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *bootstrap.Dependency) {
+	a := api.Group("/admin")
+	a.Use(middleware.RequireAuth(), middleware.RequireAdmin(dep.Config.System.AdminEmailSet()))
+
+	a.GET("/stats", ctl.AdminStats)
+
+	a.GET("/users", ctl.AdminListUsers)
+	a.PATCH("/users/:id", ctl.AdminUpdateUser)
+
+	a.GET("/groups", ctl.AdminListGroups)
+	a.POST("/groups", ctl.AdminCreateGroup)
+	a.PATCH("/groups/:id", ctl.AdminUpdateGroup)
+	a.DELETE("/groups/:id", ctl.AdminDeleteGroup)
+
+	a.GET("/policies", ctl.AdminListPolicies)
+	a.POST("/policies", ctl.AdminCreatePolicy)
+	a.DELETE("/policies/:id", ctl.AdminDeletePolicy)
 }
 
 func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {

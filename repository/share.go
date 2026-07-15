@@ -52,6 +52,13 @@ func (r *ShareRepo) DeleteByToken(ctx context.Context, userID uint, token string
 		Delete(&model.Share{}).Error
 }
 
+// Count returns the total number of shares (all users).
+func (r *ShareRepo) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.Share{}).Count(&n).Error
+	return n, err
+}
+
 // IncrementViews bumps the view counter.
 func (r *ShareRepo) IncrementViews(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Model(&model.Share{}).

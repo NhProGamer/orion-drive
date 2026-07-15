@@ -44,6 +44,20 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*model.User, e
 	return &u, err
 }
 
+// List returns every user (with their group), newest first — for the admin panel.
+func (r *UserRepo) List(ctx context.Context) ([]model.User, error) {
+	var users []model.User
+	err := r.db.WithContext(ctx).Preload("Group").Order("id asc").Find(&users).Error
+	return users, err
+}
+
+// Count returns the number of users.
+func (r *UserRepo) Count(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).Count(&n).Error
+	return n, err
+}
+
 // Create inserts a new user.
 func (r *UserRepo) Create(ctx context.Context, u *model.User) error {
 	return r.db.WithContext(ctx).Create(u).Error

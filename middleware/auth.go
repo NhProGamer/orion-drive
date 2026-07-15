@@ -2,6 +2,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/auth"
@@ -38,6 +40,30 @@ func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, ok := c.Get(userCtxKey); !ok {
 			r := serializer.Err(serializer.CodeUnauthorized, "authentication required")
+			c.AbortWithStatusJSON(r.HTTPStatus(), r)
+			return
+		}
+		c.Next()
+	}
+}
+
+// IsAdmin reports whether a user has administrator access: their email is in the
+// bootstrap allowlist, or their group carries the admin permission.
+func IsAdmin(u *model.User, adminEmails map[string]bool) bool {
+	if u == nil {
+		return false
+	}
+	if adminEmails[strings.ToLower(u.Email)] {
+		return true
+	}
+	return u.Group != nil && u.Group.CanAdmin()
+}
+
+// RequireAdmin aborts requests from non-admin users (use after RequireAuth).
+func RequireAdmin(adminEmails map[string]bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !IsAdmin(UserFrom(c), adminEmails) {
+			r := serializer.Err(serializer.CodeForbidden, "administrator access required")
 			c.AbortWithStatusJSON(r.HTTPStatus(), r)
 			return
 		}

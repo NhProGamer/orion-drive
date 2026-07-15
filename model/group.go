@@ -12,9 +12,10 @@ type Group struct {
 }
 
 // GroupPermissions is the typed view of Group.Permissions. A nil flag means
-// "unset", which the Can* helpers treat as allowed (permissive default).
+// "unset": Share defaults to allowed, Admin defaults to denied.
 type GroupPermissions struct {
 	Share *bool `json:"share,omitempty"`
+	Admin *bool `json:"admin,omitempty"`
 }
 
 // Perms decodes the group's permission flags.
@@ -28,4 +29,10 @@ func (g *Group) Perms() GroupPermissions {
 func (g *Group) CanShare() bool {
 	p := g.Perms()
 	return p.Share == nil || *p.Share
+}
+
+// CanAdmin reports whether members have administrator access (default: denied).
+func (g *Group) CanAdmin() bool {
+	p := g.Perms()
+	return p.Admin != nil && *p.Admin
 }
