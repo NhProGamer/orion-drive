@@ -59,10 +59,34 @@ func TestImageKeepsSmall(t *testing.T) {
 }
 
 func TestKind(t *testing.T) {
-	cases := map[string]string{".jpg": "image", "png": "image", ".mp4": "video", ".txt": "", ".pdf": ""}
+	cases := map[string]string{
+		".jpg":  KindImage,
+		"png":   KindImage,
+		".mp4":  KindVideo,
+		".mp3":  KindAudio,
+		".heic": KindVIPS,
+		".webp": KindVIPS,
+		".cr2":  KindRaw,
+		".nef":  KindRaw,
+		".docx": KindDocument,
+		".xlsx": KindDocument,
+		".pdf":  KindPDF,
+		".txt":  "",
+		".exe":  "",
+	}
 	for ext, want := range cases {
 		if got := Kind(ext); got != want {
 			t.Errorf("Kind(%q) = %q, want %q", ext, got, want)
 		}
+	}
+}
+
+func TestAvailable(t *testing.T) {
+	// The built-in image generator is always available; unknown kinds never are.
+	if !Available(KindImage) {
+		t.Error("image should always be available")
+	}
+	if Available("nonsense") {
+		t.Error("unknown kind should not be available")
 	}
 }

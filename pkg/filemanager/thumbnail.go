@@ -31,8 +31,7 @@ func (m *Manager) Thumbnail(ctx context.Context, user *model.User, id uint) ([]b
 		return nil, ErrNoThumbnail
 	}
 	kind := thumb.Kind(path.Ext(f.Name))
-	needsFFmpeg := kind == "video" || kind == "audio"
-	if kind == "" || (needsFFmpeg && !thumb.FFmpegAvailable()) {
+	if kind == "" || !thumb.Available(kind) {
 		return nil, ErrNoThumbnail
 	}
 
@@ -56,7 +55,7 @@ func (m *Manager) Thumbnail(ctx context.Context, user *model.User, id uint) ([]b
 // generateThumb builds thumbnail bytes for a file.
 func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string) ([]byte, error) {
 	switch kind {
-	case "image":
+	case thumb.KindImage:
 		rc, err := m.openContent(ctx, f)
 		if err != nil {
 			return nil, err
@@ -67,16 +66,27 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return nil, err
 		}
 		return thumb.Image(data)
-	case "video", "audio":
+	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF:
+		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
 			return nil, err
 		}
 		defer os.Remove(p)
-		if kind == "audio" {
+		switch kind {
+		case thumb.KindVideo:
+			return thumb.Video(ctx, p)
+		case thumb.KindAudio:
 			return thumb.Audio(ctx, p)
+		case thumb.KindVIPS:
+			return thumb.VIPS(ctx, p)
+		case thumb.KindRaw:
+			return thumb.Raw(ctx, p)
+		case thumb.KindDocument:
+			return thumb.Document(ctx, p)
+		case thumb.KindPDF:
+			return thumb.PDF(ctx, p)
 		}
-		return thumb.Video(ctx, p)
 	}
 	return nil, ErrNoThumbnail
 }

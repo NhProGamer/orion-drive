@@ -31,8 +31,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
 
 # ---- Stage 3: minimal runtime ----
 FROM alpine:3.20
-# ca-certificates for OIDC/S3 TLS; ffmpeg powers video/audio thumbnails; tzdata for local times.
-RUN apk add --no-cache ca-certificates ffmpeg tzdata \
+# Thumbnail toolchain (all optional — each generator is skipped if its binary is absent):
+#   ffmpeg        video frames + audio cover art
+#   vips-tools    extended image formats (HEIC/AVIF/TIFF/WebP/...); libheif adds HEIF/AVIF
+#   libraw-tools  camera RAW previews (CR2/NEF/ARW/DNG/...)
+#   poppler-utils PDF page rasterisation (pdftoppm)
+# ca-certificates for OIDC/S3 TLS; tzdata for local times.
+# Document (Office/ODF) thumbnails also need LibreOffice — it is NOT installed by
+# default (~800 MB). To enable it, add `libreoffice` to the apk line below.
+RUN apk add --no-cache \
+      ca-certificates tzdata \
+      ffmpeg vips-tools libheif libraw-tools poppler-utils \
  && adduser -D -u 1000 orion \
  && mkdir -p /app/data \
  && chown -R orion:orion /app

@@ -52,6 +52,16 @@ export function isOffice(name: string): boolean {
   return /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(String(name))
 }
 
+// Extensions the backend can generate a thumbnail for (image built-in / vips /
+// libraw / ffmpeg / poppler / libreoffice). A 404 falls back to the type icon.
+const THUMB_EXT =
+  /\.(jpe?g|png|gif|webp|tiff?|bmp|heic|heif|avif|jxl|jp2|jpx|cr2|cr3|nef|nrw|arw|sr2|srf|dng|raf|orf|rw2|pef|srw|k25|kdc|dcr|mrw|x3f|3fr|mef|iiq|mos|raw|mp4|mov|webm|mkv|m4v|avi|mp3|flac|m4a|aac|ogg|opus|pdf|docx?|odt|rtf|xlsx?|ods|pptx?|odp)$/i
+
+/** Whether OrionDrive may have a thumbnail for this file. */
+export function canThumbnail(name: string): boolean {
+  return THUMB_EXT.test(String(name))
+}
+
 /** Human-readable size, French style (comma decimal, narrow no-break space). */
 export function fmtSize(bytes: number): string {
   if (!bytes) return '—'

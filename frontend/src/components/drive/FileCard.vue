@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Star } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
-import { kindFromName, fmtSize, fmtDate } from '@/lib/format'
+import { kindFromName, fmtSize, fmtDate, canThumbnail } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 
 const props = defineProps<{ node: FileNode; selected: boolean }>()
@@ -14,7 +14,7 @@ defineEmits<{
 
 const kind = computed(() => kindFromName(props.node.name))
 const meta = computed(() => metaFor(kind.value))
-const canThumb = computed(() => ['image', 'video', 'audio'].includes(kind.value))
+const canThumb = computed(() => canThumbnail(props.node.name))
 const thumbUrl = computed(() => api.thumbUrl(props.node.id))
 const thumbFailed = ref(false)
 // Reset the fallback when the file (or its content) changes.
