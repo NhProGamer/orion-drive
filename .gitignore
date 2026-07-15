@@ -35,3 +35,6 @@ conf.ini
 # Tooling caches / stray lockfiles
 .serena/
 /frontend/pnpm-lock.yaml
+
+# Design assets staged here (branding); not part of the build
+/tmp/
