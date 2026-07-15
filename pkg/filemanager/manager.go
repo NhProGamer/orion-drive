@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -336,6 +337,181 @@ func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (*Dow
 		return nil, err
 	}
 	return &DownloadTarget{File: f, Stream: newThrottledReader(rc, speed)}, nil
+}
+
+// commitContent stores reader (size bytes) into the policy backend and records
+// it, either as a new version of targetFileID (when non-nil) or as a new file
+// named name under parentID. It creates the Entity + File rows and updates the
+// user's used storage. The caller must have resolved policy/h and already run
+// the conflict, lock and quota checks. Shared by resumable uploads and WebDAV.
+func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID *uint, name string, targetFileID *uint, policy *model.StoragePolicy, h driver.Handler, reader io.Reader, size int64) (*model.File, error) {
+	source := newSourcePath(user.ID, name)
+
+	// Encrypt at rest when the policy requests it (local-serve backends only,
+	// since encrypted bytes must be decrypted by OrionDrive on the way out).
+	var entityProps model.JSON
+	if m.policyEncrypts(policy) {
+		if m.cipher == nil {
+			return nil, errors.New("policy requests encryption but no encryption key is configured")
+		}
+		if !h.Capabilities().LocalServe {
+			return nil, errors.New("encryption is only supported on local-serve storage policies")
+		}
+		enc, iv, err := m.cipher.EncryptReader(reader)
+		if err != nil {
+			return nil, err
+		}
+		reader = enc
+		entityProps = model.MustJSON(model.EntityProps{IV: base64.StdEncoding.EncodeToString(iv)})
+	}
+
+	if err := h.Put(ctx, source, reader, size); err != nil {
+		return nil, err
+	}
+
+	entity := &model.Entity{
+		Type:            model.EntityTypeVersion,
+		Source:          source,
+		Size:            size,
+		ReferenceCount:  1,
+		StoragePolicyID: policy.ID,
+		CreatedByID:     user.ID,
+		Props:           entityProps,
+	}
+	if err := m.repo.Entity.Create(ctx, entity); err != nil {
+		return nil, err
+	}
+
+	var file *model.File
+	if targetFileID != nil {
+		// Add a new version to the existing file; the old versions are kept.
+		f, err := m.repo.File.GetByID(ctx, user.ID, *targetFileID)
+		if err != nil {
+			return nil, err
+		}
+		file = f
+		entity.FileID = &file.ID
+		if err := m.repo.Entity.Update(ctx, entity); err != nil {
+			return nil, err
+		}
+		file.PrimaryEntityID = &entity.ID
+		file.Size = size
+		file.StoragePolicyID = policy.ID
+		if err := m.repo.File.Update(ctx, file); err != nil {
+			return nil, err
+		}
+	} else {
+		file = &model.File{
+			Name:            name,
+			Type:            model.FileTypeFile,
+			OwnerID:         user.ID,
+			ParentID:        parentID,
+			PrimaryEntityID: &entity.ID,
+			Size:            size,
+			StoragePolicyID: policy.ID,
+		}
+		if err := m.repo.File.Create(ctx, file); err != nil {
+			return nil, err
+		}
+		entity.FileID = &file.ID
+		if err := m.repo.Entity.Update(ctx, entity); err != nil {
+			return nil, err
+		}
+	}
+
+	user.StorageUsed += size
+	_ = m.repo.User.Update(ctx, user)
+	return file, nil
+}
+
+// WriteFile stores reader (size bytes) as a file named name under parentID for
+// the user, streaming straight through in one shot (used by WebDAV PUT). If a
+// non-folder file with that name already exists it gains a new version; a
+// folder with the same name conflicts. The group quota is enforced.
+func (m *Manager) WriteFile(ctx context.Context, user *model.User, parentID *uint, name string, reader io.Reader, size int64) (*model.File, error) {
+	name = strings.TrimSpace(name)
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	if size < 0 {
+		return nil, errors.New("invalid size")
+	}
+	if err := m.ensureParent(ctx, user, parentID); err != nil {
+		return nil, err
+	}
+
+	var targetFileID *uint
+	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err == nil {
+		if existing.IsFolder() {
+			return nil, ErrConflict
+		}
+		if existing.IsLocked() {
+			return nil, ErrLocked
+		}
+		id := existing.ID
+		targetFileID = &id
+	}
+
+	used, total, err := m.Capacity(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if total > 0 && used+size > total {
+		return nil, ErrQuota
+	}
+
+	policy, err := m.policyForUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	h, err := m.driverForPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	return m.commitContent(ctx, user, parentID, name, targetFileID, policy, h, reader, size)
+}
+
+// OpenContent returns a seekable reader over a file's current content, always
+// streamed through OrionDrive and decrypted on the fly when needed. Used by
+// WebDAV, which cannot follow a backend's direct (redirect) download URL.
+func (m *Manager) OpenContent(ctx context.Context, f *model.File) (driver.ReadSeekCloser, error) {
+	if f.IsFolder() || f.PrimaryEntityID == nil {
+		return nil, errors.New("file has no content")
+	}
+	e, err := m.repo.Entity.GetByID(ctx, *f.PrimaryEntityID)
+	if err != nil {
+		return nil, err
+	}
+	policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID)
+	if err != nil {
+		return nil, err
+	}
+	h, err := m.driverForPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	rc, err := h.Open(ctx, e.Source)
+	if err != nil {
+		return nil, err
+	}
+	if !e.Encrypted() {
+		return rc, nil
+	}
+	if m.cipher == nil {
+		_ = rc.Close()
+		return nil, errors.New("cannot decrypt: no encryption key configured")
+	}
+	iv, err := base64.StdEncoding.DecodeString(e.DecodeProps().IV)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	dec, err := m.cipher.DecryptReadSeeker(rc, iv)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	return dec, nil
 }
 
 // ensureParent verifies that parentID (when set) is an existing folder.

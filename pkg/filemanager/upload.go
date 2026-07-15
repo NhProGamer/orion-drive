@@ -3,7 +3,6 @@ package filemanager
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -198,13 +197,10 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		return nil, err
 	}
 
-	source := newSourcePath(user.ID, s.Name)
-
 	// Stream the staged file (or an empty reader) into the backend.
 	var reader io.Reader = strings.NewReader("")
-	var tmp *os.File
 	if s.Size > 0 {
-		tmp, err = os.Open(s.TempPath)
+		tmp, err := os.Open(s.TempPath)
 		if err != nil {
 			return nil, err
 		}
@@ -212,79 +208,10 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		reader = io.LimitReader(tmp, s.Size)
 	}
 
-	// Encrypt at rest when the policy requests it (local-serve backends only,
-	// since encrypted bytes must be decrypted by OrionDrive on the way out).
-	var entityProps model.JSON
-	if m.policyEncrypts(policy) {
-		if m.cipher == nil {
-			return nil, errors.New("policy requests encryption but no encryption key is configured")
-		}
-		if !h.Capabilities().LocalServe {
-			return nil, errors.New("encryption is only supported on local-serve storage policies")
-		}
-		enc, iv, err := m.cipher.EncryptReader(reader)
-		if err != nil {
-			return nil, err
-		}
-		reader = enc
-		entityProps = model.MustJSON(model.EntityProps{IV: base64.StdEncoding.EncodeToString(iv)})
-	}
-
-	if err := h.Put(ctx, source, reader, s.Size); err != nil {
+	file, err := m.commitContent(ctx, user, s.ParentID, s.Name, s.FileID, policy, h, reader, s.Size)
+	if err != nil {
 		return nil, err
 	}
-
-	entity := &model.Entity{
-		Type:            model.EntityTypeVersion,
-		Source:          source,
-		Size:            s.Size,
-		ReferenceCount:  1,
-		StoragePolicyID: policy.ID,
-		CreatedByID:     user.ID,
-		Props:           entityProps,
-	}
-	if err := m.repo.Entity.Create(ctx, entity); err != nil {
-		return nil, err
-	}
-
-	var file *model.File
-	if s.FileID != nil {
-		// Add a new version to the existing file; the old versions are kept.
-		file, err = m.repo.File.GetByID(ctx, user.ID, *s.FileID)
-		if err != nil {
-			return nil, err
-		}
-		entity.FileID = &file.ID
-		if err := m.repo.Entity.Update(ctx, entity); err != nil {
-			return nil, err
-		}
-		file.PrimaryEntityID = &entity.ID
-		file.Size = s.Size
-		file.StoragePolicyID = policy.ID
-		if err := m.repo.File.Update(ctx, file); err != nil {
-			return nil, err
-		}
-	} else {
-		file = &model.File{
-			Name:            s.Name,
-			Type:            model.FileTypeFile,
-			OwnerID:         user.ID,
-			ParentID:        s.ParentID,
-			PrimaryEntityID: &entity.ID,
-			Size:            s.Size,
-			StoragePolicyID: policy.ID,
-		}
-		if err := m.repo.File.Create(ctx, file); err != nil {
-			return nil, err
-		}
-		entity.FileID = &file.ID
-		if err := m.repo.Entity.Update(ctx, entity); err != nil {
-			return nil, err
-		}
-	}
-
-	user.StorageUsed += s.Size
-	_ = m.repo.User.Update(ctx, user)
 
 	m.discardSession(s)
 	return file, nil
