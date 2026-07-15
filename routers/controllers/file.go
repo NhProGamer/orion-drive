@@ -233,6 +233,16 @@ func (ctl *Controller) Purge(c *gin.Context) {
 	respond(c, serializer.OK(nil))
 }
 
+// EmptyTrash permanently deletes every trashed file the user owns.
+func (ctl *Controller) EmptyTrash(c *gin.Context) {
+	n, err := ctl.dep.Files.EmptyTrash(c.Request.Context(), ctl.user(c))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"purged": n}))
+}
+
 // Download delivers a file's content: it redirects to a direct provider URL
 // when the backend offers one, otherwise streams the (rate-limited) content.
 func (ctl *Controller) Download(c *gin.Context) {

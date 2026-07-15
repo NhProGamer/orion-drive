@@ -242,6 +242,27 @@ func (m *Manager) Restore(ctx context.Context, user *model.User, ids []uint) err
 	return m.repo.File.Restore(ctx, user.ID, ids)
 }
 
+// EmptyTrash permanently deletes every trashed file the user owns and returns
+// how many were purged. It reuses Purge, so physical entities, shares, direct
+// links and the quota counter are all cleaned up.
+func (m *Manager) EmptyTrash(ctx context.Context, user *model.User) (int, error) {
+	trashed, err := m.repo.File.ListTrashed(ctx, user.ID)
+	if err != nil {
+		return 0, err
+	}
+	if len(trashed) == 0 {
+		return 0, nil
+	}
+	ids := make([]uint, len(trashed))
+	for i := range trashed {
+		ids[i] = trashed[i].ID
+	}
+	if err := m.Purge(ctx, user, ids); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
 // Purge permanently deletes files and their physical entities.
 func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error {
 	for _, id := range ids {

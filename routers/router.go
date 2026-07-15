@@ -109,6 +109,7 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.POST("/file/trash", ctl.Trash)
 	f.POST("/file/restore", ctl.Restore)
 	f.POST("/file/purge", ctl.Purge)
+	f.POST("/file/trash/empty", ctl.EmptyTrash)
 	f.GET("/file/content/:id", ctl.Download)
 	f.GET("/file/thumb/:id", ctl.Thumbnail)
 	f.PUT("/file/text", ctl.SaveText)
