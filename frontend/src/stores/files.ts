@@ -34,6 +34,7 @@ export const useFilesStore = defineStore('files', {
     nodes: [] as FileNode[],
     loading: false,
     sel: [] as number[],
+    anchor: null as number | null, // last plain/ctrl click, for shift-range select
     previewId: null as number | null,
     overlayId: null as number | null, // full-screen content preview
     uploads: [] as Upload[],
@@ -55,6 +56,9 @@ export const useFilesStore = defineStore('files', {
     files: (s) => s.nodes.filter((n) => n.type === 'file'),
     orderedNodes(): FileNode[] {
       return this.folders.concat(this.files)
+    },
+    orderedIds(): number[] {
+      return this.orderedNodes.map((n) => n.id)
     },
     selNodes(): FileNode[] {
       return this.sel.map((id) => this.nodes.find((n) => n.id === id)).filter(Boolean) as FileNode[]
@@ -165,13 +169,39 @@ export const useFilesStore = defineStore('files', {
     },
 
     /* Selection */
-    select(node: FileNode) {
-      // Single click: select exactly one item and show its details on the right.
-      this.sel = [node.id]
-      this.previewId = node.id
+    select(node: FileNode, ev?: MouseEvent) {
+      const id = node.id
+      // Shift+click: select the range between the anchor and this item.
+      if (ev?.shiftKey && this.anchor != null) {
+        const ids = this.orderedIds
+        const a = ids.indexOf(this.anchor)
+        const b = ids.indexOf(id)
+        if (a > -1 && b > -1) {
+          const [s, e] = a < b ? [a, b] : [b, a]
+          this.sel = ids.slice(s, e + 1)
+          this.syncPreview()
+          return
+        }
+      }
+      // Ctrl/Cmd+click: toggle this item in the current selection.
+      if (ev && (ev.metaKey || ev.ctrlKey)) {
+        this.sel = this.sel.includes(id) ? this.sel.filter((x) => x !== id) : [...this.sel, id]
+        this.anchor = id
+        this.syncPreview()
+        return
+      }
+      // Plain click: select exactly one item and show its details on the right.
+      this.sel = [id]
+      this.anchor = id
+      this.previewId = id
+    },
+    // syncPreview shows the details panel only when a single item is selected.
+    syncPreview() {
+      this.previewId = this.sel.length === 1 ? this.sel[0] : null
     },
     clearSel() {
       this.sel = []
+      this.anchor = null
       this.previewId = null
     },
 
