@@ -239,6 +239,7 @@ export const api = {
 
   // Admin
   adminStats: () => get<AdminStats>('/admin/stats'),
+  adminRunMaintenance: () => post<{ purged_trash: number; cleaned_uploads: number }>('/admin/maintenance'),
   adminUsers: () => get<AdminUser[]>('/admin/users'),
   adminUpdateUser: (id: number, input: { group_id?: number; status?: number }) =>
     http.patch(`/admin/users/${id}`, input),

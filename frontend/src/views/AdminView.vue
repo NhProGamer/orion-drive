@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check } from 'lucide-vue-next'
+import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench } from 'lucide-vue-next'
 import {
   api,
   type AdminStats,
@@ -25,6 +25,20 @@ const stats = ref<AdminStats | null>(null)
 const users = ref<AdminUser[]>([])
 const groups = ref<AdminGroup[]>([])
 const policies = ref<AdminPolicy[]>([])
+
+const maintBusy = ref(false)
+async function runMaintenance() {
+  maintBusy.value = true
+  try {
+    const r = await api.adminRunMaintenance()
+    stats.value = await api.adminStats()
+    ui.toast(`Maintenance : ${r.purged_trash} fichier(s) purgé(s), ${r.cleaned_uploads} upload(s) nettoyé(s)`, 'check')
+  } catch (e: any) {
+    ui.toast('Échec de la maintenance' + (e?.message ? ` : ${e.message}` : ''), 'x')
+  } finally {
+    maintBusy.value = false
+  }
+}
 
 async function loadAll() {
   ;[stats.value, users.value, groups.value, policies.value] = await Promise.all([
@@ -144,7 +158,8 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
     </nav>
 
     <!-- Dashboard -->
-    <section v-if="tab === 'dashboard' && stats" class="admin-cards">
+    <template v-if="tab === 'dashboard' && stats">
+    <section class="admin-cards">
       <div class="stat-card"><span class="stat-num">{{ stats.users }}</span><span class="stat-label">Utilisateurs</span></div>
       <div class="stat-card"><span class="stat-num">{{ stats.files }}</span><span class="stat-label">Fichiers</span></div>
       <div class="stat-card"><span class="stat-num">{{ fmtSize(stats.storage_used) }}</span><span class="stat-label">Stockage utilisé</span></div>
@@ -152,6 +167,13 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
       <div class="stat-card"><span class="stat-num">{{ stats.groups }}</span><span class="stat-label">Groupes</span></div>
       <div class="stat-card"><span class="stat-num">{{ stats.policies }}</span><span class="stat-label">Policies</span></div>
     </section>
+    <div class="admin-actions" style="margin-top: 20px">
+      <button class="btn btn-secondary" :disabled="maintBusy" @click="runMaintenance">
+        <Wrench :size="15" />{{ maintBusy ? 'Maintenance…' : 'Lancer la maintenance' }}
+      </button>
+      <span class="stat-label" style="margin-left: 10px">Purge la corbeille expirée et nettoie les uploads incomplets.</span>
+    </div>
+    </template>
 
     <!-- Users -->
     <section v-else-if="tab === 'users'" class="admin-table">

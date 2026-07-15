@@ -9,6 +9,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// AdminRunMaintenance runs the background maintenance jobs immediately and
+// returns what they did (also runs on a schedule; this is the manual trigger).
+func (ctl *Controller) AdminRunMaintenance(c *gin.Context) {
+	ctx := c.Request.Context()
+	retention := time.Duration(ctl.dep.Config.System.TrashRetentionDays) * 24 * time.Hour
+	purged, _ := ctl.dep.Files.PurgeExpiredTrash(ctx, retention)
+	cleaned, _ := ctl.dep.Files.CleanupUploadTemp()
+	respond(c, serializer.OK(gin.H{"purged_trash": purged, "cleaned_uploads": cleaned}))
+}
+
 // AdminStats returns dashboard counters.
 func (ctl *Controller) AdminStats(c *gin.Context) {
 	ctx := c.Request.Context()

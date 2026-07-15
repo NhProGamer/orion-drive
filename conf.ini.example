@@ -17,6 +17,9 @@ AdminEmails =
 ; Comma-separated SSO groups/roles whose members get admin access, independent of
 ; their OrionDrive storage group. Requires [OIDC] GroupsClaim to be set. e.g. admins,sysops
 AdminGroups =
+; Days a file stays in the trash before the background job purges it permanently.
+; 0 disables auto-purge. Default: 30.
+TrashRetentionDays = 30
 
 [Database]
 ; sqlite | mysql | postgres | mssql

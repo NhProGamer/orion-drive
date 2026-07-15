@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
 	"gorm.io/gorm"
@@ -131,6 +132,16 @@ func (r *FileRepo) SumSize(ctx context.Context, ownerID uint) (int64, error) {
 		return 0, err
 	}
 	return *total, err
+}
+
+// ListTrashedBefore returns files (any owner) trashed before the given time —
+// used by the background trash-purge job.
+func (r *FileRepo) ListTrashedBefore(ctx context.Context, before time.Time) ([]model.File, error) {
+	var files []model.File
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("trashed_at IS NOT NULL AND trashed_at < ?", before).
+		Find(&files).Error
+	return files, err
 }
 
 // CountAll returns the number of (non-trashed) files across all users.

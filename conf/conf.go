@@ -35,6 +35,9 @@ type System struct {
 	// AdminGroups is a comma-separated list of SSO groups/roles whose members are
 	// granted admin access, independent of their OrionDrive storage group.
 	AdminGroups string `ini:"AdminGroups"`
+	// TrashRetentionDays is how long trashed files are kept before the background
+	// cleanup purges them permanently. 0 disables auto-purge.
+	TrashRetentionDays int `ini:"TrashRetentionDays"`
 }
 
 // AdminEmailSet returns the lower-cased admin emails as a lookup set.
@@ -116,10 +119,11 @@ type Redis struct {
 func Default() *Config {
 	return &Config{
 		System: System{
-			Listen:        ":5212",
-			Mode:          "debug",
-			SessionSecret: "change-me-to-a-long-random-string",
-			SiteURL:       "http://localhost:5212",
+			Listen:             ":5212",
+			Mode:               "debug",
+			SessionSecret:      "change-me-to-a-long-random-string",
+			SiteURL:            "http://localhost:5212",
+			TrashRetentionDays: 30,
 		},
 		Database: Database{Type: "sqlite", DBFile: "data/orion.db", Name: "orion"},
 		OIDC:     OIDC{Scopes: "openid profile email"},
