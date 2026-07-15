@@ -11,7 +11,7 @@ import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { FileNode } from '@/lib/api'
 import { fmtSize, isArchive, isOffice } from '@/lib/format'
-import { logoFor } from '@/lib/branding'
+import { bannerFor } from '@/lib/branding'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -273,8 +273,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
-        <img class="logo-mark" :src="logoFor(ui.theme)" alt="" />
-        <span class="logo-word"><em>Orion</em><strong>Drive</strong></span>
+        <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
       </div>
       <div class="new-wrap">
         <button class="btn btn-primary btn-new" @click.stop="newMenuOpen = !newMenuOpen">
