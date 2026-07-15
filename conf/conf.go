@@ -32,12 +32,21 @@ type System struct {
 	// AdminEmails is a comma-separated allowlist of emails always granted admin
 	// access (bootstrap, independent of group permissions).
 	AdminEmails string `ini:"AdminEmails"`
+	// AdminGroups is a comma-separated list of SSO groups/roles whose members are
+	// granted admin access, independent of their OrionDrive storage group.
+	AdminGroups string `ini:"AdminGroups"`
 }
 
 // AdminEmailSet returns the lower-cased admin emails as a lookup set.
-func (s System) AdminEmailSet() map[string]bool {
+func (s System) AdminEmailSet() map[string]bool { return commaSet(s.AdminEmails) }
+
+// AdminGroupSet returns the lower-cased admin SSO groups as a lookup set.
+func (s System) AdminGroupSet() map[string]bool { return commaSet(s.AdminGroups) }
+
+// commaSet splits a comma-separated list into a lower-cased lookup set.
+func commaSet(v string) map[string]bool {
 	set := map[string]bool{}
-	for _, e := range strings.Split(s.AdminEmails, ",") {
+	for _, e := range strings.Split(v, ",") {
 		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
 			set[e] = true
 		}

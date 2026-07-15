@@ -140,7 +140,7 @@ func registerSlaveRoutes(r *gin.Engine, dep *bootstrap.Dependency) error {
 // registerAdminRoutes mounts the admin panel API, gated by admin access.
 func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *bootstrap.Dependency) {
 	a := api.Group("/admin")
-	a.Use(middleware.RequireAuth(), middleware.RequireAdmin(dep.Config.System.AdminEmailSet()))
+	a.Use(middleware.RequireAuth(), middleware.RequireAdmin(dep.Config.System.AdminEmailSet(), dep.Config.System.AdminGroupSet()))
 
 	a.GET("/stats", ctl.AdminStats)
 

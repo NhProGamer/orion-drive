@@ -48,21 +48,29 @@ func RequireAuth() gin.HandlerFunc {
 }
 
 // IsAdmin reports whether a user has administrator access: their email is in the
-// bootstrap allowlist, or their group carries the admin permission.
-func IsAdmin(u *model.User, adminEmails map[string]bool) bool {
+// bootstrap allowlist, one of their SSO groups is an admin group, or their
+// OrionDrive group carries the admin permission.
+func IsAdmin(u *model.User, adminEmails, adminGroups map[string]bool) bool {
 	if u == nil {
 		return false
 	}
 	if adminEmails[strings.ToLower(u.Email)] {
 		return true
 	}
+	if len(adminGroups) > 0 {
+		for _, g := range u.SSOGroupList() {
+			if adminGroups[strings.ToLower(g)] {
+				return true
+			}
+		}
+	}
 	return u.Group != nil && u.Group.CanAdmin()
 }
 
 // RequireAdmin aborts requests from non-admin users (use after RequireAuth).
-func RequireAdmin(adminEmails map[string]bool) gin.HandlerFunc {
+func RequireAdmin(adminEmails, adminGroups map[string]bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !IsAdmin(UserFrom(c), adminEmails) {
+		if !IsAdmin(UserFrom(c), adminEmails, adminGroups) {
 			r := serializer.Err(serializer.CodeForbidden, "administrator access required")
 			c.AbortWithStatusJSON(r.HTTPStatus(), r)
 			return

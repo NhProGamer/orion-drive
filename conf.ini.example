@@ -14,6 +14,9 @@ SiteURL = http://localhost:5212
 ; Comma-separated emails always granted admin access (bootstrap; independent of
 ; group permissions so you can't lock yourself out). e.g. admin@example.com,ops@example.com
 AdminEmails =
+; Comma-separated SSO groups/roles whose members get admin access, independent of
+; their OrionDrive storage group. Requires [OIDC] GroupsClaim to be set. e.g. admins,sysops
+AdminGroups =
 
 [Database]
 ; sqlite | mysql | postgres | mssql

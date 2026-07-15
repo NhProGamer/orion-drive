@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // User status values.
 const (
 	UserStatusActive = 0
@@ -18,7 +20,21 @@ type User struct {
 	StorageUsed int64  `json:"storage_used"`
 	GroupID     uint   `json:"group_id"`
 	Group       *Group `json:"group,omitempty"`
-	Settings    JSON   `gorm:"type:json" json:"-"`
+	// SSOGroups is the comma-separated list of the user's SSO groups/roles from
+	// their last login (used to resolve admin access and group mapping).
+	SSOGroups string `gorm:"size:1024" json:"-"`
+	Settings  JSON   `gorm:"type:json" json:"-"`
+}
+
+// SSOGroupList returns the user's SSO groups, trimmed and non-empty.
+func (u *User) SSOGroupList() []string {
+	var out []string
+	for _, s := range strings.Split(u.SSOGroups, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // DisplayName returns the nickname, falling back to the email local-part.

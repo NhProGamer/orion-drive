@@ -51,6 +51,7 @@ func (ctl *Controller) AdminListUsers(c *gin.Context) {
 		return
 	}
 	admins := ctl.dep.Config.System.AdminEmailSet()
+	adminGroups := ctl.dep.Config.System.AdminGroupSet()
 	out := make([]adminUserDTO, 0, len(users))
 	for i := range users {
 		u := &users[i]
@@ -61,7 +62,7 @@ func (ctl *Controller) AdminListUsers(c *gin.Context) {
 		out = append(out, adminUserDTO{
 			ID: u.ID, Email: u.Email, Nick: u.DisplayName(), Status: u.Status,
 			StorageUsed: u.StorageUsed, GroupID: u.GroupID, GroupName: name,
-			Admin: middleware.IsAdmin(u, admins), CreatedAt: u.CreatedAt,
+			Admin: middleware.IsAdmin(u, admins, adminGroups), CreatedAt: u.CreatedAt,
 		})
 	}
 	respond(c, serializer.OK(out))

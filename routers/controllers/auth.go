@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/application/constants"
@@ -78,7 +79,7 @@ func (ctl *Controller) Me(c *gin.Context) {
 		"oidc_enabled": ctl.dep.Auth.Enabled(),
 		"can_share":    canShare,
 		"wopi":         ctl.dep.Config.WOPI.Enabled(),
-		"admin":        middleware.IsAdmin(u, ctl.dep.Config.System.AdminEmailSet()),
+		"admin":        middleware.IsAdmin(u, ctl.dep.Config.System.AdminEmailSet(), ctl.dep.Config.System.AdminGroupSet()),
 	}))
 }
 
@@ -123,12 +124,13 @@ func (ctl *Controller) upsertUser(ctx context.Context, claims *auth.Claims) (*mo
 		groupID = g.ID
 	}
 	u := &model.User{
-		Email:   claims.Email,
-		Subject: claims.Subject,
-		Nick:    claims.Name,
-		Avatar:  claims.Picture,
-		Status:  model.UserStatusActive,
-		GroupID: groupID,
+		Email:     claims.Email,
+		Subject:   claims.Subject,
+		Nick:      claims.Name,
+		Avatar:    claims.Picture,
+		Status:    model.UserStatusActive,
+		GroupID:   groupID,
+		SSOGroups: strings.Join(claims.Groups, ","),
 	}
 	if err := repo.User.Create(ctx, u); err != nil {
 		return nil, err
@@ -147,6 +149,10 @@ func (ctl *Controller) syncUser(ctx context.Context, u *model.User, claims *auth
 	}
 	if u.Subject == "" && claims.Subject != "" {
 		u.Subject, changed = claims.Subject, true
+	}
+	// Persist the user's SSO groups (used for admin resolution).
+	if joined := strings.Join(claims.Groups, ","); u.SSOGroups != joined {
+		u.SSOGroups, changed = joined, true
 	}
 	// Re-sync the group from SSO on each login (SSO is the source of truth when a
 	// mapping matches); leave the group unchanged when nothing maps.
