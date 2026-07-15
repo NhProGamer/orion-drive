@@ -104,12 +104,14 @@ async function toggleLock() {
 
     <div v-if="archive && entries.length" class="preview-versions">
       <div class="pv-head"><FolderInput :size="14" />Contenu de l’archive <span class="pv-count">{{ entries.length }}</span></div>
-      <div v-for="(e, i) in entries.slice(0, 50)" :key="i" class="pv-item">
-        <component :is="e.is_dir ? Folder : FileText" :size="14" class="tint-neutral" />
-        <div class="pv-meta">
-          <span class="pv-name">{{ e.name }}</span>
+      <div class="pv-scroll">
+        <div v-for="(e, i) in entries" :key="i" class="pv-item">
+          <component :is="e.is_dir ? Folder : FileText" :size="14" class="tint-neutral" />
+          <div class="pv-meta">
+            <span class="pv-name">{{ e.name }}</span>
+          </div>
+          <span v-if="!e.is_dir" class="mono pv-date">{{ fmtSize(e.size) }}</span>
         </div>
-        <span v-if="!e.is_dir" class="mono pv-date">{{ fmtSize(e.size) }}</span>
       </div>
     </div>
 

@@ -977,6 +977,12 @@ html[data-halo='off'] body::before {
   font-family: var(--font-mono);
   font-size: 11px;
 }
+.pv-scroll {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0 calc(-1 * var(--s-1));
+  padding: 0 var(--s-1);
+}
 .pv-item {
   display: flex;
   align-items: center;
