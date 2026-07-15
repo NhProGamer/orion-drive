@@ -14,6 +14,7 @@ type Repository struct {
 	Entity     *EntityRepo
 	Share      *ShareRepo
 	DirectLink *DirectLinkRepo
+	WebDAV     *WebDAVAccountRepo
 }
 
 // New builds a Repository bound to db.
@@ -27,5 +28,6 @@ func New(db *gorm.DB) *Repository {
 		Entity:     &EntityRepo{db: db},
 		Share:      &ShareRepo{db: db},
 		DirectLink: &DirectLinkRepo{db: db},
+		WebDAV:     &WebDAVAccountRepo{db: db},
 	}
 }

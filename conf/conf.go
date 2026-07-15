@@ -20,6 +20,7 @@ type Config struct {
 	Storage  Storage
 	Slave    Slave
 	WOPI     WOPI
+	WebDAV   WebDAV
 	Redis    Redis
 }
 
@@ -108,6 +109,13 @@ type WOPI struct {
 // Enabled reports whether online Office editing is configured.
 func (w WOPI) Enabled() bool { return w.ServerURL != "" && w.EditURLTemplate != "" }
 
+// WebDAV toggles the WebDAV endpoint (/dav). It is enabled by default; users
+// still need to create dedicated WebDAV credentials to connect. Set Enable to
+// false to shut the endpoint off entirely.
+type WebDAV struct {
+	Enable bool `ini:"Enable"`
+}
+
 // Redis optionally replaces the in-memory cache.
 type Redis struct {
 	Server   string `ini:"Server"`
@@ -125,6 +133,7 @@ func Default() *Config {
 			SiteURL:            "http://localhost:5212",
 			TrashRetentionDays: 30,
 		},
+		WebDAV: WebDAV{Enable: true},
 		Database: Database{Type: "sqlite", DBFile: "data/orion.db", Name: "orion"},
 		OIDC:     OIDC{Scopes: "openid profile email"},
 		Storage:  Storage{LocalBasePath: "data/storage"},

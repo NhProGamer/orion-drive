@@ -2,6 +2,9 @@
 package routers
 
 import (
+	"net/http"
+	"strings"
+
 	"github.com/NhProGamer/orion-drive/application/bootstrap"
 	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/application/statics"
@@ -9,6 +12,7 @@ import (
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote"
+	"github.com/NhProGamer/orion-drive/pkg/webdav"
 	"github.com/NhProGamer/orion-drive/routers/controllers"
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +26,29 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logging(dep.Logger))
+
+	// WebDAV is served under /dav for clients authenticating with dedicated
+	// credentials. It is intercepted before CORS (whose preflight handler would
+	// otherwise answer OPTIONS itself, hiding the DAV capability header) and
+	// before Gin's method router, so it can handle the non-standard WebDAV
+	// methods — PROPFIND, MKCOL, MOVE, ... — that Gin would not route.
+	if dep.Config.WebDAV.Enable {
+		davHandler := webdav.Handler(dep.Files, dep.Repo)
+		r.Use(func(c *gin.Context) {
+			p := c.Request.URL.Path
+			if p == webdav.Prefix || strings.HasPrefix(p, webdav.Prefix+"/") {
+				// Reset the status Gin pre-set for the unmatched (NoRoute) path to
+				// 200; the WebDAV handler overrides it when it writes its own
+				// status (207, 201, ...), and OPTIONS — which writes none — stays 200.
+				c.Status(http.StatusOK)
+				davHandler.ServeHTTP(c.Writer, c.Request)
+				c.Abort()
+				return
+			}
+			c.Next()
+		})
+	}
+
 	r.Use(middleware.CORS(dep.Config.System.SiteURL))
 	r.Use(middleware.CurrentUser(dep.Signer, dep.Repo))
 
@@ -112,6 +139,10 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.DELETE("/upload/:sid", ctl.CancelUpload)
 
 	f.GET("/user/capacity", ctl.Capacity)
+
+	f.GET("/webdav/accounts", ctl.WebdavList)
+	f.POST("/webdav/accounts", ctl.WebdavCreate)
+	f.DELETE("/webdav/accounts/:id", ctl.WebdavDelete)
 }
 
 // registerSlaveRoutes mounts the signed slave storage API backed by a local
