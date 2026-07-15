@@ -69,7 +69,8 @@ function closeMenus() {
 
 function onCtx(node: FileNode, ev: MouseEvent) {
   ev.preventDefault()
-  if (!files.sel.includes(node.id)) files.select(node)
+  // Right-click selects the item (without opening the details panel).
+  if (!files.sel.includes(node.id)) files.sel = [node.id]
   menu.value = {
     x: Math.min(ev.clientX, window.innerWidth - 240),
     y: Math.min(ev.clientY, window.innerHeight - 300),

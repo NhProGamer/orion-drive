@@ -34,7 +34,6 @@ export const useFilesStore = defineStore('files', {
     nodes: [] as FileNode[],
     loading: false,
     sel: [] as number[],
-    anchor: null as number | null,
     previewId: null as number | null,
     overlayId: null as number | null, // full-screen content preview
     uploads: [] as Upload[],
@@ -56,9 +55,6 @@ export const useFilesStore = defineStore('files', {
     files: (s) => s.nodes.filter((n) => n.type === 'file'),
     orderedNodes(): FileNode[] {
       return this.folders.concat(this.files)
-    },
-    orderedIds(): number[] {
-      return this.orderedNodes.map((n) => n.id)
     },
     selNodes(): FileNode[] {
       return this.sel.map((id) => this.nodes.find((n) => n.id === id)).filter(Boolean) as FileNode[]
@@ -142,11 +138,14 @@ export const useFilesStore = defineStore('files', {
     },
 
     openNode(node: FileNode) {
-      if (node.type === 'folder') this.openFolder(node)
-      else {
-        this.previewId = node.id
-        this.overlayId = node.id
+      // Double click: navigate into a folder, or open a file's full-screen
+      // preview. The side details panel is closed so only the popup shows.
+      if (node.type === 'folder') {
+        this.openFolder(node)
+        return
       }
+      this.overlayId = node.id
+      this.previewId = null
     },
 
     closeOverlay() {
@@ -166,29 +165,14 @@ export const useFilesStore = defineStore('files', {
     },
 
     /* Selection */
-    select(node: FileNode, ev?: MouseEvent) {
-      const id = node.id
-      if (ev?.shiftKey && this.anchor != null) {
-        const ids = this.orderedIds
-        const a = ids.indexOf(this.anchor)
-        const b = ids.indexOf(id)
-        if (a > -1 && b > -1) {
-          const [s, e] = a < b ? [a, b] : [b, a]
-          this.sel = ids.slice(s, e + 1)
-          return
-        }
-      }
-      if (ev && (ev.metaKey || ev.ctrlKey)) {
-        this.sel = this.sel.includes(id) ? this.sel.filter((x) => x !== id) : [...this.sel, id]
-        this.anchor = id
-        return
-      }
-      this.sel = [id]
-      this.anchor = id
+    select(node: FileNode) {
+      // Single click: select exactly one item and show its details on the right.
+      this.sel = [node.id]
+      this.previewId = node.id
     },
     clearSel() {
       this.sel = []
-      this.anchor = null
+      this.previewId = null
     },
 
     /* Mutations */
