@@ -140,6 +140,7 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	// Authenticated: manage your own shares.
 	api.POST("/share", middleware.RequireAuth(), ctl.CreateShare)
 	api.GET("/share", middleware.RequireAuth(), ctl.ListShares)
+	api.PATCH("/share/:token", middleware.RequireAuth(), ctl.UpdateShare)
 	api.DELETE("/share/:token", middleware.RequireAuth(), ctl.DeleteShare)
 
 	// Public: view, browse and download a shared file or folder (no authentication).

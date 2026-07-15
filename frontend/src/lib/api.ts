@@ -168,6 +168,10 @@ export const api = {
   createShare: (input: { file_id: number; password?: string; expires_days?: number; max_downloads?: number }) =>
     post<{ token: string; url: string }>('/share', input),
   listShares: () => get<ShareInfo[]>('/share'),
+  updateShare: (
+    token: string,
+    input: { password?: string; expires_days?: number; max_downloads?: number },
+  ) => http.patch(`/share/${token}`, input),
   deleteShare: (token: string) => http.delete(`/share/${token}`),
   shareView: (token: string) => get<ShareView>(`/share/${token}`),
   shareList: (token: string, path: string, password?: string) =>

@@ -16,6 +16,18 @@ func (r *ShareRepo) Create(ctx context.Context, s *model.Share) error {
 	return r.db.WithContext(ctx).Create(s).Error
 }
 
+// Update persists changes to an existing share.
+func (r *ShareRepo) Update(ctx context.Context, s *model.Share) error {
+	return r.db.WithContext(ctx).Save(s).Error
+}
+
+// DeleteByFile removes all of a user's shares that point at a file.
+func (r *ShareRepo) DeleteByFile(ctx context.Context, userID, fileID uint) error {
+	return r.db.WithContext(ctx).
+		Where("user_id = ? AND file_id = ?", userID, fileID).
+		Delete(&model.Share{}).Error
+}
+
 // GetByToken loads a share by its public token.
 func (r *ShareRepo) GetByToken(ctx context.Context, token string) (*model.Share, error) {
 	var s model.Share

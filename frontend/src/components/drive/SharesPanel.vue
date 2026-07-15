@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Copy, Check, ExternalLink, Trash2, Lock, Folder, FileText, Eye, Download, Clock, Share2 } from 'lucide-vue-next'
+import { Copy, Check, ExternalLink, Trash2, Pencil, Lock, Folder, FileText, Eye, Download, Clock, Share2 } from 'lucide-vue-next'
 import type { ShareInfo } from '@/lib/api'
 import { fmtDate } from '@/lib/format'
 import { useFilesStore } from '@/stores/files'
+import ShareEditDialog from './ShareEditDialog.vue'
 
 defineProps<{ shares: ShareInfo[] }>()
 const files = useFilesStore()
 
+const editing = ref<ShareInfo | null>(null)
 const copied = ref<string | null>(null)
 async function copy(s: ShareInfo) {
   try {
@@ -58,8 +60,11 @@ function status(s: ShareInfo): { label: string; cls: string } | null {
           <component :is="copied === s.token ? Check : Copy" :size="16" />
         </button>
         <a class="icon-btn" title="Ouvrir" :href="s.url" target="_blank" rel="noopener"><ExternalLink :size="16" /></a>
+        <button class="icon-btn" title="Modifier" @click="editing = s"><Pencil :size="16" /></button>
         <button class="icon-btn danger" title="Révoquer" @click="files.revokeShare(s.token)"><Trash2 :size="16" /></button>
       </div>
     </div>
+
+    <ShareEditDialog v-if="editing" :share="editing" @close="editing = null" @saved="files.load()" />
   </div>
 </template>

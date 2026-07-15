@@ -210,6 +210,9 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		if err != nil {
 			continue
 		}
+		// Remove any share links and direct links pointing at this file.
+		_ = m.repo.Share.DeleteByFile(ctx, user.ID, f.ID)
+		_ = m.repo.DirectLink.DeleteByFile(ctx, user.ID, f.ID)
 		// Remove the file's thumbnail, if any (not counted against quota).
 		if t, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil {
 			m.removeEntity(ctx, t.ID)

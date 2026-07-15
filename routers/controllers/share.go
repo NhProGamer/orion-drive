@@ -79,6 +79,31 @@ func (ctl *Controller) ListShares(c *gin.Context) {
 	respond(c, serializer.OK(out))
 }
 
+type updateShareReq struct {
+	Password     *string `json:"password"`      // nil=keep, ""=remove, "x"=set
+	ExpiresDays  *int    `json:"expires_days"`  // nil=keep, <=0=never
+	MaxDownloads *int    `json:"max_downloads"` // nil=keep, <=0=unlimited
+}
+
+// UpdateShare changes an existing share's settings (password/expiry/limit).
+func (ctl *Controller) UpdateShare(c *gin.Context) {
+	var req updateShareReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	s, err := ctl.dep.Shares.Update(c.Request.Context(), ctl.user(c), c.Param("token"), share.UpdateOptions{
+		Password:     req.Password,
+		ExpiresDays:  req.ExpiresDays,
+		MaxDownloads: req.MaxDownloads,
+	})
+	if err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"token": s.Token, "url": ctl.shareURL(c, s.Token)}))
+}
+
 // DeleteShare removes one of the user's shares.
 func (ctl *Controller) DeleteShare(c *gin.Context) {
 	if err := ctl.dep.Shares.Delete(c.Request.Context(), ctl.user(c), c.Param("token")); err != nil {

@@ -42,6 +42,13 @@ func (r *DirectLinkRepo) DeleteByToken(ctx context.Context, ownerID uint, token 
 		Delete(&model.DirectLink{}).Error
 }
 
+// DeleteByFile removes all of a user's direct links to a file.
+func (r *DirectLinkRepo) DeleteByFile(ctx context.Context, ownerID, fileID uint) error {
+	return r.db.WithContext(ctx).
+		Where("owner_id = ? AND file_id = ?", ownerID, fileID).
+		Delete(&model.DirectLink{}).Error
+}
+
 // IncrementDownloads bumps a link's download counter.
 func (r *DirectLinkRepo) IncrementDownloads(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Model(&model.DirectLink{}).

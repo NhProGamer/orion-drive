@@ -82,6 +82,60 @@ func (s *Service) Create(ctx context.Context, user *model.User, opts CreateOptio
 	return share, nil
 }
 
+// UpdateOptions describes changes to an existing share. A nil field is left
+// unchanged; for Password, an empty string removes the password. For ExpiresDays
+// and MaxDownloads, a value <= 0 clears the limit (never expires / unlimited).
+type UpdateOptions struct {
+	Password     *string
+	ExpiresDays  *int
+	MaxDownloads *int
+}
+
+// Update changes a share's settings (owner only).
+func (s *Service) Update(ctx context.Context, user *model.User, token string, opts UpdateOptions) (*model.Share, error) {
+	share, err := s.repo.Share.GetByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if share.UserID != user.ID {
+		return nil, ErrNotFound
+	}
+	if opts.Password != nil {
+		if *opts.Password == "" {
+			share.Password = ""
+		} else {
+			hash, err := bcrypt.GenerateFromPassword([]byte(*opts.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return nil, err
+			}
+			share.Password = string(hash)
+		}
+	}
+	if opts.ExpiresDays != nil {
+		if *opts.ExpiresDays <= 0 {
+			share.Expires = nil
+		} else {
+			exp := time.Now().Add(time.Duration(*opts.ExpiresDays) * 24 * time.Hour)
+			share.Expires = &exp
+		}
+	}
+	if opts.MaxDownloads != nil {
+		if *opts.MaxDownloads <= 0 {
+			share.RemainDownloads = nil
+		} else {
+			remaining := *opts.MaxDownloads - share.Downloads
+			if remaining < 0 {
+				remaining = 0
+			}
+			share.RemainDownloads = &remaining
+		}
+	}
+	if err := s.repo.Share.Update(ctx, share); err != nil {
+		return nil, err
+	}
+	return share, nil
+}
+
 // List returns the user's shares.
 func (s *Service) List(ctx context.Context, user *model.User) ([]model.Share, error) {
 	return s.repo.Share.ListByUser(ctx, user.ID)
