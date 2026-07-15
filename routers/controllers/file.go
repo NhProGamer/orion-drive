@@ -89,6 +89,43 @@ func (ctl *Controller) CreateFolder(c *gin.Context) {
 	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
 }
 
+type ensureFolderPathReq struct {
+	Parent string `json:"parent"`
+	Path   string `json:"path"`
+}
+
+// EnsureFolderPath idempotently creates the folder chain given by a
+// slash-separated relative path under parent, returning the leaf folder. Used by
+// folder uploads to materialise the directory tree before storing files.
+func (ctl *Controller) EnsureFolderPath(c *gin.Context) {
+	var req ensureFolderPathReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	parentID, err := parseParentID(req.Parent)
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
+		return
+	}
+	var segments []string
+	for _, s := range strings.Split(req.Path, "/") {
+		if s = strings.TrimSpace(s); s != "" && s != "." && s != ".." {
+			segments = append(segments, s)
+		}
+	}
+	if len(segments) == 0 {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "empty path"))
+		return
+	}
+	f, err := ctl.dep.Files.EnsureFolderPath(c.Request.Context(), ctl.user(c), parentID, segments)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
+}
+
 type renameReq struct {
 	ID   uint   `json:"id"`
 	Name string `json:"name"`

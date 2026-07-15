@@ -102,6 +102,7 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 
 	f.GET("/file", ctl.ListFiles)
 	f.POST("/file/folder", ctl.CreateFolder)
+	f.POST("/file/folder-path", ctl.EnsureFolderPath)
 	f.POST("/file/rename", ctl.Rename)
 	f.POST("/file/star", ctl.Star)
 	f.POST("/file/move", ctl.Move)

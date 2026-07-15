@@ -122,6 +122,44 @@ func (m *Manager) CreateFolder(ctx context.Context, user *model.User, parentID *
 	return f, nil
 }
 
+// EnsureFolderPath resolves (creating as needed) the chain of folders named by
+// segments under parentID and returns the leaf folder. Existing folders are
+// reused, so it is idempotent — the basis for folder uploads, where each file's
+// directory chain must exist before the file is stored. A segment that collides
+// with an existing non-folder file is a conflict.
+func (m *Manager) EnsureFolderPath(ctx context.Context, user *model.User, parentID *uint, segments []string) (*model.File, error) {
+	cur := parentID
+	var leaf *model.File
+	for _, seg := range segments {
+		existing, err := m.repo.File.FindChildByName(ctx, user.ID, cur, seg)
+		switch {
+		case err == nil:
+			if !existing.IsFolder() {
+				return nil, ErrConflict
+			}
+			leaf = existing
+		case errors.Is(err, ErrNotFound):
+			f, cerr := m.CreateFolder(ctx, user, cur, seg)
+			if errors.Is(cerr, ErrConflict) {
+				// A concurrent request created it meanwhile — reuse that one.
+				f, cerr = m.repo.File.FindChildByName(ctx, user.ID, cur, seg)
+			}
+			if cerr != nil {
+				return nil, cerr
+			}
+			leaf = f
+		default:
+			return nil, err
+		}
+		id := leaf.ID
+		cur = &id
+	}
+	if leaf == nil {
+		return nil, ErrInvalidName
+	}
+	return leaf, nil
+}
+
 // Rename changes a file's name.
 func (m *Manager) Rename(ctx context.Context, user *model.User, id uint, newName string) (*model.File, error) {
 	newName = strings.TrimSpace(newName)
