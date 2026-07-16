@@ -40,6 +40,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # The Forgejo runner has no cache backend; leaving it on just wastes
+          # time trying (and failing) to restore/save the Go cache.
+          cache: false
       # Node is needed by the GoReleaser `before` hook that builds the embedded SPA.
       - uses: actions/setup-node@v4
         with:
