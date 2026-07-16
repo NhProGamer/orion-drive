@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Upload, Check, File as FileIcon } from 'lucide-vue-next'
 import type { Upload as UploadItem } from '@/stores/files'
 
+const { t } = useI18n()
 const props = defineProps<{ uploads: UploadItem[] }>()
 
 const title = computed(() => {
   const active = props.uploads.filter((u) => !u.done).length
-  if (!active) return 'Importation terminée'
-  return 'Importation de ' + active + ' fichier' + (active > 1 ? 's' : '') + '…'
+  if (!active) return t('uploads.done')
+  return t('uploads.active', active)
 })
 </script>
 

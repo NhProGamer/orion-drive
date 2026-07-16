@@ -1,4 +1,5 @@
-/** Formatting helpers ported from the OrionDrive prototype (French locale). */
+/** Formatting helpers. Size units and dates follow the active i18n locale. */
+import { i18n, currentLocale } from '@/i18n'
 
 const EXT_KIND: Record<string, string> = {
   md: 'text', txt: 'text', rtf: 'text',
@@ -62,34 +63,40 @@ export function canThumbnail(name: string): boolean {
   return THUMB_EXT.test(String(name))
 }
 
-/** Human-readable size, French style (comma decimal, narrow no-break space). */
+// Size unit suffixes per locale (SI/decimal: 1000-based).
+const SIZE_UNITS: Record<string, string[]> = {
+  fr: ['o', 'Ko', 'Mo', 'Go', 'To'],
+  en: ['B', 'KB', 'MB', 'GB', 'TB'],
+}
+
+/** Human-readable size, formatted for the active locale. */
 export function fmtSize(bytes: number): string {
   if (!bytes) return '—'
-  const units = ['o', 'Ko', 'Mo', 'Go', 'To']
+  const loc = currentLocale()
+  const units = SIZE_UNITS[loc] || SIZE_UNITS.fr
   let v = bytes
   let i = 0
   while (v >= 1000 && i < units.length - 1) {
     v /= 1000
     i += 1
   }
-  const s =
-    v >= 100 || i === 0
-      ? Math.round(v).toString()
-      : v.toFixed(1).replace('.', ',').replace(',0', '')
-  return s + ' ' + units[i]
+  const digits = v >= 100 || i === 0 ? 0 : 1
+  const s = new Intl.NumberFormat(loc, { maximumFractionDigits: digits }).format(v)
+  return s + ' ' + units[i]
 }
 
-const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
-
+/** Relative-then-absolute date, formatted for the active locale. */
 export function fmtDate(iso: string): string {
+  const loc = currentLocale()
   const d = new Date(iso)
   const diff = Date.now() - d.getTime()
   const min = Math.floor(diff / 60000)
-  if (min < 1) return 'à l’instant'
-  if (min < 60) return 'il y a ' + min + ' min'
+  if (min < 1) return i18n.global.t('format.now')
+  const rtf = new Intl.RelativeTimeFormat(loc, { numeric: 'always', style: 'short' })
+  if (min < 60) return rtf.format(-min, 'minute')
   const h = Math.floor(min / 60)
-  if (h < 24) return 'il y a ' + h + ' h'
+  if (h < 24) return rtf.format(-h, 'hour')
   const j = Math.floor(h / 24)
-  if (j < 7) return 'il y a ' + j + ' j'
-  return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear()
+  if (j < 7) return rtf.format(-j, 'day')
+  return new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', year: 'numeric' }).format(d)
 }

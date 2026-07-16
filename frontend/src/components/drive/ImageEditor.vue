@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Save, X } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { useFilesStore } from '@/stores/files'
+
+const { t } = useI18n()
 
 const props = defineProps<{ node: FileNode; url: string }>()
 const emit = defineEmits<{ done: [] }>()
@@ -75,7 +78,7 @@ async function save() {
   if (blob) {
     await api.saveBlob(props.node.id, blob)
     await Promise.all([files.load(), files.loadCapacity()])
-    files.ui().toast('Image enregistrée', 'check')
+    files.ui().toast(t('imageEditor.saved'), 'check')
   }
   saving.value = false
   emit('done')
@@ -86,13 +89,13 @@ async function save() {
   <div class="ov-imgedit">
     <div class="ov-imgedit-canvas"><canvas ref="canvas"></canvas></div>
     <div class="ov-imgedit-bar">
-      <button class="icon-btn" title="Rotation gauche" @click="rotate(-90)"><RotateCcw :size="18" /></button>
-      <button class="icon-btn" title="Rotation droite" @click="rotate(90)"><RotateCw :size="18" /></button>
-      <button class="icon-btn" :class="{ active: flipH }" title="Miroir horizontal" @click="toggleFlipH"><FlipHorizontal :size="18" /></button>
-      <button class="icon-btn" :class="{ active: flipV }" title="Miroir vertical" @click="toggleFlipV"><FlipVertical :size="18" /></button>
+      <button class="icon-btn" :title="t('imageEditor.rotateLeft')" @click="rotate(-90)"><RotateCcw :size="18" /></button>
+      <button class="icon-btn" :title="t('imageEditor.rotateRight')" @click="rotate(90)"><RotateCw :size="18" /></button>
+      <button class="icon-btn" :class="{ active: flipH }" :title="t('imageEditor.flipHorizontal')" @click="toggleFlipH"><FlipHorizontal :size="18" /></button>
+      <button class="icon-btn" :class="{ active: flipV }" :title="t('imageEditor.flipVertical')" @click="toggleFlipV"><FlipVertical :size="18" /></button>
       <span class="ov-imgedit-spacer"></span>
-      <button class="btn btn-secondary" @click="emit('done')"><X :size="15" />Annuler</button>
-      <button class="btn btn-primary" :disabled="!changed() || saving" @click="save"><Save :size="15" />Enregistrer</button>
+      <button class="btn btn-secondary" @click="emit('done')"><X :size="15" />{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" :disabled="!changed() || saving" @click="save"><Save :size="15" />{{ t('common.save') }}</button>
     </div>
   </div>
 </template>

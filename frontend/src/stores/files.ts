@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import { api, type FileNode, type ShareInfo } from '@/lib/api'
+import { i18n } from '@/i18n'
 import { useUiStore } from './ui'
+
+// Translate with the global i18n instance (Pinia stores run outside setup).
+const t = (key: string, ...args: any[]) => i18n.global.t(key, ...(args as [])) as string
 
 export type View = 'drive' | 'shares' | 'trash' | 'storage'
 
@@ -17,11 +21,12 @@ interface Crumb {
   name: string
 }
 
-const VIEW_LABEL: Record<View, string> = {
-  drive: 'Mon Drive',
-  shares: 'Mes partages',
-  trash: 'Corbeille',
-  storage: 'Stockage',
+// Breadcrumb/view labels reuse the sidebar (shell.*) translations.
+const VIEW_LABEL_KEY: Record<View, string> = {
+  drive: 'shell.myDrive',
+  shares: 'shell.myShares',
+  trash: 'shell.trash',
+  storage: 'shell.storage',
 }
 
 let uploadSeq = 0
@@ -47,7 +52,7 @@ export const useFilesStore = defineStore('files', {
   }),
 
   getters: {
-    viewLabel: (s) => VIEW_LABEL[s.view],
+    viewLabel: (s) => t(VIEW_LABEL_KEY[s.view]),
     searching: (s) => s.q.trim().length > 0,
     readOnly: (s) => s.view === 'shares',
     dndEnabled: (s) => s.view === 'drive', // drag-to-move only in Mon Drive
@@ -115,8 +120,8 @@ export const useFilesStore = defineStore('files', {
 
     async refreshTrashCount() {
       try {
-        const t = await api.list({ view: 'trash' })
-        this.trashCount = t.length
+        const trashed = await api.list({ view: 'trash' })
+        this.trashCount = trashed.length
       } catch {
         this.trashCount = 0
       }
@@ -168,7 +173,7 @@ export const useFilesStore = defineStore('files', {
     async saveText(id: number, content: string) {
       await api.saveText(id, content)
       await Promise.all([this.load(), this.loadCapacity()])
-      this.ui().toast('Fichier enregistré', 'check')
+      this.ui().toast(t('files.fileSaved'), 'check')
     },
 
     setQuery(q: string) {
@@ -217,14 +222,14 @@ export const useFilesStore = defineStore('files', {
     async revokeShare(token: string) {
       await api.deleteShare(token)
       this.shares = this.shares.filter((s) => s.token !== token)
-      this.ui().toast('Partage révoqué', 'trash')
+      this.ui().toast(t('files.shareRevoked'), 'trash')
     },
 
     /* Mutations */
     async createFolder(name: string) {
       await api.createFolder(this.currentParentParam, name)
       await this.load()
-      this.ui().toast(`Dossier « ${name} » créé`, 'folder-plus')
+      this.ui().toast(t('files.folderCreated', { name }), 'folder-plus')
     },
 
     async rename(id: number, name: string) {
@@ -241,16 +246,19 @@ export const useFilesStore = defineStore('files', {
       if (lock) await api.lock(node.id)
       else await api.unlock(node.id)
       await this.load()
-      this.ui().toast(lock ? `« ${node.name} » verrouillé` : `« ${node.name} » déverrouillé`, lock ? 'lock' : 'unlock')
+      this.ui().toast(
+        lock ? t('files.locked', { name: node.name }) : t('files.unlocked', { name: node.name }),
+        lock ? 'lock' : 'unlock',
+      )
     },
 
     async createDirectLink(node: FileNode) {
       const link = await api.createDirectLink(node.id)
       try {
         await navigator.clipboard.writeText(link.url)
-        this.ui().toast('Lien direct copié dans le presse-papiers', 'link')
+        this.ui().toast(t('files.directLinkCopied'), 'link')
       } catch {
-        this.ui().toast(`Lien direct : ${link.url}`, 'link')
+        this.ui().toast(t('files.directLink', { url: link.url }), 'link')
       }
       return link
     },
@@ -260,9 +268,8 @@ export const useFilesStore = defineStore('files', {
       if (this.previewId && ids.includes(this.previewId)) this.previewId = null
       this.clearSel()
       await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
-      const msg = ids.length > 1 ? `${ids.length} éléments déplacés vers la corbeille` : 'Élément déplacé vers la corbeille'
-      this.ui().toast(msg, 'trash', {
-        label: 'Annuler',
+      this.ui().toast(t('files.trashed', ids.length), 'trash', {
+        label: t('common.cancel'),
         fn: () => this.restore(ids),
       })
     },
@@ -271,7 +278,7 @@ export const useFilesStore = defineStore('files', {
       await api.restore(ids)
       this.clearSel()
       await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
-      this.ui().toast(ids.length > 1 ? `${ids.length} éléments restaurés` : 'Élément restauré', 'restore')
+      this.ui().toast(t('files.restored', ids.length), 'restore')
     },
 
     /* Drag & drop move: pick up an item (or the whole selection if it is part of
@@ -302,21 +309,21 @@ export const useFilesStore = defineStore('files', {
       await api.move(ids, parent)
       this.clearSel()
       await this.load()
-      this.ui().toast(ids.length > 1 ? `${ids.length} éléments déplacés` : 'Élément déplacé', 'move')
+      this.ui().toast(t('files.moved', ids.length), 'move')
     },
 
     async emptyTrash() {
       const r = await api.emptyTrash()
       this.clearSel()
       await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
-      this.ui().toast(r.purged ? `Corbeille vidée (${r.purged})` : 'La corbeille est déjà vide', 'trash')
+      this.ui().toast(r.purged ? t('files.trashEmptied', { n: r.purged }) : t('files.trashAlreadyEmpty'), 'trash')
     },
 
     async purge(ids: number[]) {
       await api.purge(ids)
       this.clearSel()
       await Promise.all([this.load(), this.loadCapacity(), this.refreshTrashCount()])
-      this.ui().toast(ids.length > 1 ? `${ids.length} éléments supprimés définitivement` : 'Élément supprimé définitivement', 'trash')
+      this.ui().toast(t('files.purged', ids.length), 'trash')
     },
 
     download(node: FileNode) {
@@ -334,10 +341,10 @@ export const useFilesStore = defineStore('files', {
       const started = Date.now()
       const tick = async () => {
         try {
-          const t = await api.taskStatus(id)
-          if (t.status === 'done') return onDone()
-          if (t.status === 'failed') {
-            this.ui().toast('Tâche échouée' + (t.error ? ` : ${t.error}` : ''), 'x')
+          const task = await api.taskStatus(id)
+          if (task.status === 'done') return onDone()
+          if (task.status === 'failed') {
+            this.ui().toast(t('files.taskFailed') + (task.error ? ` : ${task.error}` : ''), 'x')
             return
           }
         } catch {
@@ -351,10 +358,10 @@ export const useFilesStore = defineStore('files', {
     async compress(ids: number[]) {
       if (!ids.length) return
       const task = await api.compress(this.currentParentParam, ids)
-      this.ui().toast('Compression en cours…', 'file-archive')
+      this.ui().toast(t('files.compressing'), 'file-archive')
       this.pollTask(task.id, async () => {
         await Promise.all([this.load(), this.loadCapacity()])
-        this.ui().toast('Archive créée', 'file-archive')
+        this.ui().toast(t('files.archiveCreated'), 'file-archive')
       })
     },
 
@@ -366,17 +373,17 @@ export const useFilesStore = defineStore('files', {
 
     async extract(node: FileNode) {
       const task = await api.extract(node.id, this.currentParentParam)
-      this.ui().toast('Extraction en cours…', 'file-archive')
+      this.ui().toast(t('files.extracting'), 'file-archive')
       this.pollTask(task.id, async () => {
         await Promise.all([this.load(), this.loadCapacity()])
-        this.ui().toast('Archive extraite', 'file-archive')
+        this.ui().toast(t('files.archiveExtracted'), 'file-archive')
       })
     },
 
     /* Chunked resumable upload */
     async upload(files: File[]) {
       const parent = this.view === 'drive' ? this.currentParentParam : 'root'
-      if (this.view !== 'drive') this.ui().toast('Importation dans la racine de Mon Drive', 'info')
+      if (this.view !== 'drive') this.ui().toast(t('files.uploadToRoot'), 'info')
 
       await Promise.all(files.map((file) => this.uploadOne(file, parent)))
 
@@ -391,7 +398,7 @@ export const useFilesStore = defineStore('files', {
     async uploadTree(entries: { file: File; path: string }[]) {
       if (!entries.length) return
       const base = this.view === 'drive' ? this.currentParentParam : 'root'
-      if (this.view !== 'drive') this.ui().toast('Importation dans la racine de Mon Drive', 'info')
+      if (this.view !== 'drive') this.ui().toast(t('files.uploadToRoot'), 'info')
 
       const dirOf = (p: string) => {
         const i = p.lastIndexOf('/')
@@ -408,7 +415,7 @@ export const useFilesStore = defineStore('files', {
           const leaf = await api.ensureFolderPath(base, dir)
           dirParam.set(dir, String(leaf.id))
         } catch (e: any) {
-          this.ui().toast(`Échec du dossier « ${dir} »` + (e?.message ? ` : ${e.message}` : ''), 'x')
+          this.ui().toast(t('files.folderFailed', { dir }) + (e?.message ? ` : ${e.message}` : ''), 'x')
         }
       }
 
@@ -447,7 +454,7 @@ export const useFilesStore = defineStore('files', {
         await api.completeUpload(session_id)
         up.progress = 100
       } catch (e: any) {
-        this.ui().toast(`Échec de l’import de « ${file.name} »` + (e?.message ? ` : ${e.message}` : ''), 'x')
+        this.ui().toast(t('files.uploadFailed', { name: file.name }) + (e?.message ? ` : ${e.message}` : ''), 'x')
       } finally {
         up.done = true
       }

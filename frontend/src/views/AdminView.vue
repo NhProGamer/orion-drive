@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench } from 'lucide-vue-next'
 import {
   api,
@@ -16,6 +17,7 @@ import { useUiStore } from '@/stores/ui'
 const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
+const { t } = useI18n()
 
 type Tab = 'dashboard' | 'users' | 'groups' | 'policies'
 const tab = ref<Tab>('dashboard')
@@ -32,9 +34,9 @@ async function runMaintenance() {
   try {
     const r = await api.adminRunMaintenance()
     stats.value = await api.adminStats()
-    ui.toast(`Maintenance : ${r.purged_trash} fichier(s) purgé(s), ${r.cleaned_uploads} upload(s) nettoyé(s)`, 'check')
+    ui.toast(t('admin.maintenanceDone', { purged: r.purged_trash, cleaned: r.cleaned_uploads }), 'check')
   } catch (e: any) {
-    ui.toast('Échec de la maintenance' + (e?.message ? ` : ${e.message}` : ''), 'x')
+    ui.toast(t('admin.maintenanceFailed') + (e?.message ? ` : ${e.message}` : ''), 'x')
   } finally {
     maintBusy.value = false
   }
@@ -59,7 +61,7 @@ onMounted(async () => {
   try {
     await loadAll()
   } catch (e: any) {
-    ui.toast('Échec du chargement admin' + (e?.message ? ` : ${e.message}` : ''), 'x')
+    ui.toast(t('admin.loadFailed') + (e?.message ? ` : ${e.message}` : ''), 'x')
   }
   ready.value = true
 })
@@ -68,7 +70,7 @@ onMounted(async () => {
 async function setUserGroup(u: AdminUser, groupId: number) {
   await api.adminUpdateUser(u.id, { group_id: groupId })
   u.group_id = groupId
-  ui.toast('Utilisateur mis à jour', 'check')
+  ui.toast(t('admin.userUpdated'), 'check')
 }
 async function toggleBan(u: AdminUser) {
   const status = u.status === 0 ? 1 : 0
@@ -99,15 +101,15 @@ async function saveGroup() {
   else await api.adminCreateGroup(body)
   gForm.value = null
   groups.value = await api.adminGroups()
-  ui.toast('Groupe enregistré', 'check')
+  ui.toast(t('admin.groupSaved'), 'check')
 }
 async function deleteGroup(g: AdminGroup) {
-  if (!confirm(`Supprimer le groupe « ${g.name} » ?`)) return
+  if (!confirm(t('admin.confirmDeleteGroup', { name: g.name }))) return
   try {
     await api.adminDeleteGroup(g.id)
     groups.value = await api.adminGroups()
   } catch (e: any) {
-    ui.toast(e?.message || 'Suppression impossible', 'x')
+    ui.toast(e?.message || t('admin.deleteFailed'), 'x')
   }
 }
 
@@ -124,31 +126,31 @@ async function savePolicy() {
   await api.adminCreatePolicy(body)
   pForm.value = null
   policies.value = await api.adminPolicies()
-  ui.toast('Policy créée', 'check')
+  ui.toast(t('admin.policyCreated'), 'check')
 }
 async function deletePolicy(p: AdminPolicy) {
-  if (!confirm(`Supprimer la policy « ${p.name} » ?`)) return
+  if (!confirm(t('admin.confirmDeletePolicy', { name: p.name }))) return
   try {
     await api.adminDeletePolicy(p.id)
     policies.value = await api.adminPolicies()
   } catch (e: any) {
-    ui.toast(e?.message || 'Suppression impossible', 'x')
+    ui.toast(e?.message || t('admin.deleteFailed'), 'x')
   }
 }
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
-  { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-  { id: 'users', label: 'Utilisateurs', icon: Users },
-  { id: 'groups', label: 'Groupes', icon: Shield },
-  { id: 'policies', label: 'Stockage', icon: HardDrive },
+  { id: 'dashboard', label: t('admin.tabDashboard'), icon: LayoutDashboard },
+  { id: 'users', label: t('admin.tabUsers'), icon: Users },
+  { id: 'groups', label: t('admin.tabGroups'), icon: Shield },
+  { id: 'policies', label: t('admin.tabStorage'), icon: HardDrive },
 ]
 </script>
 
 <template>
   <div v-if="ready" class="admin">
     <header class="admin-top">
-      <button class="btn btn-ghost" @click="router.push('/')"><ArrowLeft :size="16" />Retour au Drive</button>
-      <h1>Administration</h1>
+      <button class="btn btn-ghost" @click="router.push('/')"><ArrowLeft :size="16" />{{ t('admin.backToDrive') }}</button>
+      <h1>{{ t('admin.title') }}</h1>
     </header>
 
     <nav class="admin-tabs">
@@ -160,25 +162,25 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
     <!-- Dashboard -->
     <template v-if="tab === 'dashboard' && stats">
     <section class="admin-cards">
-      <div class="stat-card"><span class="stat-num">{{ stats.users }}</span><span class="stat-label">Utilisateurs</span></div>
-      <div class="stat-card"><span class="stat-num">{{ stats.files }}</span><span class="stat-label">Fichiers</span></div>
-      <div class="stat-card"><span class="stat-num">{{ fmtSize(stats.storage_used) }}</span><span class="stat-label">Stockage utilisé</span></div>
-      <div class="stat-card"><span class="stat-num">{{ stats.shares }}</span><span class="stat-label">Partages</span></div>
-      <div class="stat-card"><span class="stat-num">{{ stats.groups }}</span><span class="stat-label">Groupes</span></div>
-      <div class="stat-card"><span class="stat-num">{{ stats.policies }}</span><span class="stat-label">Policies</span></div>
+      <div class="stat-card"><span class="stat-num">{{ stats.users }}</span><span class="stat-label">{{ t('admin.tabUsers') }}</span></div>
+      <div class="stat-card"><span class="stat-num">{{ stats.files }}</span><span class="stat-label">{{ t('admin.statFiles') }}</span></div>
+      <div class="stat-card"><span class="stat-num">{{ fmtSize(stats.storage_used) }}</span><span class="stat-label">{{ t('admin.statStorageUsed') }}</span></div>
+      <div class="stat-card"><span class="stat-num">{{ stats.shares }}</span><span class="stat-label">{{ t('admin.statShares') }}</span></div>
+      <div class="stat-card"><span class="stat-num">{{ stats.groups }}</span><span class="stat-label">{{ t('admin.tabGroups') }}</span></div>
+      <div class="stat-card"><span class="stat-num">{{ stats.policies }}</span><span class="stat-label">{{ t('admin.statPolicies') }}</span></div>
     </section>
     <div class="admin-actions" style="margin-top: 20px">
       <button class="btn btn-secondary" :disabled="maintBusy" @click="runMaintenance">
-        <Wrench :size="15" />{{ maintBusy ? 'Maintenance…' : 'Lancer la maintenance' }}
+        <Wrench :size="15" />{{ maintBusy ? t('admin.maintenanceRunning') : t('admin.runMaintenance') }}
       </button>
-      <span class="stat-label" style="margin-left: 10px">Purge la corbeille expirée et nettoie les uploads incomplets.</span>
+      <span class="stat-label" style="margin-left: 10px">{{ t('admin.maintenanceHint') }}</span>
     </div>
     </template>
 
     <!-- Users -->
     <section v-else-if="tab === 'users'" class="admin-table">
       <table>
-        <thead><tr><th>Email</th><th>Groupe</th><th>Stockage</th><th>Statut</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('admin.colEmail') }}</th><th>{{ t('admin.colGroup') }}</th><th>{{ t('admin.colStorage') }}</th><th>{{ t('admin.colStatus') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id">
             <td>{{ u.email }} <span v-if="u.admin" class="badge">admin</span></td>
@@ -188,9 +190,9 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
               </select>
             </td>
             <td class="mono">{{ fmtSize(u.storage_used) }}</td>
-            <td><span class="badge" :class="{ danger: u.status !== 0 }">{{ u.status === 0 ? 'Actif' : 'Banni' }}</span></td>
+            <td><span class="badge" :class="{ danger: u.status !== 0 }">{{ u.status === 0 ? t('admin.statusActive') : t('admin.statusBanned') }}</span></td>
             <td class="row-actions">
-              <button class="icon-btn" :title="u.status === 0 ? 'Bannir' : 'Réactiver'" @click="toggleBan(u)">
+              <button class="icon-btn" :title="u.status === 0 ? t('admin.ban') : t('admin.reactivate')" @click="toggleBan(u)">
                 <component :is="u.status === 0 ? Ban : Check" :size="16" />
               </button>
             </td>
@@ -201,21 +203,21 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
 
     <!-- Groups -->
     <section v-else-if="tab === 'groups'" class="admin-table">
-      <div class="admin-actions"><button class="btn btn-primary" @click="newGroup"><Plus :size="15" />Nouveau groupe</button></div>
+      <div class="admin-actions"><button class="btn btn-primary" @click="newGroup"><Plus :size="15" />{{ t('admin.newGroup') }}</button></div>
       <table>
-        <thead><tr><th>Nom</th><th>Quota</th><th>Débit max</th><th>Partage</th><th>Admin</th><th>Groupes SSO</th><th>Membres</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('admin.colQuota') }}</th><th>{{ t('admin.colMaxSpeed') }}</th><th>{{ t('admin.colSharing') }}</th><th>{{ t('admin.colAdmin') }}</th><th>{{ t('admin.colSsoGroups') }}</th><th>{{ t('admin.colMembers') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="g in groups" :key="g.id">
             <td>{{ g.name }}</td>
             <td class="mono">{{ g.max_storage ? fmtSize(g.max_storage) : '∞' }}</td>
             <td class="mono">{{ g.speed_limit ? fmtSize(g.speed_limit) + '/s' : '∞' }}</td>
-            <td>{{ g.can_share ? 'oui' : 'non' }}</td>
-            <td>{{ g.can_admin ? 'oui' : 'non' }}</td>
+            <td>{{ g.can_share ? t('admin.yes') : t('admin.no') }}</td>
+            <td>{{ g.can_admin ? t('admin.yes') : t('admin.no') }}</td>
             <td class="mono">{{ g.sso_groups || '—' }}</td>
             <td class="mono">{{ g.user_count }}</td>
             <td class="row-actions">
-              <button class="icon-btn" title="Modifier" @click="editGroup(g)"><Shield :size="15" /></button>
-              <button v-if="g.id !== 1" class="icon-btn danger" title="Supprimer" @click="deleteGroup(g)"><Trash2 :size="15" /></button>
+              <button class="icon-btn" :title="t('common.edit')" @click="editGroup(g)"><Shield :size="15" /></button>
+              <button v-if="g.id !== 1" class="icon-btn danger" :title="t('common.delete')" @click="deleteGroup(g)"><Trash2 :size="15" /></button>
             </td>
           </tr>
         </tbody>
@@ -224,16 +226,16 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
 
     <!-- Policies -->
     <section v-else-if="tab === 'policies'" class="admin-table">
-      <div class="admin-actions"><button class="btn btn-primary" @click="newPolicy"><Plus :size="15" />Nouvelle policy</button></div>
+      <div class="admin-actions"><button class="btn btn-primary" @click="newPolicy"><Plus :size="15" />{{ t('admin.newPolicy') }}</button></div>
       <table>
-        <thead><tr><th>Nom</th><th>Type</th><th>Serveur / Bucket</th><th>Base path</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('admin.colType') }}</th><th>{{ t('admin.colServerBucket') }}</th><th>{{ t('admin.colBasePath') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="p in policies" :key="p.id">
             <td>{{ p.name }}</td>
             <td><span class="badge">{{ p.type }}</span></td>
             <td class="mono">{{ p.server }}{{ p.bucket_name ? ' · ' + p.bucket_name : '' }}</td>
             <td class="mono">{{ p.base_path || '—' }}</td>
-            <td class="row-actions"><button class="icon-btn danger" title="Supprimer" @click="deletePolicy(p)"><Trash2 :size="15" /></button></td>
+            <td class="row-actions"><button class="icon-btn danger" :title="t('common.delete')" @click="deletePolicy(p)"><Trash2 :size="15" /></button></td>
           </tr>
         </tbody>
       </table>
@@ -243,25 +245,25 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   <!-- Group editor -->
   <div v-if="gForm" class="overlay" @click.self="gForm = null">
     <div class="dialog">
-      <h2>{{ gForm.id ? 'Modifier le groupe' : 'Nouveau groupe' }}</h2>
+      <h2>{{ gForm.id ? t('admin.editGroup') : t('admin.newGroup') }}</h2>
       <div class="form-grid">
-        <label>Nom<input v-model="gForm.name" class="input" /></label>
-        <label>Policy de stockage
+        <label>{{ t('common.name') }}<input v-model="gForm.name" class="input" /></label>
+        <label>{{ t('admin.storagePolicy') }}
           <select v-model="gForm.storage_policy_id" class="input">
             <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
-        <label>Quota (octets, 0 = illimité)<input v-model="gForm.max_storage" class="input" type="number" min="0" /></label>
-        <label>Débit max download (o/s, 0 = illimité)<input v-model="gForm.speed_limit" class="input" type="number" min="0" /></label>
-        <label>Groupes SSO (séparés par des virgules)
+        <label>{{ t('admin.quotaBytes') }}<input v-model="gForm.max_storage" class="input" type="number" min="0" /></label>
+        <label>{{ t('admin.maxDownloadSpeed') }}<input v-model="gForm.speed_limit" class="input" type="number" min="0" /></label>
+        <label>{{ t('admin.ssoGroupsField') }}
           <input v-model="gForm.sso_groups" class="input" placeholder="engineering, ops" />
         </label>
-        <label class="chk"><input v-model="gForm.can_share" type="checkbox" />Autoriser le partage</label>
-        <label class="chk"><input v-model="gForm.can_admin" type="checkbox" />Accès administrateur</label>
+        <label class="chk"><input v-model="gForm.can_share" type="checkbox" />{{ t('admin.allowSharing') }}</label>
+        <label class="chk"><input v-model="gForm.can_admin" type="checkbox" />{{ t('admin.adminAccess') }}</label>
       </div>
       <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="gForm = null">Annuler</button>
-        <button class="btn btn-primary" @click="saveGroup">Enregistrer</button>
+        <button class="btn btn-ghost" @click="gForm = null">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" @click="saveGroup">{{ t('common.save') }}</button>
       </div>
     </div>
   </div>
@@ -269,38 +271,38 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   <!-- Policy creator -->
   <div v-if="pForm" class="overlay" @click.self="pForm = null">
     <div class="dialog">
-      <h2>Nouvelle policy de stockage</h2>
+      <h2>{{ t('admin.newPolicyTitle') }}</h2>
       <div class="form-grid">
-        <label>Nom<input v-model="pForm.name" class="input" /></label>
-        <label>Type
+        <label>{{ t('common.name') }}<input v-model="pForm.name" class="input" /></label>
+        <label>{{ t('admin.colType') }}
           <select v-model="pForm.type" class="input">
-            <option value="local">Local</option>
-            <option value="s3">S3 / compatible</option>
-            <option value="remote">Nœud distant (slave)</option>
+            <option value="local">{{ t('admin.typeLocal') }}</option>
+            <option value="s3">{{ t('admin.typeS3') }}</option>
+            <option value="remote">{{ t('admin.typeRemote') }}</option>
           </select>
         </label>
         <template v-if="pForm.type === 'local'">
-          <label>Répertoire (base path)<input v-model="pForm.base_path" class="input" placeholder="data/storage" /></label>
-          <label class="chk"><input v-model="pForm.encrypt" type="checkbox" />Chiffrer au repos (nécessite EncryptionKey)</label>
+          <label>{{ t('admin.directoryBasePath') }}<input v-model="pForm.base_path" class="input" placeholder="data/storage" /></label>
+          <label class="chk"><input v-model="pForm.encrypt" type="checkbox" />{{ t('admin.encryptAtRest') }}</label>
         </template>
         <template v-else-if="pForm.type === 's3'">
-          <label>Endpoint<input v-model="pForm.server" class="input" placeholder="https://s3.amazonaws.com" /></label>
-          <label>Bucket<input v-model="pForm.bucket_name" class="input" /></label>
-          <label>Region<input v-model="pForm.region" class="input" /></label>
-          <label>Access key<input v-model="pForm.access_key" class="input" /></label>
-          <label>Secret key<input v-model="pForm.secret_key" class="input" type="password" /></label>
-          <label>Base path (préfixe)<input v-model="pForm.base_path" class="input" /></label>
-          <label class="chk"><input v-model="pForm.path_style" type="checkbox" />Path-style (MinIO, etc.)</label>
+          <label>{{ t('admin.endpoint') }}<input v-model="pForm.server" class="input" placeholder="https://s3.amazonaws.com" /></label>
+          <label>{{ t('admin.bucket') }}<input v-model="pForm.bucket_name" class="input" /></label>
+          <label>{{ t('admin.region') }}<input v-model="pForm.region" class="input" /></label>
+          <label>{{ t('admin.accessKey') }}<input v-model="pForm.access_key" class="input" /></label>
+          <label>{{ t('admin.secretKey') }}<input v-model="pForm.secret_key" class="input" type="password" /></label>
+          <label>{{ t('admin.basePathPrefix') }}<input v-model="pForm.base_path" class="input" /></label>
+          <label class="chk"><input v-model="pForm.path_style" type="checkbox" />{{ t('admin.pathStyle') }}</label>
         </template>
         <template v-else>
-          <label>URL du nœud<input v-model="pForm.server" class="input" placeholder="http://slave:5212" /></label>
-          <label>Secret partagé<input v-model="pForm.secret_key" class="input" type="password" /></label>
-          <label>Base path<input v-model="pForm.base_path" class="input" /></label>
+          <label>{{ t('admin.nodeUrl') }}<input v-model="pForm.server" class="input" placeholder="http://slave:5212" /></label>
+          <label>{{ t('admin.sharedSecret') }}<input v-model="pForm.secret_key" class="input" type="password" /></label>
+          <label>{{ t('admin.colBasePath') }}<input v-model="pForm.base_path" class="input" /></label>
         </template>
       </div>
       <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="pForm = null">Annuler</button>
-        <button class="btn btn-primary" @click="savePolicy">Créer</button>
+        <button class="btn btn-ghost" @click="pForm = null">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" @click="savePolicy">{{ t('common.create') }}</button>
       </div>
     </div>
   </div>

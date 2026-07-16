@@ -1,23 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileNode } from '@/lib/api'
 import { kindFromName, fmtSize } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 
+const { t } = useI18n()
 const props = defineProps<{ files: FileNode[]; total: number }>()
 defineEmits<{ open: [node: FileNode] }>()
 
 interface Cat {
-  label: string
+  key: string
   kinds: string[] | null
   color: string
 }
 const CATS: Cat[] = [
-  { label: 'Images', kinds: ['image', 'design'], color: 'var(--accent)' },
-  { label: 'Vidéos & audio', kinds: ['video', 'audio'], color: 'var(--info)' },
-  { label: 'Documents', kinds: ['doc', 'text', 'pdf', 'sheet', 'slides'], color: 'var(--success)' },
-  { label: 'Archives & disques', kinds: ['archive', 'disc'], color: 'var(--warn)' },
-  { label: 'Autres', kinds: null, color: 'var(--fg-3)' },
+  { key: 'images', kinds: ['image', 'design'], color: 'var(--accent)' },
+  { key: 'media', kinds: ['video', 'audio'], color: 'var(--info)' },
+  { key: 'documents', kinds: ['doc', 'text', 'pdf', 'sheet', 'slides'], color: 'var(--success)' },
+  { key: 'archives', kinds: ['archive', 'disc'], color: 'var(--warn)' },
+  { key: 'other', kinds: null, color: 'var(--fg-3)' },
 ]
 
 const used = computed(() => props.files.reduce((s, n) => s + n.size, 0))
@@ -25,7 +27,7 @@ const used = computed(() => props.files.reduce((s, n) => s + n.size, 0))
 const cats = computed(() => {
   const known = CATS.slice(0, -1).flatMap((c) => c.kinds!)
   return CATS.map((c) => ({
-    label: c.label,
+    label: t('storage.cat.' + c.key),
     color: c.color,
     size: props.files
       .filter((f) => {
@@ -46,7 +48,9 @@ function segWidth(size: number) {
 <template>
   <div class="storage">
     <div class="storage-card">
-      <span class="storage-big"><strong>{{ fmtSize(used) }}</strong> utilisés sur {{ fmtSize(total) }}</span>
+      <span class="storage-big"
+        ><strong>{{ fmtSize(used) }}</strong> {{ t('storage.usedOf', { total: fmtSize(total) }) }}</span
+      >
       <div class="storage-bar">
         <div
           v-for="c in cats"
@@ -64,7 +68,7 @@ function segWidth(size: number) {
       </div>
     </div>
     <section class="section">
-      <span class="eyebrow">Fichiers les plus volumineux</span>
+      <span class="eyebrow">{{ t('storage.largest') }}</span>
       <div class="storage-card top-files">
         <button v-for="f in top" :key="f.id" class="top-file" @click="$emit('open', f)">
           <component :is="metaFor(kindFromName(f.name)).icon" :size="16" :class="'tint-' + metaFor(kindFromName(f.name)).tint" />

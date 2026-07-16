@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Star, MoreVertical } from 'lucide-vue-next'
 import type { FileNode } from '@/lib/api'
 import { kindFromName, fmtSize, fmtDate } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
+
+const { t } = useI18n()
 
 const props = defineProps<{ node: FileNode; selected: boolean }>()
 defineEmits<{
@@ -64,7 +67,7 @@ const dateLabel = computed(() => fmtDate(props.node.modified))
     <span class="row-cell">{{ node.owner }}</span>
     <span class="row-cell mono">{{ dateLabel }}</span>
     <span class="row-cell mono">{{ sizeLabel }}</span>
-    <button class="icon-btn" title="Actions" @click.stop="$emit('menu', node, $event)">
+    <button class="icon-btn" :title="t('common.actions')" @click.stop="$emit('menu', node, $event)">
       <MoreVertical :size="15" />
     </button>
   </div>

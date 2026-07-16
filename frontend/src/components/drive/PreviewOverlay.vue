@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { X, Download, Save, Eye, Pencil, FileQuestion, Crop } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { previewKind, isMarkdown, isOffice } from '@/lib/format'
@@ -11,6 +12,8 @@ import ImageEditor from './ImageEditor.vue'
 
 const props = defineProps<{ node: FileNode }>()
 const emit = defineEmits<{ close: [] }>()
+
+const { t } = useI18n()
 
 const files = useFilesStore()
 const auth = useAuthStore()
@@ -65,19 +68,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <span class="ov-title">{{ node.name }}</span>
         <div class="ov-actions">
           <template v-if="kind === 'text'">
-            <button v-if="markdown" class="icon-btn" :title="mode === 'edit' ? 'Aperçu' : 'Éditer'"
+            <button v-if="markdown" class="icon-btn" :title="mode === 'edit' ? t('previewOverlay.preview') : t('common.edit')"
               @click="mode = mode === 'edit' ? 'rendered' : 'edit'">
               <component :is="mode === 'edit' ? Eye : Pencil" :size="16" />
             </button>
             <button class="btn btn-primary ov-save" :disabled="!dirty" @click="save">
-              <Save :size="15" />Enregistrer
+              <Save :size="15" />{{ t('common.save') }}
             </button>
           </template>
-          <button v-if="kind === 'image' && !editingImage" class="icon-btn" title="Éditer l’image" @click="editingImage = true">
+          <button v-if="kind === 'image' && !editingImage" class="icon-btn" :title="t('previewOverlay.editImage')" @click="editingImage = true">
             <Crop :size="16" />
           </button>
-          <a class="icon-btn" title="Télécharger" :href="api.contentUrl(node.id)"><Download :size="16" /></a>
-          <button class="icon-btn" title="Fermer" @click="emit('close')"><X :size="16" /></button>
+          <a class="icon-btn" :title="t('common.download')" :href="api.contentUrl(node.id)"><Download :size="16" /></a>
+          <button class="icon-btn" :title="t('common.close')" @click="emit('close')"><X :size="16" /></button>
         </div>
       </header>
 
@@ -90,17 +93,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <EpubViewer v-else-if="kind === 'epub'" :url="src" :key="node.id" />
 
         <template v-else-if="kind === 'text'">
-          <div v-if="loading" class="ov-empty">Chargement…</div>
+          <div v-if="loading" class="ov-empty">{{ t('common.loading') }}</div>
           <div v-else-if="markdown && mode === 'rendered'" class="ov-markdown" v-html="rendered"></div>
           <textarea v-else v-model="text" class="ov-editor" spellcheck="false"></textarea>
         </template>
 
         <div v-else class="ov-empty">
           <FileQuestion :size="48" />
-          <p>Aucun aperçu disponible pour ce type de fichier.</p>
+          <p>{{ t('previewOverlay.noPreview') }}</p>
           <div style="display: flex; gap: 8px">
-            <button v-if="office" class="btn btn-primary" @click="files.openOffice(node)"><Pencil :size="15" />Éditer avec Office</button>
-            <a class="btn btn-secondary" :href="api.contentUrl(node.id)"><Download :size="15" />Télécharger</a>
+            <button v-if="office" class="btn btn-primary" @click="files.openOffice(node)"><Pencil :size="15" />{{ t('previewOverlay.editWithOffice') }}</button>
+            <a class="btn btn-secondary" :href="api.contentUrl(node.id)"><Download :size="15" />{{ t('common.download') }}</a>
           </div>
         </div>
       </div>

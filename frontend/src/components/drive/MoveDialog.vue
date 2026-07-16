@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { FolderInput, Folder, ChevronRight } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { useFilesStore } from '@/stores/files'
@@ -7,6 +8,7 @@ import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{ nodes: FileNode[] }>()
 const emit = defineEmits<{ close: []; moved: [] }>()
+const { t } = useI18n()
 const files = useFilesStore()
 const ui = useUiStore()
 
@@ -15,7 +17,7 @@ const ui = useUiStore()
 // descendant and creating a cycle).
 const movingIds = new Set(props.nodes.map((n) => n.id))
 
-const crumbs = ref<{ id: number | null; name: string }[]>([{ id: null, name: 'Mon Drive' }])
+const crumbs = ref<{ id: number | null; name: string }[]>([{ id: null, name: t('common.myDrive') }])
 const subfolders = ref<FileNode[]>([])
 const loading = ref(true)
 const busy = ref(false)
@@ -32,7 +34,7 @@ async function load() {
     const list = await api.list({ parent: curParam.value })
     subfolders.value = list.filter((n) => n.type === 'folder' && !movingIds.has(n.id))
   } catch (e: any) {
-    ui.toast('Dossier illisible' + (e?.message ? ` : ${e.message}` : ''), 'x')
+    ui.toast(t('move.unreadable') + (e?.message ? ` : ${e.message}` : ''), 'x')
   } finally {
     loading.value = false
   }
@@ -52,7 +54,7 @@ async function confirm() {
     await files.move([...movingIds], curParam.value)
     emit('moved')
   } catch (e: any) {
-    ui.toast('Déplacement impossible' + (e?.message ? ` : ${e.message}` : ''), 'x')
+    ui.toast(t('move.failed') + (e?.message ? ` : ${e.message}` : ''), 'x')
   } finally {
     busy.value = false
   }
@@ -65,8 +67,9 @@ onMounted(load)
   <div class="overlay" @click.self="emit('close')">
     <div class="dialog" style="max-width: 520px; width: 92vw">
       <h2>
-        <FolderInput :size="18" style="vertical-align: -3px; margin-right: 6px" />Déplacer
-        {{ nodes.length }} élément{{ nodes.length > 1 ? 's' : '' }}
+        <FolderInput :size="18" style="vertical-align: -3px; margin-right: 6px" />{{
+          t('move.header', nodes.length)
+        }}
       </h2>
 
       <div class="move-crumbs">
@@ -77,8 +80,8 @@ onMounted(load)
       </div>
 
       <div class="move-list">
-        <div v-if="loading" class="move-empty">Chargement…</div>
-        <div v-else-if="!subfolders.length" class="move-empty">Aucun sous-dossier ici.</div>
+        <div v-if="loading" class="move-empty">{{ t('common.loading') }}</div>
+        <div v-else-if="!subfolders.length" class="move-empty">{{ t('move.noSubfolders') }}</div>
         <button v-for="f in subfolders" :key="f.id" class="move-row" @click="enter(f)">
           <Folder :size="16" class="tint-folder" />
           <span class="move-name">{{ f.name }}</span>
@@ -87,9 +90,9 @@ onMounted(load)
       </div>
 
       <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="emit('close')">Annuler</button>
+        <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="busy || sameParent" @click="confirm">
-          {{ sameParent ? 'Déjà dans ce dossier' : `Déplacer dans « ${cur.name} »` }}
+          {{ sameParent ? t('move.alreadyHere') : t('move.moveInto', { name: cur.name }) }}
         </button>
       </div>
     </div>

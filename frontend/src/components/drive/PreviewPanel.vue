@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Star, X, Download, Lock, Unlock, Link as LinkIcon, History, RotateCcw, Trash2, FolderInput, Folder, FileText } from 'lucide-vue-next'
 import { api, type FileNode, type Version, type ArchiveEntry } from '@/lib/api'
 import { kindFromName, fmtSize, fmtDate, isArchive, canThumbnail } from '@/lib/format'
@@ -9,6 +10,7 @@ import { useFilesStore } from '@/stores/files'
 const props = defineProps<{ node: FileNode; location: string }>()
 defineEmits<{ close: []; download: []; star: [] }>()
 
+const { t } = useI18n()
 const files = useFilesStore()
 const kind = computed(() => (props.node.type === 'folder' ? 'folder' : kindFromName(props.node.name)))
 const meta = computed(() => metaFor(kind.value))
@@ -46,7 +48,7 @@ watch(() => props.node.id, () => { loadVersions(); loadEntries() }, { immediate:
 async function restore(v: Version) {
   await api.restoreVersion(props.node.id, v.id)
   await Promise.all([files.load(), loadVersions()])
-  files.ui().toast('Version restaurée', 'restore')
+  files.ui().toast(t('preview.versionRestored'), 'restore')
 }
 async function removeVersion(v: Version) {
   await api.deleteVersion(props.node.id, v.id)
@@ -62,11 +64,11 @@ async function toggleLock() {
     <div class="preview-head">
       <component :is="meta.icon" :size="16" :class="'tint-' + meta.tint" />
       <span class="title">{{ node.name }}</span>
-      <Lock v-if="node.locked" :size="14" class="tint-warn" title="Verrouillé" />
-      <button class="icon-btn" :title="node.starred ? 'Ne plus suivre' : 'Suivre'" @click="$emit('star')">
+      <Lock v-if="node.locked" :size="14" class="tint-warn" :title="t('preview.locked')" />
+      <button class="icon-btn" :title="node.starred ? t('preview.unstar') : t('preview.star')" @click="$emit('star')">
         <span :class="node.starred ? 'star-mark' : ''" style="display: flex"><Star :size="15" /></span>
       </button>
-      <button class="icon-btn" title="Fermer" @click="$emit('close')"><X :size="15" /></button>
+      <button class="icon-btn" :title="t('common.close')" @click="$emit('close')"><X :size="15" /></button>
     </div>
     <div class="preview-visual">
       <img
@@ -79,31 +81,31 @@ async function toggleLock() {
       <component :is="meta.icon" v-else :size="44" />
     </div>
     <dl class="preview-details">
-      <div class="detail-row"><dt>Type</dt><dd>{{ meta.label }}</dd></div>
-      <div class="detail-row"><dt>Taille</dt><dd class="mono">{{ sizeLabel }}</dd></div>
-      <div class="detail-row"><dt>Propriétaire</dt><dd>{{ node.owner }}</dd></div>
-      <div class="detail-row"><dt>Modifié</dt><dd class="mono">{{ dateLabel }}</dd></div>
-      <div class="detail-row"><dt>Emplacement</dt><dd>{{ location }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.type') }}</dt><dd>{{ meta.label }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.size') }}</dt><dd class="mono">{{ sizeLabel }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.owner') }}</dt><dd>{{ node.owner }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.modified') }}</dt><dd class="mono">{{ dateLabel }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.location') }}</dt><dd>{{ location }}</dd></div>
       <div class="detail-row"><dt>ID</dt><dd class="mono">od_{{ node.id }}</dd></div>
     </dl>
 
     <div v-if="node.type === 'file' && versions.length > 1" class="preview-versions">
-      <div class="pv-head"><History :size="14" />Versions <span class="pv-count">{{ versions.length }}</span></div>
+      <div class="pv-head"><History :size="14" />{{ t('preview.versions') }} <span class="pv-count">{{ versions.length }}</span></div>
       <div v-for="v in versions" :key="v.id" class="pv-item" :class="{ current: v.current }">
         <div class="pv-meta">
           <span class="mono">{{ fmtSize(v.size) }}</span>
           <span class="pv-date">{{ fmtDate(v.created) }}</span>
         </div>
-        <span v-if="v.current" class="pv-badge">actuelle</span>
+        <span v-if="v.current" class="pv-badge">{{ t('preview.current') }}</span>
         <template v-else>
-          <button class="icon-btn" title="Restaurer cette version" @click="restore(v)"><RotateCcw :size="14" /></button>
-          <button class="icon-btn" title="Supprimer cette version" @click="removeVersion(v)"><Trash2 :size="14" /></button>
+          <button class="icon-btn" :title="t('preview.restoreVersion')" @click="restore(v)"><RotateCcw :size="14" /></button>
+          <button class="icon-btn" :title="t('preview.deleteVersion')" @click="removeVersion(v)"><Trash2 :size="14" /></button>
         </template>
       </div>
     </div>
 
     <div v-if="archive && entries.length" class="preview-versions">
-      <div class="pv-head"><FolderInput :size="14" />Contenu de l’archive <span class="pv-count">{{ entries.length }}</span></div>
+      <div class="pv-head"><FolderInput :size="14" />{{ t('preview.archiveContents') }} <span class="pv-count">{{ entries.length }}</span></div>
       <div class="pv-scroll">
         <div v-for="(e, i) in entries" :key="i" class="pv-item">
           <component :is="e.is_dir ? Folder : FileText" :size="14" class="tint-neutral" />
@@ -116,13 +118,13 @@ async function toggleLock() {
     </div>
 
     <div class="preview-actions">
-      <button class="btn btn-secondary" @click="$emit('download')"><Download :size="15" />Télécharger</button>
-      <button v-if="archive" class="btn btn-secondary" @click="files.extract(node)"><FolderInput :size="15" />Extraire</button>
+      <button class="btn btn-secondary" @click="$emit('download')"><Download :size="15" />{{ t('common.download') }}</button>
+      <button v-if="archive" class="btn btn-secondary" @click="files.extract(node)"><FolderInput :size="15" />{{ t('preview.extract') }}</button>
       <button v-if="node.type === 'file'" class="btn btn-secondary" @click="files.createDirectLink(node)">
-        <LinkIcon :size="15" />Lien direct
+        <LinkIcon :size="15" />{{ t('preview.directLink') }}
       </button>
       <button class="btn btn-secondary" @click="toggleLock">
-        <component :is="node.locked ? Unlock : Lock" :size="15" />{{ node.locked ? 'Déverrouiller' : 'Verrouiller' }}
+        <component :is="node.locked ? Unlock : Lock" :size="15" />{{ node.locked ? t('preview.unlock') : t('preview.lock') }}
       </button>
     </div>
   </aside>

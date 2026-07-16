@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Download, Lock, TriangleAlert, Sun, Moon, Folder, FileText, ChevronRight, FolderArchive, FolderOpen } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
 import { kindFromName, fmtSize } from '@/lib/format'
@@ -9,6 +10,7 @@ import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
 
 const route = useRoute()
+const { t } = useI18n()
 const ui = useUiStore()
 const token = String(route.params.token)
 
@@ -52,7 +54,7 @@ async function openList(p: string) {
     curPath.value = p
     opened.value = true
   } catch (e: any) {
-    error.value = e?.code === 401 ? 'Mot de passe incorrect ou requis.' : e?.message || 'Accès impossible.'
+    error.value = e?.code === 401 ? t('shareView.passwordIncorrect') : e?.message || t('shareView.accessDenied')
   }
 }
 
@@ -73,9 +75,9 @@ async function download() {
   const probe = url + (url.includes('?') ? '&' : '?') + 'check=1'
   try {
     const r = await fetch(probe)
-    if (r.status === 401) return void (error.value = 'Mot de passe incorrect ou requis.')
-    if (r.status === 403) return void (error.value = 'Ce lien n’est plus disponible.')
-    if (!r.ok) return void (error.value = 'Téléchargement impossible.')
+    if (r.status === 401) return void (error.value = t('shareView.passwordIncorrect'))
+    if (r.status === 403) return void (error.value = t('shareView.linkUnavailable'))
+    if (!r.ok) return void (error.value = t('shareView.downloadFailed'))
   } catch {
     /* network hiccup on the probe — fall through and try the download anyway */
   }
@@ -94,8 +96,8 @@ async function download() {
 
       <template v-if="notFound">
         <TriangleAlert :size="40" style="color: var(--danger)" />
-        <h1>Lien introuvable</h1>
-        <p>Ce lien de partage n’existe pas ou a été supprimé.</p>
+        <h1>{{ t('shareView.linkNotFound') }}</h1>
+        <p>{{ t('shareView.linkNotFoundDesc') }}</p>
       </template>
 
       <template v-else-if="data">
@@ -109,7 +111,7 @@ async function download() {
               </template>
             </div>
             <div class="share-list">
-              <div v-if="!entries.length" class="share-empty">Dossier vide</div>
+              <div v-if="!entries.length" class="share-empty">{{ t('shareView.emptyFolder') }}</div>
               <button
                 v-for="e in entries"
                 :key="e.path"
@@ -124,7 +126,7 @@ async function download() {
             </div>
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
             <button class="btn btn-secondary" style="width: 100%" @click="downloadFolderArchive">
-              <FolderArchive :size="15" />Télécharger ce dossier (.zip)
+              <FolderArchive :size="15" />{{ t('shareView.downloadFolderZip') }}
             </button>
           </div>
         </template>
@@ -137,34 +139,34 @@ async function download() {
           <div style="text-align: center">
             <h1 style="font-size: 20px">{{ data.name }}</h1>
             <p class="mono">
-              {{ data.is_dir ? 'Dossier partagé' : fmtSize(data.size) }} · partagé par {{ data.owner }}
+              {{ data.is_dir ? t('shareView.sharedFolder') : fmtSize(data.size) }} · {{ t('shareView.sharedBy', { owner: data.owner }) }}
             </p>
           </div>
 
           <template v-if="unavailable">
             <p style="color: var(--danger)">
-              {{ data.expired ? 'Ce lien a expiré.' : 'La limite de téléchargements est atteinte.' }}
+              {{ data.expired ? t('shareView.linkExpired') : t('shareView.downloadLimitReached') }}
             </p>
           </template>
           <template v-else>
             <label v-if="data.has_password" style="width: 100%; display: flex; flex-direction: column; gap: 6px">
               <span class="tweak-label" style="letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px">
-                <Lock :size="12" />Mot de passe
+                <Lock :size="12" />{{ t('shareView.password') }}
               </span>
-              <input v-model="password" class="input" type="password" placeholder="Requis"
+              <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')"
                 @keyup.enter="data.is_dir ? openList('') : download()" />
             </label>
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
             <button class="btn btn-primary" style="width: 100%; height: 42px" @click="data.is_dir ? openList('') : download()">
               <component :is="data.is_dir ? FolderOpen : Download" :size="16" />
-              {{ data.is_dir ? 'Ouvrir le dossier' : 'Télécharger' }}
+              {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}
             </button>
           </template>
         </template>
       </template>
 
       <template v-else>
-        <p>Chargement…</p>
+        <p>{{ t('common.loading') }}</p>
       </template>
     </div>
   </div>

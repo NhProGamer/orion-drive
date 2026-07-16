@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
@@ -12,6 +13,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { FileNode } from '@/lib/api'
 import { fmtSize, isArchive, isOffice } from '@/lib/format'
 import { bannerFor } from '@/lib/branding'
+import LanguageMenu from '@/components/LanguageMenu.vue'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -26,6 +28,7 @@ import WebdavDialog from './WebdavDialog.vue'
 import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
+const { t } = useI18n()
 const files = useFilesStore()
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -57,9 +60,9 @@ watch(searchTerm, (v) => {
 })
 
 const locationOf = (n: FileNode) => {
-  if (n.parent_id == null) return 'Mon Drive'
+  if (n.parent_id == null) return t('shell.myDrive')
   const crumb = files.path.find((c) => c.id === n.parent_id)
-  return crumb ? crumb.name : 'Mon Drive'
+  return crumb ? crumb.name : t('shell.myDrive')
 }
 
 /* Navigation */
@@ -94,9 +97,9 @@ function bgCtx(ev: MouseEvent) {
     x: Math.min(ev.clientX, window.innerWidth - 240),
     y: Math.min(ev.clientY, window.innerHeight - 140),
     items: [
-      { id: 'newfolder', label: 'Nouveau dossier', icon: FolderPlus },
-      { id: 'import', label: 'Importer des fichiers', icon: Upload },
-      { id: 'importfolder', label: 'Importer un dossier', icon: FolderUp },
+      { id: 'newfolder', label: t('shell.newFolder'), icon: FolderPlus },
+      { id: 'import', label: t('shell.importFiles'), icon: Upload },
+      { id: 'importfolder', label: t('shell.importFolder'), icon: FolderUp },
     ],
   }
 }
@@ -104,9 +107,9 @@ function bgCtx(ev: MouseEvent) {
 function ctxItems(): MenuItem[] {
   if (files.view === 'trash') {
     return [
-      { id: 'restore', label: 'Restaurer', icon: RotateCcw },
+      { id: 'restore', label: t('common.restore'), icon: RotateCcw },
       { sep: true },
-      { id: 'purge', label: 'Supprimer définitivement', icon: Trash2, danger: true },
+      { id: 'purge', label: t('shell.deletePermanently'), icon: Trash2, danger: true },
     ]
   }
   const sel = files.selNodes
@@ -114,38 +117,38 @@ function ctxItems(): MenuItem[] {
   const n = sel[0]
   const items: MenuItem[] = []
   if (!multi && n) {
-    if (n.type === 'folder') items.push({ id: 'open', label: 'Ouvrir', icon: Folder })
-    else items.push({ id: 'preview', label: 'Aperçu', icon: Eye })
-    if (n.type === 'file') items.push({ id: 'download', label: 'Télécharger', icon: Download })
+    if (n.type === 'folder') items.push({ id: 'open', label: t('common.open'), icon: Folder })
+    else items.push({ id: 'preview', label: t('shell.preview'), icon: Eye })
+    if (n.type === 'file') items.push({ id: 'download', label: t('common.download'), icon: Download })
   } else {
-    items.push({ id: 'download', label: 'Télécharger', icon: Download })
+    items.push({ id: 'download', label: t('common.download'), icon: Download })
   }
   if (!files.readOnly && n && (multi || n.type === 'folder')) {
-    items.push({ id: 'archive', label: 'Télécharger en archive', icon: FileArchive })
+    items.push({ id: 'archive', label: t('shell.downloadAsArchive'), icon: FileArchive })
   }
   if (!files.readOnly && n) {
-    items.push({ id: 'compress', label: 'Compresser en .zip', icon: FileArchive })
+    items.push({ id: 'compress', label: t('shell.compressToZip'), icon: FileArchive })
   }
   if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
-    items.push({ id: 'extract', label: 'Extraire ici', icon: FolderInput })
+    items.push({ id: 'extract', label: t('shell.extractHere'), icon: FolderInput })
   }
   if (!files.readOnly && !multi && n && n.type === 'file' && isOffice(n.name) && auth.wopiEnabled) {
-    items.push({ id: 'office', label: 'Éditer avec Office', icon: FileText })
+    items.push({ id: 'office', label: t('shell.editWithOffice'), icon: FileText })
   }
   if (!multi && n && auth.canShare) {
-    items.push({ id: 'share', label: 'Partager', icon: Share2 })
-    if (n.type === 'file') items.push({ id: 'directlink', label: 'Copier le lien direct', icon: LinkIcon })
+    items.push({ id: 'share', label: t('common.share'), icon: Share2 })
+    if (n.type === 'file') items.push({ id: 'directlink', label: t('shell.copyDirectLink'), icon: LinkIcon })
   }
   if (!files.readOnly && n) {
     items.push({ sep: true })
-    items.push({ id: 'move', label: 'Déplacer vers…', icon: FolderInput })
+    items.push({ id: 'move', label: t('shell.moveTo'), icon: FolderInput })
     if (!multi) {
-      items.push({ id: 'rename', label: 'Renommer', icon: Pencil })
-      items.push({ id: 'star', label: n.starred ? 'Ne plus suivre' : 'Suivre', icon: Star })
-      items.push({ id: 'lock', label: n.locked ? 'Déverrouiller' : 'Verrouiller', icon: n.locked ? Unlock : Lock })
+      items.push({ id: 'rename', label: t('common.rename'), icon: Pencil })
+      items.push({ id: 'star', label: n.starred ? t('shell.unstar') : t('shell.star'), icon: Star })
+      items.push({ id: 'lock', label: n.locked ? t('shell.unlock') : t('shell.lock'), icon: n.locked ? Unlock : Lock })
     }
     items.push({ sep: true })
-    items.push({ id: 'trash', label: 'Déplacer vers la corbeille', icon: Trash2, danger: true })
+    items.push({ id: 'trash', label: t('shell.moveToTrash'), icon: Trash2, danger: true })
   }
   return items
 }
@@ -188,7 +191,7 @@ function startRename() {
 }
 function openNewFolder() {
   closeMenus()
-  dialog.value = { type: 'folder', value: 'Nouveau dossier' }
+  dialog.value = { type: 'folder', value: t('shell.newFolder') }
   focusDialog()
 }
 function focusDialog() {
@@ -204,7 +207,7 @@ async function confirmDialog() {
     const v = d.value.trim()
     if (v) await files.rename(d.id, v)
   } else if (d.type === 'folder') {
-    await files.createFolder(d.value.trim() || 'Nouveau dossier')
+    await files.createFolder(d.value.trim() || t('shell.newFolder'))
   } else if (d.type === 'purge') {
     await files.purge(d.ids)
   } else if (d.type === 'emptytrash') {
@@ -311,7 +314,7 @@ function onKey(e: KeyboardEvent) {
 
 const dropTargetName = computed(() => {
   const c = files.crumbs
-  return files.view === 'drive' ? c[c.length - 1].name : 'Mon Drive'
+  return files.view === 'drive' ? c[c.length - 1].name : t('shell.myDrive')
 })
 
 onMounted(() => {
@@ -337,28 +340,28 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       </div>
       <div class="new-wrap">
         <button class="btn btn-primary btn-new" @click.stop="newMenuOpen = !newMenuOpen">
-          <Plus :size="16" />Nouveau
+          <Plus :size="16" />{{ t('shell.new') }}
         </button>
         <div v-if="newMenuOpen" class="menu new-menu" @click.stop>
-          <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />Nouveau dossier</button>
-          <button class="menu-item" @click="triggerUpload"><Upload :size="16" />Importer des fichiers</button>
-          <button class="menu-item" @click="triggerFolderUpload"><FolderUp :size="16" />Importer un dossier</button>
+          <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />{{ t('shell.newFolder') }}</button>
+          <button class="menu-item" @click="triggerUpload"><Upload :size="16" />{{ t('shell.importFiles') }}</button>
+          <button class="menu-item" @click="triggerFolderUpload"><FolderUp :size="16" />{{ t('shell.importFolder') }}</button>
         </div>
       </div>
-      <nav aria-label="Navigation principale">
-        <button class="nav-item" :class="{ active: files.view === 'drive' }" @click="gotoView('drive')"><HardDrive :size="18" />Mon Drive</button>
-        <button class="nav-item" :class="{ active: files.view === 'shares' }" @click="gotoView('shares')"><Share2 :size="18" />Mes partages</button>
+      <nav :aria-label="t('shell.mainNav')">
+        <button class="nav-item" :class="{ active: files.view === 'drive' }" @click="gotoView('drive')"><HardDrive :size="18" />{{ t('shell.myDrive') }}</button>
+        <button class="nav-item" :class="{ active: files.view === 'shares' }" @click="gotoView('shares')"><Share2 :size="18" />{{ t('shell.myShares') }}</button>
         <button class="nav-item" :class="{ active: files.view === 'trash' }" @click="gotoView('trash')">
-          <Trash2 :size="18" />Corbeille<span v-if="files.trashCount" class="nav-count">{{ files.trashCount }}</span>
+          <Trash2 :size="18" />{{ t('shell.trash') }}<span v-if="files.trashCount" class="nav-count">{{ files.trashCount }}</span>
         </button>
         <div class="nav-sep"></div>
-        <button class="nav-item" :class="{ active: files.view === 'storage' }" @click="gotoView('storage')"><Database :size="18" />Stockage</button>
-        <button class="nav-item" @click="webdavOpen = true"><Server :size="18" />Accès WebDAV</button>
+        <button class="nav-item" :class="{ active: files.view === 'storage' }" @click="gotoView('storage')"><Database :size="18" />{{ t('shell.storage') }}</button>
+        <button class="nav-item" @click="webdavOpen = true"><Server :size="18" />{{ t('shell.webdavAccess') }}</button>
       </nav>
       <div class="quota">
         <div class="quota-bar"><div class="quota-fill" :style="{ width: files.quotaPct + '%' }"></div></div>
         <span class="quota-text">{{ fmtSize(files.quota.used) }} / {{ fmtSize(files.quota.total) }}</span>
-        <button class="quota-link" @click="gotoView('storage')">Gérer le stockage</button>
+        <button class="quota-link" @click="gotoView('storage')">{{ t('shell.manageStorage') }}</button>
       </div>
     </aside>
 
@@ -367,16 +370,17 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       <header class="topbar">
         <label class="searchbox">
           <Search :size="16" />
-          <input ref="searchInput" v-model="searchTerm" type="search" placeholder="Rechercher dans OrionDrive" aria-label="Rechercher" />
+          <input ref="searchInput" v-model="searchTerm" type="search" :placeholder="t('shell.searchPlaceholder')" :aria-label="t('common.search')" />
           <kbd>/</kbd>
         </label>
         <div class="topbar-right">
-          <div class="segmented" role="group" aria-label="Mode d'affichage">
-            <button class="icon-btn" :class="{ active: ui.mode === 'grid' }" title="Grille" @click="ui.setMode('grid')"><Grid3x3 :size="16" /></button>
-            <button class="icon-btn" :class="{ active: ui.mode === 'list' }" title="Liste" @click="ui.setMode('list')"><List :size="16" /></button>
+          <div class="segmented" role="group" :aria-label="t('shell.displayMode')">
+            <button class="icon-btn" :class="{ active: ui.mode === 'grid' }" :title="t('shell.gridView')" @click="ui.setMode('grid')"><Grid3x3 :size="16" /></button>
+            <button class="icon-btn" :class="{ active: ui.mode === 'list' }" :title="t('shell.listView')" @click="ui.setMode('list')"><List :size="16" /></button>
           </div>
-          <button v-if="auth.isAdmin" class="icon-btn" title="Administration" @click="$router.push('/admin')"><Shield :size="16" /></button>
-          <button class="icon-btn" :title="ui.theme === 'dark' ? 'Thème clair' : 'Thème sombre'" @click="ui.toggleTheme">
+          <button v-if="auth.isAdmin" class="icon-btn" :title="t('shell.administration')" @click="$router.push('/admin')"><Shield :size="16" /></button>
+          <LanguageMenu />
+          <button class="icon-btn" :title="ui.theme === 'dark' ? t('shell.lightTheme') : t('shell.darkTheme')" @click="ui.toggleTheme">
             <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
           </button>
           <div class="avatar" :title="auth.me?.nick">
@@ -392,24 +396,24 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <div class="content-head">
             <template v-if="files.sel.length">
               <div class="selbar">
-                <button class="icon-btn" title="Annuler la sélection" @click="files.clearSel"><X :size="16" /></button>
-                <span class="selbar-label">{{ files.sel.length }} sélectionné{{ files.sel.length > 1 ? 's' : '' }}</span>
+                <button class="icon-btn" :title="t('shell.clearSelection')" @click="files.clearSel"><X :size="16" /></button>
+                <span class="selbar-label">{{ t('shell.selectedCount', files.sel.length) }}</span>
                 <span class="selbar-spacer"></span>
                 <template v-if="files.view === 'trash'">
-                  <button class="icon-btn" title="Restaurer" @click="files.restore([...files.sel])"><RotateCcw :size="16" /></button>
-                  <button class="icon-btn" title="Supprimer définitivement" @click="dialog = { type: 'purge', ids: [...files.sel] }"><Trash2 :size="16" /></button>
+                  <button class="icon-btn" :title="t('common.restore')" @click="files.restore([...files.sel])"><RotateCcw :size="16" /></button>
+                  <button class="icon-btn" :title="t('shell.deletePermanently')" @click="dialog = { type: 'purge', ids: [...files.sel] }"><Trash2 :size="16" /></button>
                 </template>
                 <template v-else>
-                  <button class="icon-btn" title="Télécharger" @click="doDownload(files.selNodes)"><Download :size="16" /></button>
-                  <button v-if="files.sel.length === 1 && files.selNodes[0]?.type === 'file'" class="icon-btn" title="Partager" @click="shareNode = files.selNodes[0]"><Share2 :size="16" /></button>
-                  <button v-if="!files.readOnly && files.sel.length === 1" class="icon-btn" title="Renommer" @click="startRename"><Pencil :size="16" /></button>
-                  <button v-if="!files.readOnly" class="icon-btn" title="Déplacer vers…" @click="moveNodes = [...files.selNodes]"><FolderInput :size="16" /></button>
-                  <button v-if="!files.readOnly" class="icon-btn" title="Corbeille" @click="files.trash([...files.sel])"><Trash2 :size="16" /></button>
+                  <button class="icon-btn" :title="t('common.download')" @click="doDownload(files.selNodes)"><Download :size="16" /></button>
+                  <button v-if="files.sel.length === 1 && files.selNodes[0]?.type === 'file'" class="icon-btn" :title="t('common.share')" @click="shareNode = files.selNodes[0]"><Share2 :size="16" /></button>
+                  <button v-if="!files.readOnly && files.sel.length === 1" class="icon-btn" :title="t('common.rename')" @click="startRename"><Pencil :size="16" /></button>
+                  <button v-if="!files.readOnly" class="icon-btn" :title="t('shell.moveTo')" @click="moveNodes = [...files.selNodes]"><FolderInput :size="16" /></button>
+                  <button v-if="!files.readOnly" class="icon-btn" :title="t('shell.trash')" @click="files.trash([...files.sel])"><Trash2 :size="16" /></button>
                 </template>
               </div>
             </template>
             <template v-else>
-              <h1 v-if="files.searching" class="view-title">Résultats</h1>
+              <h1 v-if="files.searching" class="view-title">{{ t('shell.results') }}</h1>
               <h1 v-else-if="files.crumbs.length === 1" class="view-title">{{ files.viewLabel }}</h1>
               <div v-else class="crumbs">
                 <template v-for="(c, i) in files.crumbs" :key="i">
@@ -417,14 +421,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                   <button class="crumb" :class="{ current: i === files.crumbs.length - 1 }" @click="files.crumbTo(i)">{{ c.name }}</button>
                 </template>
               </div>
-              <span v-if="files.view !== 'storage' && files.view !== 'shares'" class="head-count">{{ files.nodes.length }} élément{{ files.nodes.length > 1 ? 's' : '' }}</span>
+              <span v-if="files.view !== 'storage' && files.view !== 'shares'" class="head-count">{{ t('shell.itemCount', files.nodes.length) }}</span>
               <button
                 v-if="files.view === 'trash' && files.nodes.length"
                 class="btn btn-secondary"
                 style="margin-left: auto"
                 @click="dialog = { type: 'emptytrash' }"
               >
-                <Trash2 :size="15" />Vider la corbeille
+                <Trash2 :size="15" />{{ t('shell.emptyTrash') }}
               </button>
             </template>
           </div>
@@ -437,13 +441,13 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 
           <template v-else>
             <div v-if="files.view === 'trash' && files.nodes.length" class="notice">
-              <Info :size="16" />Les éléments de la corbeille sont supprimés définitivement après 30 jours.
+              <Info :size="16" />{{ t('shell.trashRetentionNotice') }}
             </div>
 
             <!-- Grid -->
             <template v-if="ui.mode === 'grid'">
               <section v-if="files.folders.length" class="section">
-                <span class="eyebrow">Dossiers</span>
+                <span class="eyebrow">{{ t('shell.folders') }}</span>
                 <div class="folder-grid" @click.self="files.clearSel">
                   <FolderChip
                     v-for="n in files.folders"
@@ -457,7 +461,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
                 </div>
               </section>
               <section v-if="files.files.length" class="section">
-                <span class="eyebrow">Fichiers</span>
+                <span class="eyebrow">{{ t('shell.files') }}</span>
                 <div class="file-grid" @click.self="files.clearSel">
                   <FileCard
                     v-for="n in files.files"
@@ -475,10 +479,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <!-- List -->
             <div v-else-if="files.nodes.length" class="listing">
               <div class="list-head">
-                <span>Nom</span>
-                <span>Propriétaire</span>
-                <span>Modifié</span>
-                <span>Taille</span>
+                <span>{{ t('common.name') }}</span>
+                <span>{{ t('shell.owner') }}</span>
+                <span>{{ t('shell.modified') }}</span>
+                <span>{{ t('shell.size') }}</span>
                 <span></span>
               </div>
               <FileRow
@@ -496,14 +500,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <div v-if="!files.nodes.length && !files.loading" class="empty">
               <component :is="files.searching ? Search : files.view === 'trash' ? Trash2 : Upload" :size="36" />
               <span class="empty-title">
-                <template v-if="files.searching">Aucun résultat pour « {{ files.q.trim() }} »</template>
-                <template v-else-if="files.view === 'trash'">La corbeille est vide</template>
-                <template v-else>Dossier vide</template>
+                <template v-if="files.searching">{{ t('shell.noResults', { q: files.q.trim() }) }}</template>
+                <template v-else-if="files.view === 'trash'">{{ t('shell.trashEmpty') }}</template>
+                <template v-else>{{ t('shell.folderEmpty') }}</template>
               </span>
               <span class="empty-sub">
-                <template v-if="files.searching">Essaie un autre terme ou change de vue.</template>
-                <template v-else-if="files.view === 'trash'">Les éléments supprimés apparaîtront ici.</template>
-                <template v-else>Glisse-dépose des fichiers ici, ou utilise le bouton Nouveau.</template>
+                <template v-if="files.searching">{{ t('shell.noResultsSub') }}</template>
+                <template v-else-if="files.view === 'trash'">{{ t('shell.trashEmptySub') }}</template>
+                <template v-else>{{ t('shell.folderEmptySub') }}</template>
               </span>
             </div>
           </template>
@@ -528,35 +532,35 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <div v-if="dialog" class="overlay" @click.self="dialog = null">
       <div class="dialog">
         <template v-if="dialog.type === 'rename'">
-          <h2>Renommer</h2>
+          <h2>{{ t('common.rename') }}</h2>
           <input ref="dialogInput" v-model="dialog.value" class="input" type="text" @keyup.enter="confirmDialog" />
           <div class="dialog-actions">
-            <button class="btn btn-ghost" @click="dialog = null">Annuler</button>
-            <button class="btn btn-primary" @click="confirmDialog">Renommer</button>
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="confirmDialog">{{ t('common.rename') }}</button>
           </div>
         </template>
         <template v-else-if="dialog.type === 'folder'">
-          <h2>Nouveau dossier</h2>
-          <input ref="dialogInput" v-model="dialog.value" class="input" type="text" placeholder="Nom du dossier" @keyup.enter="confirmDialog" />
+          <h2>{{ t('shell.newFolder') }}</h2>
+          <input ref="dialogInput" v-model="dialog.value" class="input" type="text" :placeholder="t('shell.folderNamePlaceholder')" @keyup.enter="confirmDialog" />
           <div class="dialog-actions">
-            <button class="btn btn-ghost" @click="dialog = null">Annuler</button>
-            <button class="btn btn-primary" @click="confirmDialog">Créer</button>
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>
           </div>
         </template>
         <template v-else-if="dialog.type === 'purge'">
-          <h2>Supprimer définitivement ?</h2>
-          <p>{{ dialog.ids.length > 1 ? dialog.ids.length + ' éléments seront supprimés' : 'Cet élément sera supprimé' }} définitivement. Cette action est irréversible.</p>
+          <h2>{{ t('shell.deletePermanentlyConfirm') }}</h2>
+          <p>{{ t('shell.purgeWarning', dialog.ids.length) }}</p>
           <div class="dialog-actions">
-            <button class="btn btn-ghost" @click="dialog = null">Annuler</button>
-            <button class="btn btn-danger" @click="confirmDialog">Supprimer</button>
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" @click="confirmDialog">{{ t('common.delete') }}</button>
           </div>
         </template>
         <template v-else-if="dialog.type === 'emptytrash'">
-          <h2>Vider la corbeille ?</h2>
-          <p>Tous les éléments de la corbeille seront supprimés définitivement. Cette action est irréversible.</p>
+          <h2>{{ t('shell.emptyTrashConfirm') }}</h2>
+          <p>{{ t('shell.emptyTrashWarning') }}</p>
           <div class="dialog-actions">
-            <button class="btn btn-ghost" @click="dialog = null">Annuler</button>
-            <button class="btn btn-danger" @click="confirmDialog">Vider la corbeille</button>
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-danger" @click="confirmDialog">{{ t('shell.emptyTrash') }}</button>
           </div>
         </template>
       </div>
@@ -572,7 +576,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <div v-if="dragDepth > 0" class="drop-overlay">
       <div class="drop-card">
         <Upload :size="32" />
-        <span>Dépose tes fichiers pour les importer</span>
+        <span>{{ t('shell.dropToUpload') }}</span>
         <span class="mono" style="font-size: 11px; color: var(--accent)">{{ dropTargetName }}</span>
       </div>
     </div>

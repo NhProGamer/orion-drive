@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
+const { t } = useI18n()
 const props = defineProps<{ url: string }>()
 
 const host = ref<HTMLElement | null>(null)
@@ -47,11 +49,11 @@ function next() {
 
 <template>
   <div class="ov-epub">
-    <button class="ov-epub-nav left" title="Précédent" @click="prev"><ChevronLeft :size="22" /></button>
+    <button class="ov-epub-nav left" :title="t('epub.prev')" @click="prev"><ChevronLeft :size="22" /></button>
     <div ref="host" class="ov-epub-host"></div>
-    <button class="ov-epub-nav right" title="Suivant" @click="next"><ChevronRight :size="22" /></button>
+    <button class="ov-epub-nav right" :title="t('epub.next')" @click="next"><ChevronRight :size="22" /></button>
     <div v-if="error" class="ov-empty" style="position: absolute; inset: 0; justify-content: center">
-      Impossible de lire cet ePub.
+      {{ t('epub.error') }}
     </div>
   </div>
 </template>

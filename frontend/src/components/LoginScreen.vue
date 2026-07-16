@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { Sun, Moon } from 'lucide-vue-next'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
+import LanguageMenu from '@/components/LanguageMenu.vue'
 
+const { t } = useI18n()
 const ui = useUiStore()
 const config = ref<{ oidc: boolean; dev: boolean }>({ oidc: true, dev: false })
 
@@ -25,21 +28,24 @@ function loginDev() {
 
 <template>
   <div class="login-screen">
-    <button class="icon-btn" style="position: fixed; top: 16px; right: 16px" @click="ui.toggleTheme">
-      <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
-    </button>
+    <div style="position: fixed; top: 16px; right: 16px; display: flex; gap: 8px">
+      <LanguageMenu />
+      <button class="icon-btn" @click="ui.toggleTheme">
+        <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
+      </button>
+    </div>
     <div class="login-card">
       <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
-      <h1>Bienvenue</h1>
-      <p>Connecte-toi pour accéder à ton espace de stockage.</p>
+      <h1>{{ t('login.welcome') }}</h1>
+      <p>{{ t('login.subtitle') }}</p>
       <button v-if="config.oidc" class="btn btn-primary" style="width: 100%; height: 42px" @click="loginOidc">
-        Se connecter avec le SSO
+        {{ t('login.sso') }}
       </button>
       <button v-if="config.dev" class="btn btn-secondary" style="width: 100%" @click="loginDev">
-        Connexion développeur
+        {{ t('login.dev') }}
       </button>
       <p v-if="!config.oidc && !config.dev" style="color: var(--danger)">
-        Aucune méthode d'authentification n'est configurée.
+        {{ t('login.noAuth') }}
       </p>
     </div>
   </div>

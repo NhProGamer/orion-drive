@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Pencil } from 'lucide-vue-next'
 import { api, type ShareInfo } from '@/lib/api'
 import { useUiStore } from '@/stores/ui'
+
+const { t } = useI18n()
 
 const props = defineProps<{ share: ShareInfo }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
@@ -39,11 +42,11 @@ async function save() {
 
   try {
     await api.updateShare(props.share.token, input)
-    ui.toast('Partage mis à jour', 'check')
+    ui.toast(t('shareEdit.updated'), 'check')
     emit('saved')
     emit('close')
   } catch (e: any) {
-    ui.toast('Échec de la mise à jour' + (e?.message ? ` : ${e.message}` : ''), 'x')
+    ui.toast(t('shareEdit.updateFailed') + (e?.message ? ` : ${e.message}` : ''), 'x')
   } finally {
     loading.value = false
   }
@@ -53,37 +56,37 @@ async function save() {
 <template>
   <div class="overlay" @click.self="emit('close')">
     <div class="dialog">
-      <h2><Pencil :size="18" style="vertical-align: -3px; margin-right: 6px" />Modifier le partage « {{ share.name }} »</h2>
+      <h2><Pencil :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('shareEdit.title', { name: share.name }) }}</h2>
 
       <div style="display: flex; flex-direction: column; gap: 12px">
         <label style="display: flex; align-items: center; gap: 8px">
           <input v-model="hasPassword" type="checkbox" />
-          <span class="tweak-label" style="letter-spacing: 0.06em">Protéger par mot de passe</span>
+          <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.passwordProtect') }}</span>
         </label>
         <input
           v-if="hasPassword"
           v-model="password"
           class="input"
           type="text"
-          :placeholder="share.has_password ? 'Laisser vide pour conserver le mot de passe actuel' : 'Nouveau mot de passe'"
+          :placeholder="share.has_password ? t('shareEdit.passwordKeepHint') : t('shareEdit.passwordNew')"
         />
 
         <div style="display: flex; gap: 12px">
           <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">Expire (jours)</span>
-            <input v-model="expiresDays" class="input" type="number" min="1" placeholder="Jamais" />
+            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.expiresDays') }}</span>
+            <input v-model="expiresDays" class="input" type="number" min="1" :placeholder="t('shareEdit.never')" />
           </label>
           <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">Max. téléchargements</span>
-            <input v-model="maxDownloads" class="input" type="number" min="1" placeholder="Illimité" />
+            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.maxDownloads') }}</span>
+            <input v-model="maxDownloads" class="input" type="number" min="1" :placeholder="t('shareEdit.unlimited')" />
           </label>
         </div>
       </div>
 
       <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="emit('close')">Annuler</button>
+        <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
         <button class="btn btn-primary" :disabled="loading" @click="save">
-          {{ loading ? 'Enregistrement…' : 'Enregistrer' }}
+          {{ loading ? t('shareEdit.saving') : t('common.save') }}
         </button>
       </div>
     </div>

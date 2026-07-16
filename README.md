@@ -30,15 +30,17 @@ Single binary serving an embedded Vue SPA with the "Nebula" design system. Imple
   cleanup).
 - **Databases & cache**: SQLite (default), PostgreSQL or MySQL; optional Redis-backed shared cache
   for multi-node deployments. Docker Compose ships all three behind opt-in profiles.
+- **Interface**: installable PWA (offline app shell, web manifest, service worker), dark/light Nebula
+  themes, and full i18n (French & English, with a language switcher).
 
-Not yet done: metadata/full-text search, PWA/i18n, master↔slave cluster orchestration,
-SMTP/email notifications.
+Not yet done: metadata/full-text search, master↔slave cluster orchestration, SMTP/email
+notifications.
 
 ## Stack
 
 - **Backend**: Go 1.26, Gin, GORM (SQLite / PostgreSQL / MySQL, all pure-Go / `CGO_ENABLED=0`),
   goose migrations, cobra, coreos/go-oidc, `golang.org/x/net/webdav`, optional Redis cache
-- **Frontend**: Vue 3 + Vite + TypeScript + Pinia + vue-router, a custom "Nebula" CSS design system
+- **Frontend**: Vue 3 + Vite + TypeScript + Pinia + vue-router + vue-i18n + vite-plugin-pwa, a custom "Nebula" CSS design system
   (oklch tokens, dark/light), lucide icons
 
 ## Development

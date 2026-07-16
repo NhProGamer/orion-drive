@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Copy, Check, ExternalLink, Trash2, Pencil, Lock, Folder, FileText, Eye, Download, Clock, Share2 } from 'lucide-vue-next'
 import type { ShareInfo } from '@/lib/api'
 import { fmtDate } from '@/lib/format'
@@ -7,6 +8,7 @@ import { useFilesStore } from '@/stores/files'
 import ShareEditDialog from './ShareEditDialog.vue'
 
 defineProps<{ shares: ShareInfo[] }>()
+const { t } = useI18n()
 const files = useFilesStore()
 
 const editing = ref<ShareInfo | null>(null)
@@ -17,13 +19,13 @@ async function copy(s: ShareInfo) {
     copied.value = s.token
     setTimeout(() => (copied.value === s.token ? (copied.value = null) : null), 1500)
   } catch {
-    files.ui().toast(`Lien : ${s.url}`, 'link')
+    files.ui().toast(t('shares.linkToast', { url: s.url }), 'link')
   }
 }
 
 function status(s: ShareInfo): { label: string; cls: string } | null {
-  if (s.expired) return { label: 'Expiré', cls: 'danger' }
-  if (s.exhausted) return { label: 'Épuisé', cls: 'danger' }
+  if (s.expired) return { label: t('shares.expired'), cls: 'danger' }
+  if (s.exhausted) return { label: t('shares.exhausted'), cls: 'danger' }
   return null
 }
 </script>
@@ -32,8 +34,8 @@ function status(s: ShareInfo): { label: string; cls: string } | null {
   <div class="shares">
     <div v-if="!shares.length" class="empty">
       <Share2 :size="36" />
-      <span class="empty-title">Aucun partage</span>
-      <span class="empty-sub">Les liens que tu crées (clic droit → Partager) apparaîtront ici.</span>
+      <span class="empty-title">{{ t('shares.empty') }}</span>
+      <span class="empty-sub">{{ t('shares.emptySub') }}</span>
     </div>
 
     <div v-for="s in shares" :key="s.token" class="share-card" :class="{ inactive: !!status(s) }">
@@ -43,25 +45,25 @@ function status(s: ShareInfo): { label: string; cls: string } | null {
         <div class="share-line1">
           <span class="share-name">{{ s.name }}</span>
           <span v-if="status(s)" class="badge" :class="status(s)!.cls">{{ status(s)!.label }}</span>
-          <span v-if="s.has_password" class="badge"><Lock :size="11" /> mot de passe</span>
+          <span v-if="s.has_password" class="badge"><Lock :size="11" /> {{ t('shares.password') }}</span>
         </div>
         <div class="share-stats">
-          <span title="Vues"><Eye :size="13" /> {{ s.views }}</span>
-          <span title="Téléchargements">
+          <span :title="t('shares.views')"><Eye :size="13" /> {{ s.views }}</span>
+          <span :title="t('shares.downloads')">
             <Download :size="13" /> {{ s.downloads }}<template v-if="s.remain_downloads !== null"> / {{ s.downloads + s.remain_downloads }}</template>
           </span>
-          <span v-if="s.expires" title="Expiration"><Clock :size="13" /> {{ fmtDate(s.expires) }}</span>
-          <span class="share-created">créé le {{ fmtDate(s.created_at) }}</span>
+          <span v-if="s.expires" :title="t('shares.expiration')"><Clock :size="13" /> {{ fmtDate(s.expires) }}</span>
+          <span class="share-created">{{ t('shares.createdOn', { date: fmtDate(s.created_at) }) }}</span>
         </div>
       </div>
 
       <div class="share-actions">
-        <button class="icon-btn" title="Copier le lien" @click="copy(s)">
+        <button class="icon-btn" :title="t('shares.copyLink')" @click="copy(s)">
           <component :is="copied === s.token ? Check : Copy" :size="16" />
         </button>
-        <a class="icon-btn" title="Ouvrir" :href="s.url" target="_blank" rel="noopener"><ExternalLink :size="16" /></a>
-        <button class="icon-btn" title="Modifier" @click="editing = s"><Pencil :size="16" /></button>
-        <button class="icon-btn danger" title="Révoquer" @click="files.revokeShare(s.token)"><Trash2 :size="16" /></button>
+        <a class="icon-btn" :title="t('common.open')" :href="s.url" target="_blank" rel="noopener"><ExternalLink :size="16" /></a>
+        <button class="icon-btn" :title="t('common.edit')" @click="editing = s"><Pencil :size="16" /></button>
+        <button class="icon-btn danger" :title="t('shares.revoke')" @click="files.revokeShare(s.token)"><Trash2 :size="16" /></button>
       </div>
     </div>
 
