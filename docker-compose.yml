@@ -24,14 +24,18 @@ services:
       # OD_CONF_System_Listen: ":5212"                # bind address (image default)
 
       # ---- [Database] ----
-      OD_CONF_Database_Type: "sqlite" # sqlite (only backend implemented so far)
+      # sqlite (default, zero-config) | postgres | mysql
+      OD_CONF_Database_Type: "sqlite"
       # OD_CONF_Database_DBFile: "/app/data/orion.db" # sqlite file path (image default)
-      # Network DB fields below are parsed but NOT yet used (SQLite only for now):
-      # OD_CONF_Database_Host: ""
-      # OD_CONF_Database_Port: ""
-      # OD_CONF_Database_User: ""
-      # OD_CONF_Database_Password: ""
+      # To use PostgreSQL: set Type=postgres, start with `--profile postgres`
+      # (brings up the `postgres` service below), and set the fields:
+      # OD_CONF_Database_Host: "postgres"
+      # OD_CONF_Database_Port: "5432"
+      # OD_CONF_Database_User: "orion"
+      # OD_CONF_Database_Password: "orion"
       # OD_CONF_Database_Name: "orion"
+      # OD_CONF_Database_SSLMode: "disable"        # postgres only
+      # For MySQL: Type=mysql, `--profile mysql`, Host=mysql, Port=3306.
 
       # ---- [OIDC] (SSO login; the only real auth — dev-login only exists in Mode=debug) ----
       # OD_CONF_OIDC_Issuer: "https://accounts.google.com"
@@ -67,8 +71,9 @@ services:
       # independent of the SSO login. Set to "false" to disable the endpoint.
       OD_CONF_WebDAV_Enable: "true"
 
-      # ---- [Redis] (parsed but NOT yet used — in-memory cache only for now) ----
-      # OD_CONF_Redis_Server: ""
+      # ---- [Redis] (shared cache; needed when running several nodes) ----
+      # Start with `--profile redis` to bring up the `redis` service below, then:
+      # OD_CONF_Redis_Server: "redis:6379"
       # OD_CONF_Redis_Password: ""
       # OD_CONF_Redis_DB: "0"
 
@@ -87,7 +92,47 @@ services:
       - onlyoffice-data:/var/www/onlyoffice/Data
       - onlyoffice-logs:/var/log/onlyoffice
 
+  # PostgreSQL — optional. Enable with `docker compose --profile postgres up`
+  # and point OrionDrive at it (see the [Database] env block above).
+  postgres:
+    image: postgres:16-alpine
+    container_name: orion-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: "orion"
+      POSTGRES_PASSWORD: "orion" # CHANGE this (must match OD_CONF_Database_Password)
+      POSTGRES_DB: "orion"
+    volumes:
+      - orion-postgres:/var/lib/postgresql/data
+
+  # MySQL — optional. Enable with `docker compose --profile mysql up`.
+  mysql:
+    image: mysql:8
+    container_name: orion-mysql
+    restart: unless-stopped
+    profiles: ["mysql"]
+    environment:
+      MYSQL_DATABASE: "orion"
+      MYSQL_USER: "orion"
+      MYSQL_PASSWORD: "orion" # CHANGE this (must match OD_CONF_Database_Password)
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - orion-mysql:/var/lib/mysql
+
+  # Redis — optional shared cache. Enable with `docker compose --profile redis up`.
+  redis:
+    image: redis:7-alpine
+    container_name: orion-redis
+    restart: unless-stopped
+    profiles: ["redis"]
+    volumes:
+      - orion-redis:/data
+
 volumes:
   orion-data:
   onlyoffice-data:
   onlyoffice-logs:
+  orion-postgres:
+  orion-mysql:
+  orion-redis:

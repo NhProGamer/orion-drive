@@ -22,16 +22,20 @@ AdminGroups =
 TrashRetentionDays = 30
 
 [Database]
-; sqlite | mysql | postgres | mssql
+; sqlite | postgres | mysql
 Type = sqlite
 ; For sqlite: path to the database file.
 DBFile = data/orion.db
-; For network databases:
+; For network databases (postgres/mysql). Port defaults to 5432 (postgres) or
+; 3306 (mysql) when empty.
 Host =
 Port =
 User =
 Password =
 Name = orion
+; PostgreSQL sslmode (disable | require | verify-ca | verify-full). Ignored by
+; sqlite/mysql. Default: disable.
+SSLMode = disable
 
 [OIDC]
 ; OpenID Connect provider (Google, Keycloak, Authentik, Azure AD, ...).
@@ -81,7 +85,9 @@ ServerURL =
 EditURLTemplate =
 
 [Redis]
-; Leave Server empty to use the in-memory cache.
+; Set Server (host:port) to back the cache (upload sessions, OIDC states, ...)
+; with Redis instead of in-process memory — required when running several
+; OrionDrive nodes so they share ephemeral state. Leave empty for in-memory.
 Server =
 Password =
 DB = 0

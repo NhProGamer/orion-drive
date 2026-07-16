@@ -28,14 +28,16 @@ Single binary serving an embedded Vue SPA with the "Nebula" design system. Imple
 - **Admin & organisation**: admin panel, groups with granular permissions and per-group storage
   policies, SSO group → group/admin mapping, scheduled maintenance (trash auto-purge, upload
   cleanup).
+- **Databases & cache**: SQLite (default), PostgreSQL or MySQL; optional Redis-backed shared cache
+  for multi-node deployments. Docker Compose ships all three behind opt-in profiles.
 
 Not yet done: metadata/full-text search, PWA/i18n, master↔slave cluster orchestration,
-Postgres/MySQL + Redis backends, SMTP/email notifications.
+SMTP/email notifications.
 
 ## Stack
 
-- **Backend**: Go 1.26, Gin, GORM (SQLite default, pure-Go / `CGO_ENABLED=0`), goose migrations,
-  cobra, coreos/go-oidc, `golang.org/x/net/webdav`
+- **Backend**: Go 1.26, Gin, GORM (SQLite / PostgreSQL / MySQL, all pure-Go / `CGO_ENABLED=0`),
+  goose migrations, cobra, coreos/go-oidc, `golang.org/x/net/webdav`, optional Redis cache
 - **Frontend**: Vue 3 + Vite + TypeScript + Pinia + vue-router, a custom "Nebula" CSS design system
   (oklch tokens, dark/light), lucide icons
 
