@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -10,12 +11,15 @@ import (
 	"github.com/NhProGamer/orion-drive/migrations"
 	"github.com/glebarez/sqlite"
 	"github.com/pressly/goose/v3"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// OpenDatabase opens the configured database. Only SQLite (pure-Go, no CGO) is
-// wired for Milestone 0; other engines return a clear error.
+// OpenDatabase opens the configured database. SQLite (pure-Go, no CGO) is the
+// default; PostgreSQL and MySQL are also supported. All three drivers are
+// CGO-free so the binary stays static.
 func OpenDatabase(cfg *conf.Config) (*gorm.DB, error) {
 	gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
 
@@ -27,25 +31,55 @@ func OpenDatabase(cfg *conf.Config) (*gorm.DB, error) {
 			}
 		}
 		return gorm.Open(sqlite.Open(cfg.Database.DBFile), gormCfg)
+	case "postgres":
+		return gorm.Open(postgres.Open(postgresDSN(cfg.Database)), gormCfg)
+	case "mysql":
+		return gorm.Open(mysql.Open(mysqlDSN(cfg.Database)), gormCfg)
 	default:
-		return nil, fmt.Errorf("database type %q is not supported yet", cfg.Database.Type)
+		return nil, fmt.Errorf("database type %q is not supported (use sqlite, postgres or mysql)", cfg.Database.Type)
 	}
+}
+
+// postgresDSN builds a key/value PostgreSQL DSN from the configured fields.
+func postgresDSN(d conf.Database) string {
+	host := firstNonEmpty(d.Host, "localhost")
+	port := firstNonEmpty(d.Port, "5432")
+	sslmode := firstNonEmpty(d.SSLMode, "disable")
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		host, port, d.User, d.Password, firstNonEmpty(d.Name, "orion"), sslmode)
+}
+
+// mysqlDSN builds a go-sql-driver/mysql DSN. parseTime is required so DATETIME
+// columns scan into time.Time; charset utf8mb4 matches the schema.
+func mysqlDSN(d conf.Database) string {
+	addr := net.JoinHostPort(firstNonEmpty(d.Host, "localhost"), firstNonEmpty(d.Port, "3306"))
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		d.User, d.Password, addr, firstNonEmpty(d.Name, "orion"))
+}
+
+func firstNonEmpty(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
 }
 
 // gooseDialect maps the configured database type to a goose dialect.
 func gooseDialect(dbType string) string {
 	switch dbType {
-	case "", "sqlite":
-		return "sqlite3"
-	case "mysql":
-		return "mysql"
 	case "postgres":
 		return "postgres"
-	case "mssql":
-		return "mssql"
+	case "mysql":
+		return "mysql"
 	default:
 		return "sqlite3"
 	}
+}
+
+// migrationsDir returns the embedded migration subdirectory for the configured
+// database, matching the goose dialect.
+func migrationsDir(cfg *conf.Config) string {
+	return migrations.Dir(gooseDialect(cfg.Database.Type))
 }
 
 // setupGoose points goose at the embedded migration files and selects the
@@ -66,7 +100,7 @@ func Migrate(db *gorm.DB, cfg *conf.Config) error {
 		return err
 	}
 	goose.SetLogger(goose.NopLogger())
-	return goose.Up(sqlDB, ".")
+	return goose.Up(sqlDB, migrationsDir(cfg))
 }
 
 // RunGoose executes a goose command (up, down, status, version, reset, ...)
@@ -79,5 +113,5 @@ func RunGoose(db *gorm.DB, cfg *conf.Config, command string, args ...string) err
 	if err := setupGoose(cfg); err != nil {
 		return err
 	}
-	return goose.RunContext(context.Background(), command, sqlDB, ".", args...)
+	return goose.RunContext(context.Background(), command, sqlDB, migrationsDir(cfg), args...)
 }

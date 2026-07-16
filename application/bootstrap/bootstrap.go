@@ -3,6 +3,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -48,7 +49,10 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		return nil, err
 	}
 
-	c := cache.NewMemory()
+	c, err := openCache(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
 	repo := repository.New(db)
 	tmpDir := filepath.Join(filepath.Dir(cfg.Database.DBFile), "tmp", "uploads")
 	var cipher *encrypt.Cipher
@@ -85,6 +89,20 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		WOPI:   wopi.NewToken(cfg.System.SessionSecret),
 	}
 	return dep, nil
+}
+
+// openCache returns the Redis-backed cache when a server is configured,
+// otherwise the in-process memory cache.
+func openCache(cfg *conf.Config, logger *slog.Logger) (cache.Store, error) {
+	if cfg.Redis.Server == "" {
+		return cache.NewMemory(), nil
+	}
+	c, err := cache.NewRedis(cfg.Redis.Server, cfg.Redis.Password, cfg.Redis.DB)
+	if err != nil {
+		return nil, fmt.Errorf("connect to redis at %s: %w", cfg.Redis.Server, err)
+	}
+	logger.Info("using redis cache", "server", cfg.Redis.Server, "db", cfg.Redis.DB)
+	return c, nil
 }
 
 func newLogger(cfg *conf.Config) *slog.Logger {

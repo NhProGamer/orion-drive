@@ -67,6 +67,9 @@ type Database struct {
 	User     string `ini:"User"`
 	Password string `ini:"Password"`
 	Name     string `ini:"Name"`
+	// SSLMode is the PostgreSQL sslmode (disable, require, verify-full, ...).
+	// Ignored by SQLite/MySQL. Defaults to "disable".
+	SSLMode string `ini:"SSLMode"`
 }
 
 // OIDC holds the OpenID Connect provider credentials.
@@ -133,7 +136,7 @@ func Default() *Config {
 			SiteURL:            "http://localhost:5212",
 			TrashRetentionDays: 30,
 		},
-		WebDAV: WebDAV{Enable: true},
+		WebDAV:   WebDAV{Enable: true},
 		Database: Database{Type: "sqlite", DBFile: "data/orion.db", Name: "orion"},
 		OIDC:     OIDC{Scopes: "openid profile email"},
 		Storage:  Storage{LocalBasePath: "data/storage"},
