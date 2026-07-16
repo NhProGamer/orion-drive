@@ -50,6 +50,10 @@ changelog:
       - "^chore:"
 
 # Publish releases to the self-hosted Gitea instance (needs GITEA_TOKEN).
+# The Forgejo Actions runner also injects a GITHUB_TOKEN into the environment,
+# so pin the publisher to Gitea to avoid goreleaser's "multiple tokens" error.
+force_token: gitea
+
 release:
   gitea:
     owner: nhpro
