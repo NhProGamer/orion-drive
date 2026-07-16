@@ -1249,7 +1249,12 @@ html[data-halo='off'] body::before {
   padding: 18px;
   background: var(--bg-1);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
+  border-radius: var(--r-lg);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.stat-card:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-md);
 }
 .stat-num {
   font-size: 24px;
@@ -1265,6 +1270,9 @@ html[data-halo='off'] body::before {
 .admin-table {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
 }
 .admin-table table {
   width: 100%;
@@ -1275,13 +1283,25 @@ html[data-halo='off'] body::before {
   text-align: left;
   color: var(--fg-2);
   font-weight: 500;
-  padding: 8px 10px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--border-subtle);
 }
 .admin-table td {
-  padding: 8px 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
+}
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.admin-table tbody tr {
+  transition: background var(--t-fast);
+}
+.admin-table tbody tr:hover {
+  background: var(--bg-2);
 }
 .admin-table select.input {
   height: 30px;
@@ -1315,16 +1335,21 @@ html[data-halo='off'] body::before {
 .shares {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 .share-card {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: 12px 14px;
+  padding: 14px 16px;
   background: var(--bg-1);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
+  border-radius: var(--r-lg);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.share-card:hover {
+  border-color: var(--border);
+  box-shadow: var(--shadow-md);
 }
 .share-card.inactive {
   opacity: 0.6;

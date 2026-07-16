@@ -202,8 +202,9 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
     </section>
 
     <!-- Groups -->
-    <section v-else-if="tab === 'groups'" class="admin-table">
+    <section v-else-if="tab === 'groups'">
       <div class="admin-actions"><button class="btn btn-primary" @click="newGroup"><Plus :size="15" />{{ t('admin.newGroup') }}</button></div>
+      <div class="admin-table">
       <table>
         <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('admin.colQuota') }}</th><th>{{ t('admin.colMaxSpeed') }}</th><th>{{ t('admin.colSharing') }}</th><th>{{ t('admin.colAdmin') }}</th><th>{{ t('admin.colSsoGroups') }}</th><th>{{ t('admin.colMembers') }}</th><th></th></tr></thead>
         <tbody>
@@ -222,11 +223,13 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
 
     <!-- Policies -->
-    <section v-else-if="tab === 'policies'" class="admin-table">
+    <section v-else-if="tab === 'policies'">
       <div class="admin-actions"><button class="btn btn-primary" @click="newPolicy"><Plus :size="15" />{{ t('admin.newPolicy') }}</button></div>
+      <div class="admin-table">
       <table>
         <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('admin.colType') }}</th><th>{{ t('admin.colServerBucket') }}</th><th>{{ t('admin.colBasePath') }}</th><th></th></tr></thead>
         <tbody>
@@ -239,6 +242,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
           </tr>
         </tbody>
       </table>
+      </div>
     </section>
   </div>
 

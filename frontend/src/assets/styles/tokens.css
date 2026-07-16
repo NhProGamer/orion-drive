@@ -26,6 +26,11 @@
   --r-xl: 16px;
   --r-full: 999px;
 
+  /* Semantic radius aliases used across the explorer, admin and shares views. */
+  --radius-sm: var(--r-sm);
+  --radius: var(--r-lg);
+  --radius-lg: var(--r-xl);
+
   --t-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
   --t-med: 220ms cubic-bezier(0.2, 0, 0, 1);
   --t-slow: 360ms cubic-bezier(0.2, 0, 0, 1);
