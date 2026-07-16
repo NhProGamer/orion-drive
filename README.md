@@ -16,6 +16,8 @@ Single binary serving an embedded Vue SPA with the "Nebula" design system. Imple
 
 - **Files**: local storage explorer — list, folders, resumable chunked upload, rename/move,
   trash & restore, download, per-group quota.
+- **Search**: recursive search across all folders with filters (type, category, starred, modified
+  date); results show each hit's location.
 - **Storage backends**: local, S3-compatible, and remote (slave node) drivers; direct/presigned
   downloads with per-group speed limiting.
 - **Advanced files**: versioning, locking, AES-256-CTR at-rest encryption, direct links.
@@ -33,8 +35,8 @@ Single binary serving an embedded Vue SPA with the "Nebula" design system. Imple
 - **Interface**: installable PWA (offline app shell, web manifest, service worker), dark/light Nebula
   themes, and full i18n (French & English, with a language switcher).
 
-Not yet done: metadata/full-text search, master↔slave cluster orchestration, SMTP/email
-notifications.
+Not yet done: EXIF/tag metadata & full-text content search, master↔slave cluster orchestration,
+SMTP/email notifications.
 
 ## Stack
 

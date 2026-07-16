@@ -2078,6 +2078,91 @@ html[data-halo='off'] body::before {
   margin: 0;
 }
 
+/* Search filter bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+}
+.filter-icon {
+  display: flex;
+  color: var(--fg-3);
+}
+.filter-group {
+  display: inline-flex;
+  gap: 4px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  color: var(--fg-1);
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.filter-chip:hover {
+  border-color: var(--border);
+  color: var(--fg-0);
+}
+.filter-chip.active {
+  background: var(--accent-bg);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  color: var(--accent-fg);
+}
+.filter-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-subtle);
+}
+.filter-select {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12.5px;
+}
+.filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.filter-clear:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+
+/* Location line shown on search-result cards */
+.card-loc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--s-3) var(--s-3);
+  font-size: 10.5px;
+  color: var(--fg-3);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-loc svg {
+  flex: none;
+}
+
 /* Hamburger + drawer backdrop (mobile only; hidden on wide layouts) */
 .topbar-burger {
   display: none;

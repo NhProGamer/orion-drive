@@ -87,12 +87,60 @@ func (r *FileRepo) ListTrashed(ctx context.Context, ownerID uint) ([]model.File,
 	return files, err
 }
 
-// Search returns non-trashed files whose name matches the query for the owner.
-func (r *FileRepo) Search(ctx context.Context, ownerID uint, query string) ([]model.File, error) {
+// SearchFilters narrows a search. All fields are optional; a zero value means
+// "no constraint". The name query is a case-insensitive substring match.
+type SearchFilters struct {
+	Query   string // substring of the file name
+	Type    string // "", "file" or "folder"
+	Starred bool   // only starred items
+	MinSize int64  // bytes; 0 = ignore
+	MaxSize int64  // bytes; 0 = ignore
+	After   *time.Time
+	Before  *time.Time
+}
+
+// Search returns non-trashed files owned by ownerID matching the filters,
+// across every folder (recursive). Category (kind) filtering is applied by the
+// caller since it depends on the file extension, not a column.
+func (r *FileRepo) Search(ctx context.Context, ownerID uint, f SearchFilters) ([]model.File, error) {
+	q := r.db.WithContext(ctx).Where("owner_id = ?", ownerID)
+	if f.Query != "" {
+		q = q.Where("name LIKE ?", "%"+f.Query+"%")
+	}
+	switch f.Type {
+	case "file":
+		q = q.Where("type = ?", model.FileTypeFile)
+	case "folder":
+		q = q.Where("type = ?", model.FileTypeFolder)
+	}
+	if f.Starred {
+		q = q.Where("starred = ?", true)
+	}
+	if f.MinSize > 0 {
+		q = q.Where("size >= ?", f.MinSize)
+	}
+	if f.MaxSize > 0 {
+		q = q.Where("size <= ?", f.MaxSize)
+	}
+	if f.After != nil {
+		q = q.Where("updated_at >= ?", *f.After)
+	}
+	if f.Before != nil {
+		q = q.Where("updated_at <= ?", *f.Before)
+	}
+	var files []model.File
+	err := q.Order("type desc, name asc").Find(&files).Error
+	return files, err
+}
+
+// AllFolders returns lightweight rows (id, name, parent) for every non-trashed
+// folder owned by ownerID — used to resolve the location path of search hits.
+func (r *FileRepo) AllFolders(ctx context.Context, ownerID uint) ([]model.File, error) {
 	var files []model.File
 	err := r.db.WithContext(ctx).
-		Where("owner_id = ? AND name LIKE ?", ownerID, "%"+query+"%").
-		Order("type desc, name asc").Find(&files).Error
+		Select("id", "name", "parent_id").
+		Where("owner_id = ? AND type = ?", ownerID, model.FileTypeFolder).
+		Find(&files).Error
 	return files, err
 }
 

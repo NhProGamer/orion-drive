@@ -324,5 +324,16 @@
     "uploadToRoot": "Uploading to the root of My Drive",
     "folderFailed": "Folder “{dir}” failed",
     "uploadFailed": "Failed to upload “{name}”"
+  },
+  "search": {
+    "filters": "Filters",
+    "typeAll": "All",
+    "starredOnly": "Starred",
+    "anyTime": "Any time",
+    "since1d": "Last 24 h",
+    "since7d": "Last 7 days",
+    "since30d": "Last 30 days",
+    "since365d": "Last year",
+    "clearFilters": "Clear filters"
   }
 }

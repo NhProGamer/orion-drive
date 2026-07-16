@@ -43,6 +43,10 @@ function onDrop() {
 const meta = computed(() => (props.node.type === 'folder' ? metaFor('folder') : metaFor(kindFromName(props.node.name))))
 const sizeLabel = computed(() => (props.node.type === 'folder' ? '—' : fmtSize(props.node.size)))
 const dateLabel = computed(() => fmtDate(props.node.modified))
+// In search results the owner column shows the item's location instead.
+const locLabel = computed(() =>
+  t('shell.myDrive') + (props.node.location ? ' / ' + props.node.location : ''),
+)
 </script>
 
 <template>
@@ -64,7 +68,7 @@ const dateLabel = computed(() => fmtDate(props.node.modified))
       <span class="name">{{ node.name }}</span>
       <span v-if="node.starred" class="star-mark"><Star :size="11" /></span>
     </div>
-    <span class="row-cell">{{ node.owner }}</span>
+    <span class="row-cell" :title="files.searching ? locLabel : node.owner">{{ files.searching ? locLabel : node.owner }}</span>
     <span class="row-cell mono">{{ dateLabel }}</span>
     <span class="row-cell mono">{{ sizeLabel }}</span>
     <button class="icon-btn" :title="t('common.actions')" @click.stop="$emit('menu', node, $event)">

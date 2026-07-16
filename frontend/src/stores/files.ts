@@ -21,6 +21,22 @@ interface Crumb {
   name: string
 }
 
+export type SearchType = '' | 'file' | 'folder'
+export type SearchKind = '' | 'images' | 'media' | 'documents' | 'archives'
+export type SearchSince = '' | '1d' | '7d' | '30d' | '365d'
+
+export interface SearchFilters {
+  type: SearchType
+  kind: SearchKind
+  starred: boolean
+  since: SearchSince
+}
+
+const emptyFilters = (): SearchFilters => ({ type: '', kind: '', starred: false, since: '' })
+
+// Map a "modified since" preset to an ISO timestamp cutoff.
+const SINCE_DAYS: Record<Exclude<SearchSince, ''>, number> = { '1d': 1, '7d': 7, '30d': 30, '365d': 365 }
+
 // Breadcrumb/view labels reuse the sidebar (shell.*) translations.
 const VIEW_LABEL_KEY: Record<View, string> = {
   drive: 'shell.myDrive',
@@ -36,6 +52,7 @@ export const useFilesStore = defineStore('files', {
     view: 'drive' as View,
     path: [] as Crumb[], // breadcrumb trail within the current view
     q: '',
+    filters: emptyFilters(), // active search filters (type/kind/starred/since)
     nodes: [] as FileNode[],
     loading: false,
     sel: [] as number[],
@@ -53,7 +70,10 @@ export const useFilesStore = defineStore('files', {
 
   getters: {
     viewLabel: (s) => t(VIEW_LABEL_KEY[s.view]),
-    searching: (s) => s.q.trim().length > 0,
+    hasFilters: (s) => !!(s.filters.type || s.filters.kind || s.filters.starred || s.filters.since),
+    searching(): boolean {
+      return this.q.trim().length > 0 || this.hasFilters
+    },
     readOnly: (s) => s.view === 'shares',
     dndEnabled: (s) => s.view === 'drive', // drag-to-move only in Mon Drive
     folderId: (s) => (s.path.length ? s.path[s.path.length - 1].id : null),
@@ -104,9 +124,18 @@ export const useFilesStore = defineStore('files', {
           this.shares = await api.listShares()
           return
         }
-        const params: { parent?: string; view?: string; q?: string } = {}
-        if (this.searching) params.q = this.q.trim()
-        else if (this.view === 'trash') params.view = 'trash'
+        const params: Record<string, string> = {}
+        if (this.searching) {
+          if (this.q.trim()) params.q = this.q.trim()
+          const f = this.filters
+          if (f.type) params.type = f.type
+          if (f.kind) params.kind = f.kind
+          if (f.starred) params.starred = '1'
+          if (f.since) {
+            const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
+            params.after = cutoff.toISOString()
+          }
+        } else if (this.view === 'trash') params.view = 'trash'
         else params.parent = this.currentParentParam
         this.nodes = await api.list(params)
       } finally {
@@ -135,6 +164,7 @@ export const useFilesStore = defineStore('files', {
       this.view = v
       this.path = []
       this.q = ''
+      this.filters = emptyFilters()
       this.previewId = null
       this.clearSel()
       this.load()
@@ -178,6 +208,25 @@ export const useFilesStore = defineStore('files', {
 
     setQuery(q: string) {
       this.q = q
+      this.clearSel()
+      this.load()
+    },
+
+    // Merge new search filter values and reload the results.
+    setFilters(patch: Partial<SearchFilters>) {
+      this.filters = { ...this.filters, ...patch }
+      this.clearSel()
+      this.load()
+    },
+    clearFilters() {
+      this.filters = emptyFilters()
+      this.clearSel()
+      this.load()
+    },
+    // Leave search entirely: clear the text query and every filter.
+    clearSearch() {
+      this.q = ''
+      this.filters = emptyFilters()
       this.clearSel()
       this.load()
     },

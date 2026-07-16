@@ -11,6 +11,7 @@ export interface FileNode {
   locked: boolean
   owner: string
   modified: string
+  location?: string // "/"-joined ancestor folder path, present on search results
 }
 
 export interface Version {
@@ -176,8 +177,22 @@ export const api = {
   me: () => get<Me>('/user/me'),
   capacity: () => get<Capacity>('/user/capacity'),
 
-  list: (params: { parent?: string; view?: string; q?: string; all?: string }) =>
-    get<FileNode[]>('/file', { params }),
+  list: (
+    params: {
+      parent?: string
+      view?: string
+      q?: string
+      all?: string
+      // search filters
+      type?: string
+      kind?: string
+      starred?: string
+      after?: string
+      before?: string
+      min_size?: string
+      max_size?: string
+    },
+  ) => get<FileNode[]>('/file', { params }),
   createFolder: (parent: string, name: string) =>
     post<FileNode>('/file/folder', { parent, name }),
   ensureFolderPath: (parent: string, path: string) =>

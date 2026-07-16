@@ -324,5 +324,16 @@
     "uploadToRoot": "Importation dans la racine de Mon Drive",
     "folderFailed": "Échec du dossier « {dir} »",
     "uploadFailed": "Échec de l'import de « {name} »"
+  },
+  "search": {
+    "filters": "Filtres",
+    "typeAll": "Tous",
+    "starredOnly": "Favoris",
+    "anyTime": "N'importe quand",
+    "since1d": "Dernières 24 h",
+    "since7d": "7 derniers jours",
+    "since30d": "30 derniers jours",
+    "since365d": "Dernière année",
+    "clearFilters": "Effacer les filtres"
   }
 }

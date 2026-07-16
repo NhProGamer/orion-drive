@@ -56,6 +56,9 @@ type fileDTO struct {
 	Locked   bool      `json:"locked"`
 	Owner    string    `json:"owner"`
 	Modified time.Time `json:"modified"`
+	// Location is the "/"-joined ancestor folder path, set only for search
+	// results (which span folders). Empty for items at the drive root.
+	Location string `json:"location,omitempty"`
 }
 
 func toDTO(f *model.File, owner string) fileDTO {

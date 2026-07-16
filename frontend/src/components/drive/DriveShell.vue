@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield, Menu,
-  Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
+  Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp,
 } from 'lucide-vue-next'
@@ -14,6 +14,7 @@ import type { FileNode } from '@/lib/api'
 import { fmtSize, isArchive, isOffice } from '@/lib/format'
 import { bannerFor } from '@/lib/branding'
 import LanguageMenu from '@/components/LanguageMenu.vue'
+import SearchFiltersBar from './SearchFiltersBar.vue'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -53,6 +54,8 @@ const webdavOpen = ref(false)
 const moveNodes = ref<FileNode[] | null>(null)
 // Off-canvas sidebar drawer (mobile only; ignored on wide layouts via CSS).
 const sidebarOpen = ref(false)
+// Search filter bar toggle (lets users filter without typing a query).
+const filtersOpen = ref(false)
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -390,6 +393,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <kbd>/</kbd>
         </label>
         <div class="topbar-right">
+          <button
+            class="icon-btn"
+            :class="{ active: filtersOpen || files.hasFilters }"
+            :title="t('search.filters')"
+            @click="filtersOpen = !filtersOpen"
+          >
+            <SlidersHorizontal :size="16" />
+          </button>
           <div class="segmented" role="group" :aria-label="t('shell.displayMode')">
             <button class="icon-btn" :class="{ active: ui.mode === 'grid' }" :title="t('shell.gridView')" @click="ui.setMode('grid')"><Grid3x3 :size="16" /></button>
             <button class="icon-btn" :class="{ active: ui.mode === 'list' }" :title="t('shell.listView')" @click="ui.setMode('list')"><List :size="16" /></button>
@@ -448,6 +459,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
               </button>
             </template>
           </div>
+
+          <!-- Search filters -->
+          <SearchFiltersBar v-if="(filtersOpen || files.searching) && files.view === 'drive'" />
 
           <!-- Storage view -->
           <StoragePanel v-if="files.view === 'storage'" :files="files.storageFiles" :total="files.quota.total" @open="files.previewId = $event.id" />

@@ -89,8 +89,23 @@ func (m *Manager) ListAllFiles(ctx context.Context, user *model.User) ([]model.F
 }
 
 // Search returns non-trashed files matching query.
-func (m *Manager) Search(ctx context.Context, user *model.User, query string) ([]model.File, error) {
-	return m.repo.File.Search(ctx, user.ID, query)
+func (m *Manager) Search(ctx context.Context, user *model.User, f repository.SearchFilters, kind string) ([]model.File, error) {
+	files, err := m.repo.File.Search(ctx, user.ID, f)
+	if err != nil {
+		return nil, err
+	}
+	// Category filtering depends on the extension, so it runs here rather than
+	// in SQL. A kind filter implies files (folders have no category).
+	if kind != "" {
+		out := files[:0]
+		for _, fl := range files {
+			if !fl.IsFolder() && matchesKind(fl.Name, kind) {
+				out = append(out, fl)
+			}
+		}
+		files = out
+	}
+	return files, nil
 }
 
 // CreateFolder creates a new folder under parentID.

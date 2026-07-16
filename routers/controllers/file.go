@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime"
@@ -9,8 +10,11 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
+	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,13 +25,34 @@ func (ctl *Controller) ListFiles(c *gin.Context) {
 	ctx := c.Request.Context()
 	owner := u.DisplayName()
 
-	if q := c.Query("q"); q != "" {
-		files, err := ctl.dep.Files.Search(ctx, u, q)
+	filters := repository.SearchFilters{
+		Query:   c.Query("q"),
+		Type:    c.Query("type"),
+		Starred: c.Query("starred") == "1",
+	}
+	if v, err := strconv.ParseInt(c.Query("min_size"), 10, 64); err == nil {
+		filters.MinSize = v
+	}
+	if v, err := strconv.ParseInt(c.Query("max_size"), 10, 64); err == nil {
+		filters.MaxSize = v
+	}
+	if t, err := time.Parse(time.RFC3339, c.Query("after")); err == nil {
+		filters.After = &t
+	}
+	if t, err := time.Parse(time.RFC3339, c.Query("before")); err == nil {
+		filters.Before = &t
+	}
+	kind := c.Query("kind")
+	// Enter search mode when a query or any filter is present.
+	if filters.Query != "" || filters.Type != "" || filters.Starred ||
+		filters.MinSize > 0 || filters.MaxSize > 0 || filters.After != nil ||
+		filters.Before != nil || kind != "" {
+		files, err := ctl.dep.Files.Search(ctx, u, filters, kind)
 		if err != nil {
 			fail(c, err)
 			return
 		}
-		respond(c, serializer.OK(toDTOs(files, owner)))
+		respond(c, serializer.OK(ctl.searchDTOs(ctx, u, files, owner)))
 		return
 	}
 
@@ -62,6 +87,39 @@ func (ctl *Controller) ListFiles(c *gin.Context) {
 		return
 	}
 	respond(c, serializer.OK(toDTOs(files, owner)))
+}
+
+// searchDTOs maps search results to DTOs, resolving each hit's location (the
+// "/"-joined ancestor folder path) so the UI can show where a match lives.
+func (ctl *Controller) searchDTOs(ctx context.Context, u *model.User, files []model.File, owner string) []fileDTO {
+	folders, _ := ctl.dep.Repo.File.AllFolders(ctx, u.ID)
+	type node struct {
+		name   string
+		parent *uint
+	}
+	byID := make(map[uint]node, len(folders))
+	for i := range folders {
+		byID[folders[i].ID] = node{folders[i].Name, folders[i].ParentID}
+	}
+	location := func(parent *uint) string {
+		var parts []string
+		for guard := 0; parent != nil && guard < 64; guard++ {
+			n, ok := byID[*parent]
+			if !ok {
+				break
+			}
+			parts = append([]string{n.name}, parts...)
+			parent = n.parent
+		}
+		return strings.Join(parts, "/")
+	}
+	out := make([]fileDTO, 0, len(files))
+	for i := range files {
+		d := toDTO(&files[i], owner)
+		d.Location = location(files[i].ParentID)
+		out = append(out, d)
+	}
+	return out
 }
 
 type createFolderReq struct {
