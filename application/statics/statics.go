@@ -5,6 +5,7 @@ package statics
 import (
 	"embed"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -18,6 +19,12 @@ import (
 //
 //go:embed all:dist
 var dist embed.FS
+
+func init() {
+	// Go's default MIME table has no entry for the PWA manifest extension, so it
+	// would be served as text/plain; register the correct type.
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
+}
 
 // Register mounts the SPA on the engine. Requests under /api are left untouched.
 func Register(r *gin.Engine) error {
