@@ -33,7 +33,8 @@
     "subtitle": "Sign in to access your storage space.",
     "sso": "Sign in with SSO",
     "dev": "Developer sign-in",
-    "noAuth": "No authentication method is configured."
+    "noAuth": "No authentication method is configured.",
+    "redirecting": "Redirecting to SSO sign-in…"
   },
   "admin": {
     "title": "Administration",
@@ -269,7 +270,8 @@
     "unstar": "Unfollow",
     "lock": "Lock",
     "unlock": "Unlock",
-    "moveToTrash": "Move to trash"
+    "moveToTrash": "Move to trash",
+    "logout": "Sign out"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

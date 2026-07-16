@@ -10,12 +10,21 @@ import LanguageMenu from '@/components/LanguageMenu.vue'
 const { t } = useI18n()
 const ui = useUiStore()
 const config = ref<{ oidc: boolean; dev: boolean }>({ oidc: true, dev: false })
+// While true we are bouncing straight to the IdP, so the login card is skipped.
+const redirecting = ref(false)
 
 onMounted(async () => {
   try {
     const { data } = await axios.get('/api/v1/auth/config')
     config.value = data.data
   } catch {}
+  // SSO is the only real login method: when it is the sole option, launch it
+  // immediately instead of showing an interstitial. In debug mode the dev-login
+  // shortcut coexists, so we keep the picker to let developers choose.
+  if (config.value.oidc && !config.value.dev) {
+    redirecting.value = true
+    loginOidc()
+  }
 })
 
 function loginOidc() {
@@ -28,6 +37,11 @@ function loginDev() {
 
 <template>
   <div class="login-screen">
+    <div v-if="redirecting" class="login-card">
+      <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
+      <p>{{ t('login.redirecting') }}</p>
+    </div>
+    <template v-else>
     <div style="position: fixed; top: 16px; right: 16px; display: flex; gap: 8px">
       <LanguageMenu />
       <button class="icon-btn" @click="ui.toggleTheme">
@@ -48,5 +62,6 @@ function loginDev() {
         {{ t('login.noAuth') }}
       </p>
     </div>
+    </template>
   </div>
 </template>

@@ -39,9 +39,17 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async logout() {
-      await api.logout()
+      let redirect = '/'
+      try {
+        const res = await api.logout()
+        // When the IdP supports RP-initiated logout, end the SSO session too;
+        // otherwise the auto-redirect login would silently sign us back in.
+        if (res?.logout_url) redirect = res.logout_url
+      } catch {
+        // Ignore — clear local state and leave regardless.
+      }
       this.me = null
-      window.location.href = '/'
+      window.location.href = redirect
     },
   },
 })

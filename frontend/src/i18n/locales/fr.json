@@ -33,7 +33,8 @@
     "subtitle": "Connecte-toi pour accéder à ton espace de stockage.",
     "sso": "Se connecter avec le SSO",
     "dev": "Connexion développeur",
-    "noAuth": "Aucune méthode d'authentification n'est configurée."
+    "noAuth": "Aucune méthode d'authentification n'est configurée.",
+    "redirecting": "Redirection vers la connexion SSO…"
   },
   "admin": {
     "title": "Administration",
@@ -269,7 +270,8 @@
     "unstar": "Ne plus suivre",
     "lock": "Verrouiller",
     "unlock": "Déverrouiller",
-    "moveToTrash": "Déplacer vers la corbeille"
+    "moveToTrash": "Déplacer vers la corbeille",
+    "logout": "Se déconnecter"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

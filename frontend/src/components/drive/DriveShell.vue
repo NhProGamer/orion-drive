@@ -5,7 +5,7 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield, Menu,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp,
+  Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -48,6 +48,7 @@ type Dialog =
 const dialog = ref<Dialog>(null)
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const newMenuOpen = ref(false)
+const accountMenuOpen = ref(false)
 const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
 const webdavOpen = ref(false)
@@ -82,6 +83,7 @@ function gotoView(v: View) {
 function closeMenus() {
   menu.value = null
   newMenuOpen.value = false
+  accountMenuOpen.value = false
 }
 // Close the mobile drawer (called from its in-drawer actions).
 function closeSidebar() {
@@ -313,7 +315,7 @@ function isTyping(e: KeyboardEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (dialog.value) dialog.value = null
-    else if (menu.value || newMenuOpen.value) closeMenus()
+    else if (menu.value || newMenuOpen.value || accountMenuOpen.value) closeMenus()
     else if (files.previewId) files.previewId = null
     else files.clearSel()
   } else if ((e.key === 'Delete' || e.key === 'Backspace') && files.sel.length && !isTyping(e)) {
@@ -410,9 +412,18 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <button class="icon-btn" :title="ui.theme === 'dark' ? t('shell.lightTheme') : t('shell.darkTheme')" @click="ui.toggleTheme">
             <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
           </button>
-          <div class="avatar" :title="auth.me?.nick">
-            <img v-if="auth.me?.avatar" :src="auth.me.avatar" alt="" />
-            <template v-else>{{ auth.initials }}</template>
+          <div class="account-wrap">
+            <button class="avatar" :title="auth.me?.nick" @click.stop="accountMenuOpen = !accountMenuOpen">
+              <img v-if="auth.me?.avatar" :src="auth.me.avatar" alt="" />
+              <template v-else>{{ auth.initials }}</template>
+            </button>
+            <div v-if="accountMenuOpen" class="menu account-menu" @click.stop>
+              <div class="account-id">
+                <span class="account-name">{{ auth.me?.nick }}</span>
+                <span class="account-email">{{ auth.me?.email }}</span>
+              </div>
+              <button class="menu-item" @click="auth.logout()"><LogOut :size="16" />{{ t('shell.logout') }}</button>
+            </div>
           </div>
         </div>
       </header>

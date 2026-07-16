@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/conf"
@@ -25,6 +27,8 @@ type Claims struct {
 	// Groups are the SSO groups/roles from the configured claim (used to map the
 	// user onto an OrionDrive group).
 	Groups []string `json:"-"`
+	// IDToken is the raw ID token, kept for use as id_token_hint on logout.
+	IDToken string `json:"-"`
 }
 
 // Authenticator wraps OIDC discovery, the OAuth2 config and the token verifier,
@@ -35,6 +39,7 @@ type Authenticator struct {
 	cache       cache.Store
 	enabled     bool
 	groupsClaim string
+	endSession  string
 }
 
 // NewAuthenticator performs provider discovery. If OIDC is not configured (no
@@ -58,13 +63,46 @@ func NewAuthenticator(ctx context.Context, cfg *conf.Config, c cache.Store) (*Au
 	if groupsClaim == "" {
 		groupsClaim = "groups"
 	}
+	// The end_session_endpoint is optional in discovery; when present it enables
+	// RP-initiated logout so signing out also ends the SSO session.
+	var meta struct {
+		EndSession string `json:"end_session_endpoint"`
+	}
+	_ = provider.Claims(&meta)
 	return &Authenticator{
 		oauth:       oauthCfg,
 		verifier:    provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
 		cache:       c,
 		enabled:     true,
 		groupsClaim: groupsClaim,
+		endSession:  meta.EndSession,
 	}, nil
+}
+
+// LogoutURL builds the provider's RP-initiated logout URL, sending the browser
+// back to postLogoutRedirect once the SSO session ends. It returns "" when the
+// provider advertises no end_session_endpoint, in which case the caller should
+// just clear the local session.
+func (a *Authenticator) LogoutURL(idToken, postLogoutRedirect string) string {
+	if !a.enabled || a.endSession == "" {
+		return ""
+	}
+	q := url.Values{}
+	if idToken != "" {
+		q.Set("id_token_hint", idToken)
+	}
+	if a.oauth != nil && a.oauth.ClientID != "" {
+		q.Set("client_id", a.oauth.ClientID)
+	}
+	if postLogoutRedirect != "" {
+		q.Set("post_logout_redirect_uri", postLogoutRedirect)
+	}
+	sep := "?"
+	if strings.Contains(a.endSession, "?") {
+		// The endpoint may already carry a query string.
+		sep = "&"
+	}
+	return a.endSession + sep + q.Encode()
 }
 
 // Enabled reports whether a provider is configured.
@@ -113,6 +151,7 @@ func (a *Authenticator) Exchange(ctx context.Context, state, code string) (*Clai
 	if err := idToken.Claims(&c); err != nil {
 		return nil, err
 	}
+	c.IDToken = rawID
 	if c.Subject == "" {
 		c.Subject = idToken.Subject
 	}

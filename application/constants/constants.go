@@ -14,3 +14,7 @@ const APIPrefix = "/api/v1"
 
 // SessionCookieName is the name of the session cookie.
 const SessionCookieName = "orion_session"
+
+// IDTokenCookieName holds the raw OIDC ID token, used as id_token_hint for
+// RP-initiated logout at the provider.
+const IDTokenCookieName = "orion_id_token"

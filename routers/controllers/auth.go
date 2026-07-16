@@ -42,6 +42,10 @@ func (ctl *Controller) OIDCCallback(c *gin.Context) {
 		return
 	}
 	ctl.issueSession(c, user)
+	// Keep the raw ID token so logout can end the SSO session (id_token_hint).
+	secure := c.Request.TLS != nil
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(constants.IDTokenCookieName, claims.IDToken, int(sessionTTL.Seconds()), "/", "", secure, true)
 	c.Redirect(http.StatusFound, "/")
 }
 
@@ -53,10 +57,23 @@ func (ctl *Controller) AuthConfig(c *gin.Context) {
 	}))
 }
 
-// Logout clears the session cookie.
+// Logout clears the session cookie and, when the provider supports it, returns
+// an RP-initiated logout URL so the browser can also end the SSO session.
 func (ctl *Controller) Logout(c *gin.Context) {
+	idToken, _ := c.Cookie(constants.IDTokenCookieName)
 	ctl.clearSession(c)
-	respond(c, serializer.OK(nil))
+	logoutURL := ctl.dep.Auth.LogoutURL(idToken, requestOrigin(c)+"/")
+	respond(c, serializer.OK(gin.H{"logout_url": logoutURL}))
+}
+
+// requestOrigin reconstructs the browser-facing origin (scheme://host) of the
+// current request, honouring a reverse proxy's forwarded scheme.
+func requestOrigin(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request.Host
 }
 
 // Me returns the authenticated user, or a 401.
@@ -183,4 +200,5 @@ func (ctl *Controller) issueSession(c *gin.Context, u *model.User) {
 
 func (ctl *Controller) clearSession(c *gin.Context) {
 	c.SetCookie(constants.SessionCookieName, "", -1, "/", "", false, true)
+	c.SetCookie(constants.IDTokenCookieName, "", -1, "/", "", false, true)
 }

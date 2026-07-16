@@ -279,7 +279,7 @@ export const api = {
     post<WebdavCreated>('/webdav/accounts', input),
   deleteWebdavAccount: (id: number) => http.delete(`/webdav/accounts/${id}`),
 
-  logout: () => post('/auth/logout'),
+  logout: () => post<{ logout_url: string }>('/auth/logout'),
 
   // Admin
   adminStats: () => get<AdminStats>('/admin/stats'),
