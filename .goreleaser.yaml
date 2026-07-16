@@ -1,5 +1,7 @@
 # GoReleaser — build tagged SemVer releases (https://goreleaser.com).
-# Usage: tag a version (git tag -a v0.6.0 -m ...) then `goreleaser release --clean`.
+# On a pushed tag the `.gitea/workflows/release.yaml` CI job runs
+# `goreleaser release --clean` (with GITEA_TOKEN) to publish the archives.
+# Locally you can dry-run the build with `goreleaser release --clean --skip=publish`.
 version: 2
 project_name: orion-drive
 

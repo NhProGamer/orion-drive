@@ -4,8 +4,8 @@ on:
   push:
     tags: ["v*"]
 
-# Binary releases are cut manually with git + fj (forgejo-cli); see README.
-# This workflow only builds and pushes the container image on a tag.
+# On a tag we (1) build & push the container image and (2) cut the binary
+# release — cross-platform archives + checksums — to Forgejo with GoReleaser.
 # Third-party actions use full github.com URLs because the Forgejo runner
 # resolves bare `owner/repo` against data.forgejo.org, which only mirrors actions/*.
 jobs:
@@ -29,3 +29,25 @@ jobs:
           tags: |
             git.nhsoul.fr/nhpro/orion-drive:${{ github.ref_name }}
             git.nhsoul.fr/nhpro/orion-drive:latest
+
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      # Full history + tags are needed for the changelog and version inference.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Node is needed by the GoReleaser `before` hook that builds the embedded SPA.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: https://github.com/goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          # A Forgejo access token with repository (contents) write scope.
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
