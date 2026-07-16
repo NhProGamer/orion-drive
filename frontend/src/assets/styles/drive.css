@@ -1262,6 +1262,10 @@ html[data-halo='off'] body::before {
 .admin-actions {
   margin-bottom: var(--s-3);
 }
+.admin-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .admin-table table {
   width: 100%;
   border-collapse: collapse;
@@ -2049,20 +2053,131 @@ html[data-halo='off'] body::before {
   margin: 0;
 }
 
+/* Hamburger + drawer backdrop (mobile only; hidden on wide layouts) */
+.topbar-burger {
+  display: none;
+  flex: none;
+}
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: color-mix(in oklab, var(--bg-inset) 70%, transparent);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--t-fast) both;
+}
+
 /* Responsive */
 @media (max-width: 860px) {
   .app {
     grid-template-columns: 1fr;
   }
+  /* Sidebar becomes an off-canvas drawer toggled by the topbar hamburger. */
+  .topbar-burger {
+    display: inline-flex;
+  }
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 300px);
+    z-index: 60;
+    background: color-mix(in oklab, var(--bg-1) 96%, transparent);
+    transform: translateX(-100%);
+    transition: transform var(--t-med);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .topbar {
+    gap: var(--s-2);
+    padding: 0 var(--s-3);
+  }
+  .searchbox {
+    height: 34px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .searchbox input {
+    min-width: 0;
+  }
+  .searchbox kbd {
     display: none;
   }
+  .topbar-right {
+    gap: var(--s-1);
+  }
+
+  .content {
+    padding: var(--s-4);
+    gap: var(--s-4);
+    --card-min: 148px;
+  }
+  .view-title {
+    font-size: 21px;
+  }
+
+  /* List view: drop the owner and modified columns on narrow screens. */
+  .list-head,
+  .list-row {
+    grid-template-columns: minmax(0, 1fr) 72px 32px;
+  }
+  .list-head > *:nth-child(2),
+  .list-head > *:nth-child(3),
+  .list-row > *:nth-child(2),
+  .list-row > *:nth-child(3) {
+    display: none;
+  }
+  .list-row .icon-btn {
+    opacity: 1;
+  }
+
+  /* Details panel slides in full-width over the content. */
   .preview {
     position: fixed;
+    left: 0;
     right: 0;
     top: var(--topbar-h);
     bottom: 0;
+    width: auto;
     z-index: 50;
     box-shadow: var(--shadow-lg);
+  }
+
+  .dialog {
+    max-width: 92vw;
+  }
+
+  /* Admin: compact padding; tables scroll horizontally, tabs stay swipeable. */
+  .admin {
+    padding: var(--s-4);
+  }
+  .admin-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .admin-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .admin-tab {
+    flex: none;
+  }
+  .admin-table table {
+    min-width: 560px;
+  }
+}
+
+@media (max-width: 520px) {
+  /* Reclaim room for search: the grid/list toggle is non-essential (grid is
+     the default) and the admin shortcut lives in the sidebar route too. */
+  .segmented {
+    display: none;
+  }
+  .content {
+    --card-min: 132px;
+    --thumb-h: 92px;
   }
 }

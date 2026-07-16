@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield,
+  Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield, Menu,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp,
@@ -51,6 +51,8 @@ const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
 const webdavOpen = ref(false)
 const moveNodes = ref<FileNode[] | null>(null)
+// Off-canvas sidebar drawer (mobile only; ignored on wide layouts via CSS).
+const sidebarOpen = ref(false)
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -70,12 +72,17 @@ function gotoView(v: View) {
   searchTerm.value = ''
   files.gotoView(v)
   closeMenus()
+  sidebarOpen.value = false
 }
 
 /* Menus */
 function closeMenus() {
   menu.value = null
   newMenuOpen.value = false
+}
+// Close the mobile drawer (called from its in-drawer actions).
+function closeSidebar() {
+  sidebarOpen.value = false
 }
 
 function onCtx(node: FileNode, ev: MouseEvent) {
@@ -191,6 +198,7 @@ function startRename() {
 }
 function openNewFolder() {
   closeMenus()
+  sidebarOpen.value = false
   dialog.value = { type: 'folder', value: t('shell.newFolder') }
   focusDialog()
 }
@@ -219,6 +227,7 @@ async function confirmDialog() {
 /* Upload */
 function triggerUpload() {
   closeMenus()
+  sidebarOpen.value = false
   fileInput.value?.click()
 }
 function onFileInput(e: Event) {
@@ -229,6 +238,7 @@ function onFileInput(e: Event) {
 }
 function triggerFolderUpload() {
   closeMenus()
+  sidebarOpen.value = false
   dirInput.value?.click()
 }
 function onDirInput(e: Event) {
@@ -333,8 +343,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     @dragleave.prevent="onDragLeave"
     @drop.prevent="onDrop"
   >
+    <!-- Mobile drawer backdrop -->
+    <div v-if="sidebarOpen" class="sidebar-backdrop" @click="closeSidebar"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="logo">
         <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
       </div>
@@ -356,7 +369,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         </button>
         <div class="nav-sep"></div>
         <button class="nav-item" :class="{ active: files.view === 'storage' }" @click="gotoView('storage')"><Database :size="18" />{{ t('shell.storage') }}</button>
-        <button class="nav-item" @click="webdavOpen = true"><Server :size="18" />{{ t('shell.webdavAccess') }}</button>
+        <button class="nav-item" @click="webdavOpen = true; closeSidebar()"><Server :size="18" />{{ t('shell.webdavAccess') }}</button>
       </nav>
       <div class="quota">
         <div class="quota-bar"><div class="quota-fill" :style="{ width: files.quotaPct + '%' }"></div></div>
@@ -368,6 +381,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <div class="main">
       <!-- Topbar -->
       <header class="topbar">
+        <button class="icon-btn topbar-burger" :aria-label="t('shell.mainNav')" @click.stop="sidebarOpen = !sidebarOpen">
+          <Menu :size="18" />
+        </button>
         <label class="searchbox">
           <Search :size="16" />
           <input ref="searchInput" v-model="searchTerm" type="search" :placeholder="t('shell.searchPlaceholder')" :aria-label="t('common.search')" />
