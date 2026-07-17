@@ -271,7 +271,9 @@
     "lock": "Verrouiller",
     "unlock": "Déverrouiller",
     "moveToTrash": "Déplacer vers la corbeille",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "details": "Détails",
+    "select": "Sélectionner"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

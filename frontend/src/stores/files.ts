@@ -57,6 +57,7 @@ export const useFilesStore = defineStore('files', {
     loading: false,
     sel: [] as number[],
     anchor: null as number | null, // last plain/ctrl click, for shift-range select
+    selectionMode: false, // touch multi-select mode (entered via long-press)
     previewId: null as number | null,
     overlayId: null as number | null, // full-screen content preview
     uploads: [] as Upload[],
@@ -266,6 +267,23 @@ export const useFilesStore = defineStore('files', {
       this.sel = []
       this.anchor = null
       this.previewId = null
+      this.selectionMode = false
+    },
+
+    // Touch: long-press enters selection mode and selects the pressed item.
+    enterSelection(node: FileNode) {
+      this.selectionMode = true
+      this.previewId = null
+      if (!this.sel.includes(node.id)) this.sel = [...this.sel, node.id]
+      this.anchor = node.id
+    },
+    // Touch: in selection mode a tap toggles the item; emptying the selection
+    // leaves the mode.
+    toggleSel(node: FileNode) {
+      const id = node.id
+      this.sel = this.sel.includes(id) ? this.sel.filter((x) => x !== id) : [...this.sel, id]
+      this.anchor = id
+      if (this.sel.length === 0) this.selectionMode = false
     },
 
     async revokeShare(token: string) {

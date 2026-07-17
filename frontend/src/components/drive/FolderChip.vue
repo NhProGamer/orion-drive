@@ -1,17 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Folder, Star } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import { Folder, Star, MoreVertical, Check } from 'lucide-vue-next'
 import type { FileNode } from '@/lib/api'
 import { useFilesStore } from '@/stores/files'
+import { useUiStore } from '@/stores/ui'
+import { useItemGestures } from '@/composables/useItemGestures'
 
+const { t } = useI18n()
 const props = defineProps<{ node: FileNode; selected: boolean }>()
-defineEmits<{
+const emit = defineEmits<{
   select: [node: FileNode, ev: MouseEvent]
   open: [node: FileNode]
   menu: [node: FileNode, ev: MouseEvent]
 }>()
 
 const files = useFilesStore()
+const ui = useUiStore()
+const gestures = useItemGestures({
+  onTap: () => (files.selectionMode ? files.toggleSel(props.node) : emit('open', props.node)),
+  onLongPress: () => files.enterSelection(props.node),
+})
 const isDropTarget = computed(() => files.dragOverId === props.node.id)
 
 function onDragStart(ev: DragEvent) {
@@ -39,19 +48,32 @@ function onDrop() {
 <template>
   <div
     class="folder-chip"
-    :class="{ selected, 'drop-target': isDropTarget }"
+    :class="{ selected, 'drop-target': isDropTarget, 'select-mode': files.selectionMode }"
     :draggable="files.dndEnabled"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
     @contextmenu.stop="$emit('menu', node, $event)"
+    @touchstart="gestures.onTouchStart"
+    @touchmove="gestures.onTouchMove"
+    @touchend="gestures.onTouchEnd"
+    @touchcancel="gestures.onTouchCancel"
     @dragstart="onDragStart"
     @dragend="files.endDrag()"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop.stop="onDrop"
   >
+    <span v-if="files.selectionMode" class="item-check" :class="{ on: selected }"><Check :size="13" /></span>
     <Folder :size="18" />
     <span class="name">{{ node.name }}</span>
     <span v-if="node.starred" class="star-mark"><Star :size="12" /></span>
+    <button
+      v-if="ui.coarse && !files.selectionMode"
+      class="chip-menu-btn"
+      :aria-label="t('common.actions')"
+      @click.stop="$emit('menu', node, $event)"
+    >
+      <MoreVertical :size="15" />
+    </button>
   </div>
 </template>

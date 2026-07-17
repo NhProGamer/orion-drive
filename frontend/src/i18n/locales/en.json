@@ -271,7 +271,9 @@
     "lock": "Lock",
     "unlock": "Unlock",
     "moveToTrash": "Move to trash",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "details": "Details",
+    "select": "Select"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

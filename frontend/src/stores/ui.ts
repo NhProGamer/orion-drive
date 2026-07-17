@@ -15,8 +15,16 @@ export const useUiStore = defineStore('ui', {
     theme: (document.documentElement.dataset.theme as 'dark' | 'light') || 'dark',
     mode: (localStorage.getItem('od-mode') as 'grid' | 'list') || 'grid',
     toasts: [] as Toast[],
+    // Touch device (coarse pointer): drives the mobile interaction model
+    // (tap-to-open, long-press selection, bottom-sheet menus).
+    coarse: window.matchMedia?.('(pointer: coarse)').matches ?? false,
   }),
   actions: {
+    // Track pointer changes for hybrid devices (e.g. tablet + keyboard).
+    watchPointer() {
+      const mq = window.matchMedia?.('(pointer: coarse)')
+      mq?.addEventListener('change', (e) => (this.coarse = e.matches))
+    },
     toggleTheme() {
       this.theme = this.theme === 'dark' ? 'light' : 'dark'
       document.documentElement.dataset.theme = this.theme

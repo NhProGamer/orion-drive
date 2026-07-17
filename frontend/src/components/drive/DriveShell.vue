@@ -5,7 +5,7 @@ import {
   Plus, FolderPlus, Upload, HardDrive, Trash2, Database, Shield, Menu,
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
-  Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut,
+  Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -132,6 +132,11 @@ function ctxItems(): MenuItem[] {
     if (n.type === 'folder') items.push({ id: 'open', label: t('common.open'), icon: Folder })
     else items.push({ id: 'preview', label: t('shell.preview'), icon: Eye })
     if (n.type === 'file') items.push({ id: 'download', label: t('common.download'), icon: Download })
+    // Touch has no hover/side-panel, so surface details and multi-select here.
+    if (ui.coarse) {
+      items.push({ id: 'details', label: t('shell.details'), icon: Info })
+      if (!files.selectionMode) items.push({ id: 'selectItem', label: t('shell.select'), icon: Check })
+    }
   } else {
     items.push({ id: 'download', label: t('common.download'), icon: Download })
   }
@@ -171,6 +176,8 @@ function menuAction(id: string) {
   switch (id) {
     case 'open': if (sel[0]) files.openFolder(sel[0]); break
     case 'preview': if (sel[0]) files.openNode(sel[0]); break
+    case 'details': if (sel[0]) files.previewId = sel[0].id; break
+    case 'selectItem': if (sel[0]) files.enterSelection(sel[0]); break
     case 'download': doDownload(sel); break
     case 'rename': startRename(); break
     case 'star': if (sel[0]) files.toggleStar(sel[0]); break
@@ -334,6 +341,7 @@ const dropTargetName = computed(() => {
 
 onMounted(() => {
   files.init()
+  ui.watchPointer()
   document.addEventListener('keydown', onKey)
 })
 onUnmounted(() => document.removeEventListener('keydown', onKey))
@@ -567,7 +575,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 
     <PreviewOverlay v-if="files.overlayNode" :node="files.overlayNode" @close="files.closeOverlay()" />
 
-    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" @action="menuAction" />
+    <ContextMenu v-if="menu" :x="menu.x" :y="menu.y" :items="menu.items" :sheet="ui.coarse" @action="menuAction" @close="menu = null" />
 
     <!-- Dialogs -->
     <div v-if="dialog" class="overlay" @click.self="dialog = null">

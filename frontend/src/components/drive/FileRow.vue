@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Star, MoreVertical } from 'lucide-vue-next'
+import { Star, MoreVertical, Check } from 'lucide-vue-next'
 import type { FileNode } from '@/lib/api'
 import { kindFromName, fmtSize, fmtDate } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
+import { useItemGestures } from '@/composables/useItemGestures'
 
 const { t } = useI18n()
 
 const props = defineProps<{ node: FileNode; selected: boolean }>()
-defineEmits<{
+const emit = defineEmits<{
   select: [node: FileNode, ev: MouseEvent]
   open: [node: FileNode]
   menu: [node: FileNode, ev: MouseEvent]
 }>()
 
 const files = useFilesStore()
+const gestures = useItemGestures({
+  onTap: () => (files.selectionMode ? files.toggleSel(props.node) : emit('open', props.node)),
+  onLongPress: () => files.enterSelection(props.node),
+})
 const isDropTarget = computed(() => files.dragOverId === props.node.id)
 
 function onDragStart(ev: DragEvent) {
@@ -52,11 +57,15 @@ const locLabel = computed(() =>
 <template>
   <div
     class="list-row"
-    :class="{ selected, 'drop-target': isDropTarget }"
+    :class="{ selected, 'drop-target': isDropTarget, 'select-mode': files.selectionMode }"
     :draggable="files.dndEnabled"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
     @contextmenu.stop="$emit('menu', node, $event)"
+    @touchstart="gestures.onTouchStart"
+    @touchmove="gestures.onTouchMove"
+    @touchend="gestures.onTouchEnd"
+    @touchcancel="gestures.onTouchCancel"
     @dragstart="onDragStart"
     @dragend="files.endDrag()"
     @dragover="onDragOver"
@@ -64,6 +73,7 @@ const locLabel = computed(() =>
     @drop.stop="onDrop"
   >
     <div class="row-name">
+      <span v-if="files.selectionMode" class="item-check" :class="{ on: selected }"><Check :size="13" /></span>
       <component :is="meta.icon" :size="16" :class="'tint-' + meta.tint" />
       <span class="name">{{ node.name }}</span>
       <span v-if="node.starred" class="star-mark"><Star :size="11" /></span>
@@ -71,7 +81,7 @@ const locLabel = computed(() =>
     <span class="row-cell" :title="files.searching ? locLabel : node.owner">{{ files.searching ? locLabel : node.owner }}</span>
     <span class="row-cell mono">{{ dateLabel }}</span>
     <span class="row-cell mono">{{ sizeLabel }}</span>
-    <button class="icon-btn" :title="t('common.actions')" @click.stop="$emit('menu', node, $event)">
+    <button v-if="!files.selectionMode" class="icon-btn" :title="t('common.actions')" @click.stop="$emit('menu', node, $event)">
       <MoreVertical :size="15" />
     </button>
   </div>

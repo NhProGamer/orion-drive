@@ -1,21 +1,28 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Star, FolderClosed } from 'lucide-vue-next'
+import { Star, FolderClosed, MoreVertical, Check } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { kindFromName, fmtSize, fmtDate, canThumbnail } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
+import { useUiStore } from '@/stores/ui'
+import { useItemGestures } from '@/composables/useItemGestures'
 
 const { t } = useI18n()
 const props = defineProps<{ node: FileNode; selected: boolean }>()
-defineEmits<{
+const emit = defineEmits<{
   select: [node: FileNode, ev: MouseEvent]
   open: [node: FileNode]
   menu: [node: FileNode, ev: MouseEvent]
 }>()
 
 const files = useFilesStore()
+const ui = useUiStore()
+const gestures = useItemGestures({
+  onTap: () => (files.selectionMode ? files.toggleSel(props.node) : emit('open', props.node)),
+  onLongPress: () => files.enterSelection(props.node),
+})
 const isDropTarget = computed(() => files.dragOverId === props.node.id)
 
 function onDragStart(ev: DragEvent) {
@@ -59,17 +66,30 @@ const locLabel = computed(() =>
 <template>
   <div
     class="card"
-    :class="{ selected, 'drop-target': isDropTarget }"
+    :class="{ selected, 'drop-target': isDropTarget, 'select-mode': files.selectionMode }"
     :draggable="files.dndEnabled"
     @click.stop="$emit('select', node, $event)"
     @dblclick="$emit('open', node)"
     @contextmenu.stop="$emit('menu', node, $event)"
+    @touchstart="gestures.onTouchStart"
+    @touchmove="gestures.onTouchMove"
+    @touchend="gestures.onTouchEnd"
+    @touchcancel="gestures.onTouchCancel"
     @dragstart="onDragStart"
     @dragend="files.endDrag()"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop.stop="onDrop"
   >
+    <span v-if="files.selectionMode" class="item-check" :class="{ on: selected }"><Check :size="13" /></span>
+    <button
+      v-else-if="ui.coarse"
+      class="card-menu-btn"
+      :aria-label="t('common.actions')"
+      @click.stop="$emit('menu', node, $event)"
+    >
+      <MoreVertical :size="16" />
+    </button>
     <div class="card-thumb">
       <img
         v-if="canThumb && !thumbFailed"

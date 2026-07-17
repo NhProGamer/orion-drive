@@ -524,6 +524,7 @@ html[data-halo='off'] body::before {
   gap: var(--s-3);
 }
 .folder-chip {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -533,6 +534,7 @@ html[data-halo='off'] body::before {
   border-radius: var(--r-md);
   cursor: pointer;
   user-select: none;
+  -webkit-touch-callout: none;
   transition: border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
   min-width: 0;
 }
@@ -567,6 +569,7 @@ html[data-halo='off'] body::before {
   gap: var(--s-3);
 }
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--bg-1);
@@ -574,6 +577,7 @@ html[data-halo='off'] body::before {
   border-radius: var(--r-lg);
   cursor: pointer;
   user-select: none;
+  -webkit-touch-callout: none;
   overflow: hidden;
   transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
 }
@@ -702,6 +706,7 @@ html[data-halo='off'] body::before {
   height: var(--row-h);
   cursor: pointer;
   user-select: none;
+  -webkit-touch-callout: none;
   border-bottom: 1px solid var(--border-subtle);
   transition: background var(--t-fast);
 }
@@ -2324,5 +2329,115 @@ html[data-halo='off'] body::before {
   .content {
     --card-min: 132px;
     --thumb-h: 92px;
+  }
+}
+
+/* ===== Touch interaction: selection checks, item menu buttons, bottom sheet ===== */
+
+/* Selection-mode check badge (cards, chips, rows) */
+.item-check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--border);
+  background: var(--bg-1);
+  color: transparent;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.item-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: oklch(0.18 0.03 295);
+}
+/* On cards the badge floats over the thumbnail, top-left. */
+.card .item-check {
+  position: absolute;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: 2;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Per-item ⋮ button surfaced on touch (grid cards and folder chips) */
+.card-menu-btn,
+.chip-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--fg-2);
+  cursor: pointer;
+  border-radius: var(--r-md);
+}
+.card-menu-btn {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  color: var(--fg-1);
+  background: color-mix(in oklch, var(--bg-0) 55%, transparent);
+  backdrop-filter: blur(4px);
+}
+.chip-menu-btn {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+}
+/* When a folder chip shows its ⋮, the star sits before it, not pushed right. */
+.folder-chip .chip-menu-btn ~ .star-mark,
+.folder-chip .star-mark:has(~ .chip-menu-btn) {
+  margin-left: auto;
+}
+
+/* Bottom sheet for the actions menu on touch */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: color-mix(in oklch, var(--bg-0) 55%, transparent);
+  animation: fade-in var(--t-fast) both;
+}
+.menu.menu-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  z-index: 71;
+  width: auto;
+  min-width: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: var(--s-2) var(--s-2) max(var(--s-3), env(safe-area-inset-bottom));
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-bottom: none;
+  animation: sheet-up var(--t-med) both;
+}
+.menu-sheet .menu-item {
+  padding: 13px var(--s-3);
+  font-size: 14px;
+}
+.sheet-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  margin: var(--s-1) auto var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--border);
+  flex: none;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }
