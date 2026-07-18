@@ -65,6 +65,13 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 	}
 	tasks := queue.New(4)
 	files := filemanager.NewManager(repo, c, tmpDir, cipher, tasks)
+	files.SetArchiveLimits(filemanager.ArchiveLimits{
+		MaxEntries:      cfg.Archive.MaxEntries,
+		MaxUncompressed: cfg.Archive.MaxSizeMB << 20,
+		MaxRatio:        cfg.Archive.MaxRatio,
+		RatioFloor:      cfg.Archive.RatioFloorMB << 20,
+		Timeout:         time.Duration(cfg.Archive.TimeoutSeconds) * time.Second,
+	})
 
 	// OIDC discovery is best-effort: if the provider is unreachable or
 	// unconfigured, the server still boots (login just stays unavailable).

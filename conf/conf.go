@@ -22,6 +22,18 @@ type Config struct {
 	WOPI     WOPI
 	WebDAV   WebDAV
 	Redis    Redis
+	Archive  Archive
+}
+
+// Archive tunes the safety limits applied when extracting archives (defence
+// against decompression bombs and quota abuse). A zero value uses the built-in
+// default. Sizes are in mebibytes for readability.
+type Archive struct {
+	MaxEntries     int   `ini:"MaxEntries"`     // max members per archive
+	MaxSizeMB      int64 `ini:"MaxSizeMB"`      // ceiling when the user quota is unlimited
+	MaxRatio       int64 `ini:"MaxRatio"`       // max uncompressed:compressed ratio
+	RatioFloorMB   int64 `ini:"RatioFloorMB"`   // ratio is only enforced above this size
+	TimeoutSeconds int   `ini:"TimeoutSeconds"` // per-extraction wall-clock cap
 }
 
 // System holds server-wide settings.

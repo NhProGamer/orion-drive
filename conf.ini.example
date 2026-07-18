@@ -94,6 +94,23 @@ DiscoveryURL =
 EditURLTemplate =
 VerifyProof = false
 
+[Archive]
+; Safety limits when extracting archives, guarding against decompression bombs
+; and quota abuse. Any value left at 0 uses the built-in default.
+; MaxEntries     : max members an archive may unpack to (default 100000).
+; MaxSizeMB      : ceiling on total uncompressed output when the user's quota is
+;                  unlimited (default 51200 = 50 GiB).
+; MaxRatio       : max uncompressed:compressed ratio; above it the archive is a
+;                  decompression bomb (default 1000). Only enforced above
+;                  RatioFloorMB, so small highly-compressible files still extract.
+; RatioFloorMB   : size below which the ratio is not enforced (default 1024 = 1 GiB).
+; TimeoutSeconds : per-extraction wall-clock cap (default 300).
+MaxEntries = 0
+MaxSizeMB = 0
+MaxRatio = 0
+RatioFloorMB = 0
+TimeoutSeconds = 0
+
 [Redis]
 ; Set Server (host:port) to back the cache (upload sessions, OIDC states, ...)
 ; with Redis instead of in-process memory — required when running several

@@ -33,18 +33,25 @@ var (
 
 // Manager coordinates logical files (repository) and physical storage (driver).
 type Manager struct {
-	repo   *repository.Repository
-	cache  cache.Store
-	tmpDir string
-	cipher *encrypt.Cipher // nil when at-rest encryption is not configured
-	queue  *queue.Queue
+	repo    *repository.Repository
+	cache   cache.Store
+	tmpDir  string
+	cipher  *encrypt.Cipher // nil when at-rest encryption is not configured
+	queue   *queue.Queue
+	archive ArchiveLimits // extraction safety limits (with defaults applied)
 }
 
 // NewManager builds a Manager. tmpDir is where in-progress uploads are staged;
 // cipher, when non-nil, encrypts objects for policies that request it; queue
 // runs background archive jobs.
 func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, cipher *encrypt.Cipher, q *queue.Queue) *Manager {
-	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q}
+	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q, archive: ArchiveLimits{}.withDefaults()}
+}
+
+// SetArchiveLimits overrides the extraction safety limits; zero fields keep
+// their default. Called at startup from configuration.
+func (m *Manager) SetArchiveLimits(l ArchiveLimits) {
+	m.archive = l.withDefaults()
 }
 
 // policySettings is the typed view of StoragePolicy.Settings used here.

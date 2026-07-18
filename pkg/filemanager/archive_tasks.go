@@ -6,14 +6,90 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/archive"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
 )
+
+// ArchiveLimits are the safety limits applied when extracting archives (defence
+// against decompression bombs and quota abuse). Zero fields fall back to the
+// defaults below.
+type ArchiveLimits struct {
+	// MaxEntries caps how many members an archive may unpack to, guarding against
+	// archives with millions of tiny entries.
+	MaxEntries int
+	// MaxUncompressed bounds an extraction when the user has no storage quota, so
+	// a decompression bomb still cannot fill the disk.
+	MaxUncompressed int64
+	// MaxRatio rejects an archive whose uncompressed size exceeds this many times
+	// its compressed size — an egregious decompression bomb — but only above
+	// RatioFloor, so ordinary highly-compressible files are not flagged.
+	MaxRatio int64
+	RatioFloor int64
+	// Timeout caps how long an extraction may run, bounding CPU on a bomb that is
+	// cheap to read but expensive to decompress (e.g. a gzip bomb).
+	Timeout time.Duration
+}
+
+// Default archive-limit values, used for any field left zero.
+const (
+	defArchiveMaxEntries      = 100_000
+	defArchiveMaxUncompressed = int64(50 << 30) // 50 GiB
+	defArchiveMaxRatio        = int64(1000)
+	defArchiveRatioFloor      = int64(1 << 30) // 1 GiB
+	defArchiveTimeout         = 5 * time.Minute
+)
+
+// withDefaults returns the limits with any zero field replaced by its default.
+func (l ArchiveLimits) withDefaults() ArchiveLimits {
+	if l.MaxEntries <= 0 {
+		l.MaxEntries = defArchiveMaxEntries
+	}
+	if l.MaxUncompressed <= 0 {
+		l.MaxUncompressed = defArchiveMaxUncompressed
+	}
+	if l.MaxRatio <= 0 {
+		l.MaxRatio = defArchiveMaxRatio
+	}
+	if l.RatioFloor <= 0 {
+		l.RatioFloor = defArchiveRatioFloor
+	}
+	if l.Timeout <= 0 {
+		l.Timeout = defArchiveTimeout
+	}
+	return l
+}
+
+// ErrArchiveTooLarge is returned when extracting an archive would exceed the
+// user's storage quota, hit the unlimited-quota safety cap, or when an entry's
+// decompressed stream runs past its declared size (a zip bomb).
+var ErrArchiveTooLarge = errors.New("archive is too large to extract (quota exceeded or decompression bomb)")
+
+// ErrTooManyFiles is returned when an archive holds more entries than allowed.
+var ErrTooManyFiles = errors.New("archive has too many entries to extract")
+
+// boundedReader fails once more than max bytes have been read, so a lying entry
+// header whose decompressed stream keeps producing data cannot overrun.
+type boundedReader struct {
+	r   io.Reader
+	n   int64
+	max int64
+}
+
+func (b *boundedReader) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	b.n += int64(n)
+	if b.n > b.max {
+		return n, ErrArchiveTooLarge
+	}
+	return n, err
+}
 
 // Compress schedules a background job that zips the given files/folders and
 // stores the archive as a new file under parentID.
@@ -31,7 +107,13 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		return nil, err
 	}
 
+	lim := m.archive
 	job := m.queue.Enqueue(user.ID, "compress", func(ctx context.Context, report queue.Report) (map[string]any, error) {
+		// Bound compression time too: zipping a very large tree should not run
+		// unbounded.
+		ctx, cancel := context.WithTimeout(ctx, lim.Timeout)
+		defer cancel()
+
 		report(10, "Création de l’archive")
 		tmp, err := os.CreateTemp(m.tmpDir, "compress-*.zip")
 		if err != nil {
@@ -52,7 +134,19 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		}
 
 		report(70, "Enregistrement")
-		f, err := m.ingestContent(ctx, user, parentID, name, tmp, size)
+		// The produced archive counts against the user's quota like any upload.
+		used, total, err := m.Capacity(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		budget := lim.MaxUncompressed
+		if total > 0 {
+			budget = total - used
+		}
+		if budget < 0 {
+			budget = 0
+		}
+		f, _, err := m.ingestContent(ctx, user, parentID, name, tmp, size, budget)
 		if err != nil {
 			return nil, err
 		}
@@ -74,7 +168,13 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		return nil, err
 	}
 
+	lim := m.archive
 	job := m.queue.Enqueue(user.ID, "extract", func(ctx context.Context, report queue.Report) (map[string]any, error) {
+		// Cap total extraction time: a gzip bomb is cheap to read but expensive to
+		// decompress, so bound CPU/wall-clock regardless of size checks.
+		ctx, cancel := context.WithTimeout(ctx, lim.Timeout)
+		defer cancel()
+
 		report(10, "Lecture de l’archive")
 		tmpPath, err := m.bufferContent(ctx, f)
 		if err != nil {
@@ -83,8 +183,72 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		defer os.Remove(tmpPath)
 
 		report(30, "Extraction")
+		// Budget the extraction against the user's remaining quota, then tighten it
+		// with the compression-ratio cap: total uncompressed may not exceed MaxRatio
+		// times the compressed archive, but never less than RatioFloor so ordinary
+		// small, highly-compressible archives still extract. Folding the ratio into
+		// the byte budget means it applies to TAR too (which has no central
+		// directory to pre-flight), closing that gap.
+		used, total, err := m.Capacity(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		budget := lim.MaxUncompressed
+		if total > 0 {
+			budget = total - used
+		}
+		if budget < 0 {
+			budget = 0
+		}
+		if f.Size > 0 {
+			ratioCap := lim.RatioFloor
+			if f.Size <= math.MaxInt64/lim.MaxRatio {
+				if rc := f.Size * lim.MaxRatio; rc > ratioCap {
+					ratioCap = rc
+				}
+			} else {
+				ratioCap = lim.MaxUncompressed
+			}
+			if ratioCap < budget {
+				budget = ratioCap
+			}
+		}
+
+		// Pre-flight for central-directory formats (ZIP, 7z), whose entry sizes are
+		// read cheaply: sum the declared uncompressed sizes and reject the whole job
+		// up front if it would not fit — so no partial tree is written. TAR has no
+		// central directory, so it relies on the per-entry streaming bounds below.
+		if fm := archive.Format(f.Name); fm == archive.FormatZip || fm == archive.Format7z {
+			entries, err := archive.List(tmpPath)
+			if err != nil {
+				return nil, err
+			}
+			if len(entries) > lim.MaxEntries {
+				return nil, ErrTooManyFiles
+			}
+			var declared int64
+			for _, e := range entries {
+				if e.IsDir || e.Size <= 0 {
+					continue
+				}
+				declared += e.Size
+				if declared < 0 || declared > budget { // overflow or over budget
+					return nil, ErrArchiveTooLarge
+				}
+			}
+		}
+
+		// Track what we create so a failure mid-extraction (timeout, a lying header,
+		// or a TAR that overruns) leaves no partial tree: everything is purged.
+		var created []uint
 		count := 0
 		err = archive.Extract(tmpPath, func(e archive.Entry, open func() (io.ReadCloser, error)) error {
+			if err := ctx.Err(); err != nil {
+				return err // extraction timed out
+			}
+			if count >= lim.MaxEntries {
+				return ErrTooManyFiles
+			}
 			clean := strings.Trim(path.Clean("/"+e.Name), "/")
 			if clean == "" {
 				return nil
@@ -107,14 +271,22 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 				return err
 			}
 			defer rc.Close()
-			if _, err := m.ingestContent(ctx, user, parent, base, rc, e.Size); err != nil {
+			file, written, err := m.ingestContent(ctx, user, parent, base, rc, e.Size, budget)
+			if err != nil {
 				return err
 			}
+			created = append(created, file.ID)
+			budget -= written
 			count++
 			report(-1, fmt.Sprintf("%d fichier(s) extrait(s)", count))
 			return nil
 		})
 		if err != nil {
+			// Roll back partial output: purge removes the physical objects, the
+			// rows, and restores the quota counter (best-effort).
+			if len(created) > 0 {
+				_ = m.Purge(context.WithoutCancel(ctx), user, created)
+			}
 			return nil, err
 		}
 		return map[string]any{"count": count}, nil
@@ -164,32 +336,53 @@ func (m *Manager) bufferContent(ctx context.Context, f *model.File) (string, err
 }
 
 // ingestContent stores r as a new file named uniquely under parentID, encrypting
-// at rest when the policy requires it, and updates the user's used storage.
-func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID *uint, name string, r io.Reader, size int64) (*model.File, error) {
+// at rest when the policy requires it, and updates the user's used storage. The
+// extraction is bounded by budget (remaining quota): a declared size over budget
+// is rejected up front, and the decompressed stream is capped so a lying header
+// (zip bomb) cannot overrun. It returns the number of bytes counted against the
+// quota.
+func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID *uint, name string, r io.Reader, size, budget int64) (*model.File, int64, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	if size < 0 {
+		size = 0
+	}
+	// Reject before reading a single byte when the declared size already exceeds
+	// what is left (honest-huge or overlapping-header bombs).
+	if size > budget {
+		return nil, 0, ErrArchiveTooLarge
+	}
+	// Cap the actual decompressed stream at the declared size when known, else at
+	// the remaining budget, so a stream that keeps expanding past its header is
+	// aborted rather than written to disk.
+	limit := size
+	if limit == 0 {
+		limit = budget
+	}
+	r = &boundedReader{r: r, max: limit}
+
 	policy, err := m.policyForUser(ctx, user)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	h, err := m.driverForPolicy(policy)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var props model.JSON
 	if m.policyEncrypts(policy) {
 		if m.cipher == nil {
-			return nil, errors.New("policy requests encryption but no encryption key is configured")
+			return nil, 0, errors.New("policy requests encryption but no encryption key is configured")
 		}
 		if !h.Capabilities().LocalServe {
-			return nil, errors.New("encryption is only supported on local-serve storage policies")
+			return nil, 0, errors.New("encryption is only supported on local-serve storage policies")
 		}
 		enc, iv, err := m.cipher.EncryptReader(r)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		r = enc
 		props = model.MustJSON(model.EntityProps{IV: base64.StdEncoding.EncodeToString(iv)})
@@ -197,7 +390,7 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 
 	source := newSourcePath(user.ID, name)
 	if err := h.Put(ctx, source, r, size); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	entity := &model.Entity{
@@ -210,7 +403,7 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		Props:           props,
 	}
 	if err := m.repo.Entity.Create(ctx, entity); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	file := &model.File{
@@ -223,16 +416,16 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		StoragePolicyID: policy.ID,
 	}
 	if err := m.repo.File.Create(ctx, file); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	entity.FileID = &file.ID
 	if err := m.repo.Entity.Update(ctx, entity); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	user.StorageUsed += size
 	_ = m.repo.User.Update(ctx, user)
-	return file, nil
+	return file, size, nil
 }
 
 // mkdirs resolves (creating as needed) a slash-separated directory path under
