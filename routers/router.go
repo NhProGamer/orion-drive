@@ -203,4 +203,15 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	api.GET("/share/:token/list", ctl.ShareList)
 	api.GET("/share/:token/content", ctl.ShareDownload)
 	api.GET("/share/:token/archive", ctl.ShareArchive)
+
+	// Public: write into a write/deposit share (no authentication). Each handler
+	// enforces the share's permission, password/expiry and subtree confinement.
+	api.POST("/share/:token/folder", ctl.ShareCreateFolder)
+	api.POST("/share/:token/upload", ctl.ShareInitUpload)
+	api.POST("/share/:token/upload/:sid/chunk", ctl.SharePutChunk)
+	api.POST("/share/:token/upload/:sid/complete", ctl.ShareCompleteUpload)
+	api.DELETE("/share/:token/upload/:sid", ctl.ShareCancelUpload)
+	api.POST("/share/:token/rename", ctl.ShareRename)
+	api.POST("/share/:token/move", ctl.ShareMove)
+	api.POST("/share/:token/delete", ctl.ShareDelete)
 }

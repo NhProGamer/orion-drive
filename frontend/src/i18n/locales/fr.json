@@ -163,7 +163,14 @@
     "createLink": "Créer le lien",
     "created": "Lien de partage créé. Toute personne disposant de ce lien peut accéder au fichier.",
     "done": "Terminé",
-    "createError": "Échec de la création du lien"
+    "createError": "Échec de la création du lien",
+    "permLabel": "Accès",
+    "permRead": "Consultation",
+    "permReadHint": "Voir et télécharger",
+    "permWrite": "Édition",
+    "permWriteHint": "Voir, envoyer, modifier et supprimer",
+    "permDeposit": "Dépôt",
+    "permDepositHint": "Envoi uniquement, sans voir le contenu"
   },
   "shareEdit": {
     "title": "Modifier le partage « {name} »",
@@ -193,7 +200,16 @@
     "downloadLimitReached": "La limite de téléchargements est atteinte.",
     "password": "Mot de passe",
     "required": "Requis",
-    "openFolder": "Ouvrir le dossier"
+    "openFolder": "Ouvrir le dossier",
+    "depositInto": "Déposez des fichiers pour {owner}",
+    "yourName": "Votre nom (optionnel)",
+    "yourNamePlaceholder": "Anonyme",
+    "dropHere": "Glissez des fichiers ici ou cliquez pour parcourir",
+    "newFolder": "Nouveau dossier",
+    "importFiles": "Envoyer des fichiers",
+    "newFolderPrompt": "Nom du dossier",
+    "renamePrompt": "Nouveau nom",
+    "deleteConfirm": "Supprimer « {name} » ?"
   },
   "shares": {
     "linkToast": "Lien : {url}",

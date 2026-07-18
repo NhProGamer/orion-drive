@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Link2, Copy, Check, ExternalLink } from 'lucide-vue-next'
-import type { FileNode } from '@/lib/api'
+import type { FileNode, SharePermission } from '@/lib/api'
 import { api } from '@/lib/api'
 import { useUiStore } from '@/stores/ui'
 
@@ -12,6 +12,8 @@ const props = defineProps<{ node: FileNode }>()
 const emit = defineEmits<{ close: [] }>()
 
 const ui = useUiStore()
+const isFolder = props.node.type === 'folder'
+const permission = ref<SharePermission>('read')
 const password = ref('')
 const expiresDays = ref<number | ''>('')
 const maxDownloads = ref<number | ''>('')
@@ -19,11 +21,19 @@ const loading = ref(false)
 const result = ref<{ url: string } | null>(null)
 const copied = ref(false)
 
+// Write/deposit only apply to folders; a file share is always read-only.
+const permOptions: { value: SharePermission; label: string; hint: string }[] = [
+  { value: 'read', label: t('shareDialog.permRead'), hint: t('shareDialog.permReadHint') },
+  { value: 'write', label: t('shareDialog.permWrite'), hint: t('shareDialog.permWriteHint') },
+  { value: 'deposit', label: t('shareDialog.permDeposit'), hint: t('shareDialog.permDepositHint') },
+]
+
 async function create() {
   loading.value = true
   try {
     result.value = await api.createShare({
       file_id: props.node.id,
+      permission: isFolder ? permission.value : 'read',
       password: password.value || undefined,
       expires_days: expiresDays.value ? Number(expiresDays.value) : undefined,
       max_downloads: maxDownloads.value ? Number(maxDownloads.value) : undefined,
@@ -52,6 +62,22 @@ async function copy() {
 
       <template v-if="!result">
         <div style="display: flex; flex-direction: column; gap: 12px">
+          <div v-if="isFolder" style="display: flex; flex-direction: column; gap: 6px">
+            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
+            <div class="seg">
+              <button
+                v-for="o in permOptions"
+                :key="o.value"
+                type="button"
+                class="seg-btn"
+                :class="{ active: permission === o.value }"
+                @click="permission = o.value"
+              >
+                {{ o.label }}
+              </button>
+            </div>
+            <span style="font-size: 12px; color: var(--fg-2)">{{ permOptions.find((o) => o.value === permission)?.hint }}</span>
+          </div>
           <label style="display: flex; flex-direction: column; gap: 4px">
             <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.passwordLabel') }}</span>
             <input v-model="password" class="input" type="text" :placeholder="t('shareDialog.passwordPlaceholder')" />

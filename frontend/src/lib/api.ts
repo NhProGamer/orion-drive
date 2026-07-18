@@ -247,17 +247,54 @@ export const api = {
   cancelUpload: (sid: string) => http.delete(`/upload/${sid}`),
 
   // Sharing
-  createShare: (input: { file_id: number; password?: string; expires_days?: number; max_downloads?: number }) =>
-    post<{ token: string; url: string }>('/share', input),
+  createShare: (input: {
+    file_id: number
+    permission?: SharePermission
+    password?: string
+    expires_days?: number
+    max_downloads?: number
+  }) => post<{ token: string; url: string }>('/share', input),
   listShares: () => get<ShareInfo[]>('/share'),
   updateShare: (
     token: string,
-    input: { password?: string; expires_days?: number; max_downloads?: number },
+    input: {
+      permission?: SharePermission
+      password?: string
+      expires_days?: number
+      max_downloads?: number
+    },
   ) => http.patch(`/share/${token}`, input),
   deleteShare: (token: string) => http.delete(`/share/${token}`),
   shareView: (token: string) => get<ShareView>(`/share/${token}`),
   shareList: (token: string, path: string, password?: string) =>
     get<{ name: string; entries: ShareEntry[] }>(`/share/${token}/list`, { params: { path, password } }),
+
+  // Sharing — anonymous write (write/deposit shares)
+  shareCreateFolder: (token: string, path: string, name: string, password?: string) =>
+    post(`/share/${token}/folder`, { path, name, password }),
+  shareInitUpload: (
+    token: string,
+    input: { path: string; name: string; size: number; contributor?: string; password?: string },
+  ) => post<{ session_id: string; chunk_size: number; num_chunks: number }>(`/share/${token}/upload`, input),
+  shareChunk: (
+    token: string,
+    sid: string,
+    index: number,
+    chunk: Blob,
+    onProgress?: (sent: number) => void,
+  ) =>
+    http.post(`/share/${token}/upload/${sid}/chunk`, chunk, {
+      headers: { 'X-Chunk-Index': String(index), 'Content-Type': 'application/octet-stream' },
+      onUploadProgress: onProgress ? (e) => onProgress(e.loaded ?? 0) : undefined,
+    }),
+  shareComplete: (token: string, sid: string) => post(`/share/${token}/upload/${sid}/complete`),
+  shareCancelUpload: (token: string, sid: string) => http.delete(`/share/${token}/upload/${sid}`),
+  shareRename: (token: string, path: string, name: string, password?: string) =>
+    post(`/share/${token}/rename`, { path, name, password }),
+  shareMove: (token: string, path: string, dest: string, password?: string) =>
+    post(`/share/${token}/move`, { path, dest, password }),
+  shareDeleteItem: (token: string, path: string, password?: string) =>
+    post(`/share/${token}/delete`, { path, password }),
   shareContentUrl: (token: string, path?: string, password?: string) => {
     const q = new URLSearchParams()
     if (path) q.set('path', path)
@@ -296,11 +333,14 @@ export const api = {
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
 }
 
+export type SharePermission = 'read' | 'write' | 'deposit'
+
 export interface ShareInfo {
   token: string
   file_id: number
   name: string
   is_dir: boolean
+  permission: SharePermission
   url: string
   has_password: boolean
   expired: boolean
@@ -317,6 +357,7 @@ export interface ShareView {
   name: string
   is_dir: boolean
   size: number
+  permission: SharePermission
   has_password: boolean
   expired: boolean
   exhausted: boolean

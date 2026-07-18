@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Download, Lock, TriangleAlert, Sun, Moon, Folder, FileText, ChevronRight, FolderArchive, FolderOpen } from 'lucide-vue-next'
+import {
+  Download, Lock, TriangleAlert, Sun, Moon, Folder, FileText, ChevronRight,
+  FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check,
+} from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
 import { kindFromName, fmtSize } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
@@ -24,6 +27,16 @@ const opened = ref(false)
 const entries = ref<ShareEntry[]>([])
 const curPath = ref('')
 
+// Write/deposit state.
+const contributor = ref('')
+type UploadItem = { name: string; pct: number; done: boolean; error: boolean }
+const uploads = ref<UploadItem[]>([])
+const dragover = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+const canWrite = computed(() => data.value?.permission === 'write')
+const isDeposit = computed(() => data.value?.permission === 'deposit')
+
 const meta = computed(() => (data.value ? metaFor(kindFromName(data.value.name)) : metaFor('file')))
 const unavailable = computed(() => data.value && (data.value.expired || data.value.exhausted))
 const crumbs = computed(() => {
@@ -40,7 +53,9 @@ const crumbs = computed(() => {
 onMounted(async () => {
   try {
     data.value = await api.shareView(token)
-    if (data.value.is_dir && !data.value.has_password && !unavailable.value) openList('')
+    // Read/write folders auto-open the listing; a deposit share is blind (no
+    // listing) and a password-protected share waits for the password first.
+    if (data.value.is_dir && !data.value.has_password && !unavailable.value && !isDeposit.value) openList('')
   } catch {
     notFound.value = true
   }
@@ -63,6 +78,83 @@ function downloadFile(entry: ShareEntry) {
 }
 function downloadFolderArchive() {
   window.location.href = api.shareArchiveUrl(token, curPath.value, password.value || undefined)
+}
+
+// --- Write / deposit ---------------------------------------------------------
+
+async function uploadFiles(files: FileList | File[], path: string) {
+  for (const file of Array.from(files)) {
+    const item = reactive<UploadItem>({ name: file.name, pct: 0, done: false, error: false })
+    uploads.value.push(item)
+    try {
+      const init = await api.shareInitUpload(token, {
+        path,
+        name: file.name,
+        size: file.size,
+        contributor: contributor.value || undefined,
+        password: password.value || undefined,
+      })
+      let sent = 0
+      for (let i = 0; i < init.num_chunks; i++) {
+        const start = i * init.chunk_size
+        const blob = file.slice(start, Math.min(start + init.chunk_size, file.size))
+        await api.shareChunk(token, init.session_id, i, blob)
+        sent += blob.size
+        item.pct = file.size ? Math.round((sent / file.size) * 100) : 100
+      }
+      await api.shareComplete(token, init.session_id)
+      item.pct = 100
+      item.done = true
+    } catch {
+      item.error = true
+    }
+  }
+  // Refresh the listing (write only — a deposit share cannot list).
+  if (opened.value && canWrite.value) openList(curPath.value)
+}
+
+function pickFiles() {
+  fileInput.value?.click()
+}
+function onFilePicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files?.length) uploadFiles(input.files, isDeposit.value ? '' : curPath.value)
+  input.value = ''
+}
+function onDrop(e: DragEvent) {
+  dragover.value = false
+  const files = e.dataTransfer?.files
+  if (files?.length) uploadFiles(files, isDeposit.value ? '' : curPath.value)
+}
+
+async function newFolder() {
+  const name = window.prompt(t('shareView.newFolderPrompt'))
+  if (!name) return
+  try {
+    await api.shareCreateFolder(token, curPath.value, name, password.value || undefined)
+    openList(curPath.value)
+  } catch (e: any) {
+    error.value = e?.message || t('shareView.accessDenied')
+  }
+}
+async function renameEntry(entry: ShareEntry) {
+  const name = window.prompt(t('shareView.renamePrompt'), entry.name)
+  if (!name || name === entry.name) return
+  try {
+    await api.shareRename(token, entry.path, name, password.value || undefined)
+    openList(curPath.value)
+  } catch (e: any) {
+    error.value = e?.message || t('shareView.accessDenied')
+  }
+}
+async function deleteEntry(entry: ShareEntry) {
+  if (!window.confirm(t('shareView.deleteConfirm', { name: entry.name }))) return
+  try {
+    await api.shareDeleteItem(token, entry.path, password.value || undefined)
+    openList(curPath.value)
+  } catch (e: any) {
+    error.value = e?.message || t('shareView.accessDenied')
+  }
 }
 
 // Single-file share download. A lightweight `check=1` request validates the
@@ -91,7 +183,9 @@ async function download() {
       <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
     </button>
 
-    <div class="login-card" :style="{ gap: '20px', maxWidth: opened ? '620px' : undefined, width: opened ? '92vw' : undefined }">
+    <input ref="fileInput" type="file" multiple hidden @change="onFilePicked" />
+
+    <div class="login-card" :style="{ gap: '20px', maxWidth: opened || isDeposit ? '620px' : undefined, width: opened || isDeposit ? '92vw' : undefined }">
       <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
 
       <template v-if="notFound">
@@ -101,29 +195,89 @@ async function download() {
       </template>
 
       <template v-else-if="data">
-        <!-- Folder browser -->
-        <template v-if="data.is_dir && opened">
-          <div class="share-browser">
+        <!-- Deposit (blind drop box): upload only, no listing. -->
+        <template v-if="isDeposit && !unavailable">
+          <div style="text-align: center">
+            <h1 style="font-size: 20px">{{ data.name }}</h1>
+            <p class="mono">{{ t('shareView.depositInto', { owner: data.owner }) }}</p>
+          </div>
+          <label v-if="data.has_password" style="width: 100%; display: flex; flex-direction: column; gap: 6px">
+            <span class="tweak-label" style="letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px">
+              <Lock :size="12" />{{ t('shareView.password') }}
+            </span>
+            <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')" />
+          </label>
+          <label style="width: 100%; display: flex; flex-direction: column; gap: 6px">
+            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareView.yourName') }}</span>
+            <input v-model="contributor" class="input" type="text" :placeholder="t('shareView.yourNamePlaceholder')" />
+          </label>
+          <div
+            class="drop-zone"
+            :class="{ over: dragover }"
+            @click="pickFiles"
+            @dragover.prevent="dragover = true"
+            @dragleave="dragover = false"
+            @drop.prevent="onDrop"
+          >
+            <UploadCloud :size="32" class="tint-neutral" />
+            <p>{{ t('shareView.dropHere') }}</p>
+          </div>
+          <div v-if="uploads.length" class="upload-list">
+            <div v-for="(u, i) in uploads" :key="i" class="upload-item">
+              <component :is="u.error ? TriangleAlert : u.done ? Check : Upload" :size="14"
+                :style="{ color: u.error ? 'var(--danger)' : u.done ? 'var(--success)' : 'var(--fg-2)' }" />
+              <span class="upload-name">{{ u.name }}</span>
+              <span class="mono" style="font-size: 12px">{{ u.error ? '!' : u.pct + '%' }}</span>
+            </div>
+          </div>
+        </template>
+
+        <!-- Folder browser (read / write) -->
+        <template v-else-if="data.is_dir && opened">
+          <div
+            class="share-browser"
+            @dragover.prevent="canWrite && (dragover = true)"
+            @dragleave="dragover = false"
+            @drop.prevent="canWrite && onDrop($event)"
+          >
             <div class="share-crumbs">
               <template v-for="(c, i) in crumbs" :key="c.path">
                 <ChevronRight v-if="i > 0" :size="13" class="tint-neutral" />
                 <button class="crumb-btn" @click="openList(c.path)">{{ i === 0 ? data.name : c.name }}</button>
               </template>
             </div>
-            <div class="share-list">
-              <div v-if="!entries.length" class="share-empty">{{ t('shareView.emptyFolder') }}</div>
-              <button
-                v-for="e in entries"
-                :key="e.path"
-                class="share-row"
-                @click="e.is_dir ? openList(e.path) : downloadFile(e)"
-              >
-                <component :is="e.is_dir ? Folder : FileText" :size="16" :class="e.is_dir ? 'tint-folder' : 'tint-neutral'" />
-                <span class="share-name">{{ e.name }}</span>
-                <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
-                <component :is="e.is_dir ? ChevronRight : Download" :size="15" class="tint-neutral" />
-              </button>
+
+            <div v-if="canWrite" class="share-toolbar">
+              <button class="btn btn-secondary btn-sm" @click="newFolder"><FolderPlus :size="14" />{{ t('shareView.newFolder') }}</button>
+              <button class="btn btn-secondary btn-sm" @click="pickFiles"><Upload :size="14" />{{ t('shareView.importFiles') }}</button>
             </div>
+
+            <div class="share-list" :class="{ 'drop-over': dragover && canWrite }">
+              <div v-if="!entries.length" class="share-empty">{{ t('shareView.emptyFolder') }}</div>
+              <div v-for="e in entries" :key="e.path" class="share-row">
+                <button class="share-row-main" @click="e.is_dir ? openList(e.path) : downloadFile(e)">
+                  <component :is="e.is_dir ? Folder : FileText" :size="16" :class="e.is_dir ? 'tint-folder' : 'tint-neutral'" />
+                  <span class="share-name">{{ e.name }}</span>
+                  <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
+                </button>
+                <template v-if="canWrite">
+                  <button class="share-row-act" :title="t('common.rename')" @click.stop="renameEntry(e)"><Pencil :size="14" /></button>
+                  <button class="share-row-act danger" :title="t('common.delete')" @click.stop="deleteEntry(e)"><Trash2 :size="14" /></button>
+                </template>
+                <component :is="e.is_dir ? ChevronRight : Download" :size="15" class="tint-neutral share-row-tail"
+                  @click="e.is_dir ? openList(e.path) : downloadFile(e)" />
+              </div>
+            </div>
+
+            <div v-if="uploads.length" class="upload-list">
+              <div v-for="(u, i) in uploads" :key="i" class="upload-item">
+                <component :is="u.error ? TriangleAlert : u.done ? Check : Upload" :size="14"
+                  :style="{ color: u.error ? 'var(--danger)' : u.done ? 'var(--success)' : 'var(--fg-2)' }" />
+                <span class="upload-name">{{ u.name }}</span>
+                <span class="mono" style="font-size: 12px">{{ u.error ? '!' : u.pct + '%' }}</span>
+              </div>
+            </div>
+
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
             <button class="btn btn-secondary" style="width: 100%" @click="downloadFolderArchive">
               <FolderArchive :size="15" />{{ t('shareView.downloadFolderZip') }}

@@ -36,6 +36,10 @@ type UploadSession struct {
 	// FileID is set when the upload replaces an existing file, adding a new
 	// version to it instead of creating a new file.
 	FileID *uint `json:"file_id,omitempty"`
+	// ShareToken, when set, marks a session created through a write/deposit share
+	// link by an anonymous visitor. Contributor is the optional name they gave.
+	ShareToken  string `json:"share_token,omitempty"`
+	Contributor string `json:"contributor,omitempty"`
 }
 
 // NumChunks returns how many chunks the upload is split into.
@@ -135,6 +139,32 @@ func (m *Manager) GetSession(user *model.User, id string) (*UploadSession, error
 		return nil, err
 	}
 	if s.UserID != user.ID {
+		return nil, ErrNotFound
+	}
+	return &s, nil
+}
+
+// AttachShare tags a session as belonging to a share link and persists it. Used
+// right after InitUpload when the upload is driven by an anonymous share visitor.
+func (m *Manager) AttachShare(s *UploadSession, token, contributor string) error {
+	s.ShareToken = token
+	s.Contributor = contributor
+	return m.saveSession(s)
+}
+
+// GetShareSession loads a session created through a share link, authorized by
+// the share token rather than a user id (the visitor is anonymous). It returns
+// ErrNotFound if the session is unknown or was not created for this token.
+func (m *Manager) GetShareSession(token, id string) (*UploadSession, error) {
+	raw, ok := m.cache.Get(uploadKey(id))
+	if !ok {
+		return nil, ErrNotFound
+	}
+	var s UploadSession
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return nil, err
+	}
+	if s.ShareToken == "" || s.ShareToken != token {
 		return nil, ErrNotFound
 	}
 	return &s, nil

@@ -340,6 +340,35 @@ html[data-halo='off'] body::before {
   color: var(--fg-0);
 }
 
+/* Text segmented control (e.g. share permission picker). */
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+.seg-btn {
+  flex: 1;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.seg-btn:hover {
+  color: var(--fg-0);
+}
+.seg-btn.active {
+  background: var(--bg-3);
+  color: var(--fg-0);
+}
+
 .avatar {
   width: 32px;
   height: 32px;
@@ -1487,20 +1516,96 @@ html[data-halo='off'] body::before {
 .share-row {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
-  padding: 10px 12px;
-  background: none;
-  border: none;
+  gap: 2px;
   border-bottom: 1px solid var(--border-subtle);
-  cursor: pointer;
-  text-align: left;
-  color: var(--fg-0);
 }
 .share-row:last-child {
   border-bottom: none;
 }
 .share-row:hover {
   background: var(--bg-2);
+}
+.share-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--fg-0);
+}
+.share-row-act {
+  background: none;
+  border: none;
+  color: var(--fg-2);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.share-row-act:hover {
+  color: var(--fg-0);
+  background: var(--bg-3);
+}
+.share-row-act.danger:hover {
+  color: var(--danger);
+}
+.share-row-tail {
+  margin-right: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.share-toolbar {
+  display: flex;
+  gap: 8px;
+}
+.btn-sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.share-list.drop-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+.drop-zone {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px;
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.drop-zone:hover,
+.drop-zone.over {
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+.upload-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.upload-list .upload-item {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.upload-list .upload-item:last-child {
+  border-bottom: none;
+}
+.upload-list .upload-name {
+  flex: 1;
 }
 .share-name {
   flex: 1;

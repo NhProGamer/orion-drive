@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Pencil } from 'lucide-vue-next'
-import { api, type ShareInfo } from '@/lib/api'
+import { api, type ShareInfo, type SharePermission } from '@/lib/api'
 import { useUiStore } from '@/stores/ui'
 
 const { t } = useI18n()
@@ -11,6 +11,14 @@ const props = defineProps<{ share: ShareInfo }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
 
 const ui = useUiStore()
+
+// Permission (only meaningful for folder shares).
+const permission = ref<SharePermission>(props.share.permission)
+const permOptions: { value: SharePermission; label: string }[] = [
+  { value: 'read', label: t('shareDialog.permRead') },
+  { value: 'write', label: t('shareDialog.permWrite') },
+  { value: 'deposit', label: t('shareDialog.permDeposit') },
+]
 
 // Password: keep existing unless the user changes the toggle / types a new one.
 const hasPassword = ref(props.share.has_password)
@@ -32,10 +40,16 @@ const loading = ref(false)
 
 async function save() {
   loading.value = true
-  const input: { password?: string; expires_days?: number; max_downloads?: number } = {
+  const input: {
+    permission?: SharePermission
+    password?: string
+    expires_days?: number
+    max_downloads?: number
+  } = {
     expires_days: expiresDays.value === '' ? 0 : Number(expiresDays.value),
     max_downloads: maxDownloads.value === '' ? 0 : Number(maxDownloads.value),
   }
+  if (props.share.is_dir) input.permission = permission.value
   // Password intent: unchecked -> remove (""); checked+typed -> set; checked+empty -> keep (omit).
   if (!hasPassword.value) input.password = ''
   else if (password.value) input.password = password.value
@@ -59,6 +73,21 @@ async function save() {
       <h2><Pencil :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('shareEdit.title', { name: share.name }) }}</h2>
 
       <div style="display: flex; flex-direction: column; gap: 12px">
+        <div v-if="share.is_dir" style="display: flex; flex-direction: column; gap: 6px">
+          <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
+          <div class="seg">
+            <button
+              v-for="o in permOptions"
+              :key="o.value"
+              type="button"
+              class="seg-btn"
+              :class="{ active: permission === o.value }"
+              @click="permission = o.value"
+            >
+              {{ o.label }}
+            </button>
+          </div>
+        </div>
         <label style="display: flex; align-items: center; gap: 8px">
           <input v-model="hasPassword" type="checkbox" />
           <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.passwordProtect') }}</span>

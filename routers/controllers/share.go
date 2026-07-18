@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
@@ -14,6 +15,7 @@ import (
 
 type createShareReq struct {
 	FileID       uint   `json:"file_id"`
+	Permission   string `json:"permission"`
 	Password     string `json:"password"`
 	ExpiresDays  int    `json:"expires_days"`
 	MaxDownloads int    `json:"max_downloads"`
@@ -28,6 +30,7 @@ func (ctl *Controller) CreateShare(c *gin.Context) {
 	}
 	s, err := ctl.dep.Shares.Create(c.Request.Context(), ctl.user(c), share.CreateOptions{
 		FileID:       req.FileID,
+		Permission:   req.Permission,
 		Password:     req.Password,
 		ExpiresIn:    time.Duration(req.ExpiresDays) * 24 * time.Hour,
 		MaxDownloads: req.MaxDownloads,
@@ -65,6 +68,7 @@ func (ctl *Controller) ListShares(c *gin.Context) {
 			"file_id":          s.FileID,
 			"name":             name,
 			"is_dir":           isDir,
+			"permission":       s.Perm(),
 			"url":              ctl.shareURL(c, s.Token),
 			"has_password":     s.HasPassword(),
 			"expired":          s.Expired(),
@@ -80,6 +84,7 @@ func (ctl *Controller) ListShares(c *gin.Context) {
 }
 
 type updateShareReq struct {
+	Permission   *string `json:"permission"`    // nil=keep, "read|write|deposit"=set
 	Password     *string `json:"password"`      // nil=keep, ""=remove, "x"=set
 	ExpiresDays  *int    `json:"expires_days"`  // nil=keep, <=0=never
 	MaxDownloads *int    `json:"max_downloads"` // nil=keep, <=0=unlimited
@@ -93,6 +98,7 @@ func (ctl *Controller) UpdateShare(c *gin.Context) {
 		return
 	}
 	s, err := ctl.dep.Shares.Update(c.Request.Context(), ctl.user(c), c.Param("token"), share.UpdateOptions{
+		Permission:   req.Permission,
 		Password:     req.Password,
 		ExpiresDays:  req.ExpiresDays,
 		MaxDownloads: req.MaxDownloads,
@@ -176,6 +182,146 @@ func (ctl *Controller) ShareArchive(c *gin.Context) {
 	}
 }
 
+// --- Public write endpoints (write/deposit shares, no auth) ------------------
+
+type shareFolderReq struct {
+	Path     string `json:"path"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+// ShareCreateFolder creates a folder inside a writable shared folder.
+func (ctl *Controller) ShareCreateFolder(c *gin.Context) {
+	var req shareFolderReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	if err := ctl.dep.Shares.CreateFolder(c.Request.Context(), c.Param("token"), req.Path, req.Name, req.Password); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+type shareUploadReq struct {
+	Path        string `json:"path"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	Contributor string `json:"contributor"`
+	Password    string `json:"password"`
+}
+
+// ShareInitUpload starts an anonymous resumable upload into a writable share.
+func (ctl *Controller) ShareInitUpload(c *gin.Context) {
+	var req shareUploadReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	s, err := ctl.dep.Shares.InitUpload(c.Request.Context(), c.Param("token"), req.Path, req.Name, req.Size, req.Contributor, req.Password)
+	if err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{
+		"session_id": s.ID,
+		"chunk_size": s.ChunkSize,
+		"num_chunks": s.NumChunks(),
+	}))
+}
+
+// SharePutChunk receives one chunk of an anonymous share upload.
+func (ctl *Controller) SharePutChunk(c *gin.Context) {
+	index, err := strconv.Atoi(c.GetHeader("X-Chunk-Index"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "missing X-Chunk-Index"))
+		return
+	}
+	if err := ctl.dep.Shares.PutChunk(c.Request.Context(), c.Param("token"), c.Param("sid"), index, c.Request.Body); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+// ShareCompleteUpload finalizes an anonymous share upload.
+func (ctl *Controller) ShareCompleteUpload(c *gin.Context) {
+	if err := ctl.dep.Shares.CompleteUpload(c.Request.Context(), c.Param("token"), c.Param("sid")); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+// ShareCancelUpload aborts an anonymous share upload.
+func (ctl *Controller) ShareCancelUpload(c *gin.Context) {
+	if err := ctl.dep.Shares.CancelUpload(c.Request.Context(), c.Param("token"), c.Param("sid")); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+type shareRenameReq struct {
+	Path     string `json:"path"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+// ShareRename renames an item inside a writable share.
+func (ctl *Controller) ShareRename(c *gin.Context) {
+	var req shareRenameReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	if err := ctl.dep.Shares.Rename(c.Request.Context(), c.Param("token"), req.Path, req.Name, req.Password); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+type shareMoveReq struct {
+	Path     string `json:"path"`
+	Dest     string `json:"dest"`
+	Password string `json:"password"`
+}
+
+// ShareMove relocates an item within a writable share.
+func (ctl *Controller) ShareMove(c *gin.Context) {
+	var req shareMoveReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	if err := ctl.dep.Shares.Move(c.Request.Context(), c.Param("token"), req.Path, req.Dest, req.Password); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
+type shareDeleteReq struct {
+	Path     string `json:"path"`
+	Password string `json:"password"`
+}
+
+// ShareDelete moves an item in a writable share to the owner's recycle bin.
+func (ctl *Controller) ShareDelete(c *gin.Context) {
+	var req shareDeleteReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	if err := ctl.dep.Shares.DeleteItem(c.Request.Context(), c.Param("token"), req.Path, req.Password); err != nil {
+		failShare(c, err)
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
+
 // shareURL builds the public share page URL from the configured site URL.
 func (ctl *Controller) shareURL(c *gin.Context, token string) string {
 	base := ctl.dep.Config.System.SiteURL
@@ -192,11 +338,13 @@ func failShare(c *gin.Context, err error) {
 		respond(c, serializer.Err(serializer.CodeNotFound, "share not found"))
 	case errors.Is(err, share.ErrPasswordRequired), errors.Is(err, share.ErrWrongPassword):
 		respond(c, serializer.Err(serializer.CodeUnauthorized, err.Error()))
-	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrExhausted), errors.Is(err, share.ErrNotAllowed):
+	case errors.Is(err, share.ErrExpired), errors.Is(err, share.ErrExhausted), errors.Is(err, share.ErrNotAllowed), errors.Is(err, share.ErrForbidden):
 		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
-	case errors.Is(err, share.ErrNotAFile):
+	case errors.Is(err, share.ErrNotAFile), errors.Is(err, share.ErrNotAFolder), errors.Is(err, share.ErrBadPermission):
 		respond(c, serializer.Err(serializer.CodeBadRequest, err.Error()))
 	default:
-		respond(c, serializer.Err(serializer.CodeInternal, err.Error()))
+		// Write operations surface filemanager errors (conflict, quota, lock,
+		// invalid name); let the shared mapper handle those.
+		fail(c, err)
 	}
 }

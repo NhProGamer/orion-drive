@@ -6,6 +6,8 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -25,7 +27,19 @@ var (
 	ErrWrongPassword    = errors.New("incorrect password")
 	ErrNotAllowed       = errors.New("your group is not allowed to create shares")
 	ErrNotAFile         = errors.New("target is not a file")
+	ErrNotAFolder       = errors.New("target is not a folder")
+	ErrForbidden        = errors.New("this action is not permitted on this share")
+	ErrBadPermission    = errors.New("invalid permission")
 )
+
+// validPermission reports whether p is one of the accepted permission levels.
+func validPermission(p string) bool {
+	switch p {
+	case model.SharePermRead, model.SharePermWrite, model.SharePermDeposit:
+		return true
+	}
+	return false
+}
 
 // Service coordinates shares (repository) and file delivery (filemanager).
 type Service struct {
@@ -41,6 +55,7 @@ func New(repo *repository.Repository, files *filemanager.Manager) *Service {
 // CreateOptions describes a new share link.
 type CreateOptions struct {
 	FileID       uint
+	Permission   string        // "" defaults to read
 	Password     string
 	ExpiresIn    time.Duration // 0 = never expires
 	MaxDownloads int           // 0 = unlimited
@@ -51,15 +66,27 @@ func (s *Service) Create(ctx context.Context, user *model.User, opts CreateOptio
 	if user.Group != nil && !user.Group.CanShare() {
 		return nil, ErrNotAllowed
 	}
+	perm := opts.Permission
+	if perm == "" {
+		perm = model.SharePermRead
+	}
+	if !validPermission(perm) {
+		return nil, ErrBadPermission
+	}
 	f, err := s.repo.File.GetByID(ctx, user.ID, opts.FileID)
 	if err != nil {
 		return nil, err
 	}
+	// Write and deposit shares only make sense on a folder.
+	if perm != model.SharePermRead && !f.IsFolder() {
+		return nil, ErrNotAFolder
+	}
 
 	share := &model.Share{
-		Token:  randToken(22),
-		FileID: f.ID,
-		UserID: user.ID,
+		Token:      randToken(22),
+		FileID:     f.ID,
+		UserID:     user.ID,
+		Permission: perm,
 	}
 	if opts.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(opts.Password), bcrypt.DefaultCost)
@@ -86,6 +113,7 @@ func (s *Service) Create(ctx context.Context, user *model.User, opts CreateOptio
 // unchanged; for Password, an empty string removes the password. For ExpiresDays
 // and MaxDownloads, a value <= 0 clears the limit (never expires / unlimited).
 type UpdateOptions struct {
+	Permission   *string
 	Password     *string
 	ExpiresDays  *int
 	MaxDownloads *int
@@ -99,6 +127,22 @@ func (s *Service) Update(ctx context.Context, user *model.User, token string, op
 	}
 	if share.UserID != user.ID {
 		return nil, ErrNotFound
+	}
+	if opts.Permission != nil {
+		if !validPermission(*opts.Permission) {
+			return nil, ErrBadPermission
+		}
+		// A write/deposit share must point at a folder.
+		if *opts.Permission != model.SharePermRead {
+			f, err := s.repo.File.GetByIDUnscoped(ctx, share.UserID, share.FileID)
+			if err != nil {
+				return nil, err
+			}
+			if !f.IsFolder() {
+				return nil, ErrNotAFolder
+			}
+		}
+		share.Permission = *opts.Permission
 	}
 	if opts.Password != nil {
 		if *opts.Password == "" {
@@ -152,6 +196,7 @@ type PublicView struct {
 	Name        string `json:"name"`
 	IsDir       bool   `json:"is_dir"`
 	Size        int64  `json:"size"`
+	Permission  string `json:"permission"`
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
 	Exhausted   bool   `json:"exhausted"`
@@ -180,6 +225,7 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 		Name:        f.Name,
 		IsDir:       f.IsFolder(),
 		Size:        f.Size,
+		Permission:  share.Perm(),
 		HasPassword: share.HasPassword(),
 		Expired:     share.Expired(),
 		Exhausted:   share.Exhausted(),
@@ -201,6 +247,9 @@ func (s *Service) ListDir(ctx context.Context, token, subPath, password string) 
 	share, err := s.authorize(ctx, token, password)
 	if err != nil {
 		return "", nil, err
+	}
+	if !share.CanList() {
+		return "", nil, ErrForbidden
 	}
 	target, err := s.resolve(ctx, share, subPath)
 	if err != nil {
@@ -236,6 +285,9 @@ func (s *Service) Check(ctx context.Context, token, subPath, password string) er
 	if err != nil {
 		return err
 	}
+	if !share.CanDownload() {
+		return ErrForbidden
+	}
 	if share.Exhausted() {
 		return ErrExhausted
 	}
@@ -255,6 +307,9 @@ func (s *Service) Download(ctx context.Context, token, subPath, password string)
 	share, err := s.authorize(ctx, token, password)
 	if err != nil {
 		return nil, err
+	}
+	if !share.CanDownload() {
+		return nil, ErrForbidden
 	}
 	if share.Exhausted() {
 		return nil, ErrExhausted
@@ -286,6 +341,9 @@ func (s *Service) ArchiveTarget(ctx context.Context, token, subPath, password st
 	if err != nil {
 		return nil, nil, err
 	}
+	if !share.CanDownload() {
+		return nil, nil, ErrForbidden
+	}
 	if share.Exhausted() {
 		return nil, nil, ErrExhausted
 	}
@@ -299,6 +357,213 @@ func (s *Service) ArchiveTarget(ctx context.Context, token, subPath, password st
 	}
 	_ = s.repo.Share.RegisterDownload(ctx, share)
 	return owner, target, nil
+}
+
+// --- Write access (anonymous visitors on write/deposit shares) ---------------
+//
+// Every write mirrors the read pattern: it runs "as the owner" (the owner's
+// *model.User drives owner_id scoping, quota and storage namespacing) but every
+// target is resolved through resolve() from the share root, so nothing outside
+// the shared subtree is ever reachable.
+
+// loadOwner returns the share owner's user record.
+func (s *Service) loadOwner(ctx context.Context, share *model.Share) (*model.User, error) {
+	return s.repo.User.GetByID(ctx, share.UserID)
+}
+
+// writeParent authorizes a write share and resolves the folder at subPath that
+// the operation targets, ensuring it is inside the subtree and is a folder.
+func (s *Service) writeParent(ctx context.Context, token, subPath, password string, need func(*model.Share) bool) (*model.Share, *model.User, *model.File, error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !need(share) {
+		return nil, nil, nil, ErrForbidden
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !target.IsFolder() {
+		return nil, nil, nil, ErrNotAFolder
+	}
+	owner, err := s.loadOwner(ctx, share)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return share, owner, target, nil
+}
+
+// CreateFolder creates a folder named name inside the shared folder at subPath.
+func (s *Service) CreateFolder(ctx context.Context, token, subPath, name, password string) error {
+	_, owner, parent, err := s.writeParent(ctx, token, subPath, password, (*model.Share).CanUpload)
+	if err != nil {
+		return err
+	}
+	_, err = s.files.CreateFolder(ctx, owner, &parent.ID, name)
+	return err
+}
+
+// InitUpload starts an anonymous resumable upload into the shared folder at
+// subPath. For a blind (deposit) share the name is made unique so an existing
+// file is never silently overwritten by a visitor who cannot see it.
+func (s *Service) InitUpload(ctx context.Context, token, subPath, name string, size int64, contributor, password string) (*filemanager.UploadSession, error) {
+	share, owner, parent, err := s.writeParent(ctx, token, subPath, password, (*model.Share).CanUpload)
+	if err != nil {
+		return nil, err
+	}
+	if share.Blind() {
+		name = s.uniqueName(ctx, owner.ID, &parent.ID, strings.TrimSpace(name))
+	}
+	sess, err := s.files.InitUpload(ctx, owner, &parent.ID, name, size)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.files.AttachShare(sess, token, contributor); err != nil {
+		return nil, err
+	}
+	return sess, nil
+}
+
+// PutChunk writes one chunk of an anonymous share upload.
+func (s *Service) PutChunk(ctx context.Context, token, sid string, index int, r io.Reader) error {
+	owner, _, err := s.shareUpload(ctx, token, sid)
+	if err != nil {
+		return err
+	}
+	_, err = s.files.PutChunk(ctx, owner, sid, index, r)
+	return err
+}
+
+// CompleteUpload finalizes an anonymous share upload and tags the resulting file
+// with its provenance (contributor name and originating share token).
+func (s *Service) CompleteUpload(ctx context.Context, token, sid string) error {
+	owner, sess, err := s.shareUpload(ctx, token, sid)
+	if err != nil {
+		return err
+	}
+	file, err := s.files.CompleteUpload(ctx, owner, sid)
+	if err != nil {
+		return err
+	}
+	s.tagProvenance(ctx, file, token, sess.Contributor)
+	return nil
+}
+
+// CancelUpload aborts an anonymous share upload.
+func (s *Service) CancelUpload(ctx context.Context, token, sid string) error {
+	owner, _, err := s.shareUpload(ctx, token, sid)
+	if err != nil {
+		return err
+	}
+	return s.files.CancelUpload(owner, sid)
+}
+
+// shareUpload loads the owner and the share-scoped upload session, validating
+// that the session was created for this token.
+func (s *Service) shareUpload(ctx context.Context, token, sid string) (*model.User, *filemanager.UploadSession, error) {
+	sess, err := s.files.GetShareSession(token, sid)
+	if err != nil {
+		return nil, nil, err
+	}
+	owner, err := s.repo.User.GetByID(ctx, sess.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return owner, sess, nil
+}
+
+// Rename renames the item at subPath within the shared subtree.
+func (s *Service) Rename(ctx context.Context, token, subPath, newName, password string) error {
+	share, target, owner, err := s.writeTarget(ctx, token, subPath, password, (*model.Share).CanModify)
+	if err != nil {
+		return err
+	}
+	_ = share
+	_, err = s.files.Rename(ctx, owner, target.ID, newName)
+	return err
+}
+
+// Move relocates the item at subPath into the folder at destPath, both inside
+// the shared subtree.
+func (s *Service) Move(ctx context.Context, token, subPath, destPath, password string) error {
+	share, target, owner, err := s.writeTarget(ctx, token, subPath, password, (*model.Share).CanModify)
+	if err != nil {
+		return err
+	}
+	dest, err := s.resolve(ctx, share, destPath)
+	if err != nil {
+		return err
+	}
+	if !dest.IsFolder() {
+		return ErrNotAFolder
+	}
+	return s.files.Move(ctx, owner, []uint{target.ID}, &dest.ID)
+}
+
+// DeleteItem moves the item at subPath to the owner's recycle bin (never a
+// purge), so the owner can always restore anything a visitor removes.
+func (s *Service) DeleteItem(ctx context.Context, token, subPath, password string) error {
+	_, target, owner, err := s.writeTarget(ctx, token, subPath, password, (*model.Share).CanDelete)
+	if err != nil {
+		return err
+	}
+	return s.files.Trash(ctx, owner, []uint{target.ID})
+}
+
+// writeTarget authorizes a write share and resolves the item at subPath. subPath
+// must be non-empty: the share root itself cannot be renamed, moved or deleted
+// by a visitor (that would break the share and touch content outside it).
+func (s *Service) writeTarget(ctx context.Context, token, subPath, password string, need func(*model.Share) bool) (*model.Share, *model.File, *model.User, error) {
+	if cleanPath(subPath) == "" {
+		return nil, nil, nil, ErrForbidden
+	}
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !need(share) {
+		return nil, nil, nil, ErrForbidden
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	owner, err := s.loadOwner(ctx, share)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return share, target, owner, nil
+}
+
+// uniqueName returns name, or the first "name (n).ext" variant that does not yet
+// exist under parentID for the owner.
+func (s *Service) uniqueName(ctx context.Context, ownerID uint, parentID *uint, name string) string {
+	if _, err := s.repo.File.FindChildByName(ctx, ownerID, parentID, name); err != nil {
+		return name
+	}
+	ext := path.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	for i := 2; i < 10000; i++ {
+		cand := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		if _, err := s.repo.File.FindChildByName(ctx, ownerID, parentID, cand); err != nil {
+			return cand
+		}
+	}
+	return name
+}
+
+// tagProvenance records who contributed a file through a share (best-effort).
+func (s *Service) tagProvenance(ctx context.Context, file *model.File, token, contributor string) {
+	props := map[string]any{}
+	_ = file.Props.Unmarshal(&props)
+	props["shared_via"] = token
+	if contributor != "" {
+		props["created_by"] = contributor
+	}
+	file.Props = model.MustJSON(props)
+	_ = s.repo.File.Update(ctx, file)
 }
 
 // authorize validates a share's expiry and password (but not its download limit,

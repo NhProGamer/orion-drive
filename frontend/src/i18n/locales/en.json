@@ -163,7 +163,14 @@
     "createLink": "Create link",
     "created": "Share link created. Anyone with this link can access the file.",
     "done": "Done",
-    "createError": "Failed to create link"
+    "createError": "Failed to create link",
+    "permLabel": "Access",
+    "permRead": "View",
+    "permReadHint": "View and download",
+    "permWrite": "Edit",
+    "permWriteHint": "View, upload, edit and delete",
+    "permDeposit": "Drop-off",
+    "permDepositHint": "Upload only, without seeing the contents"
   },
   "shareEdit": {
     "title": "Edit share “{name}”",
@@ -193,7 +200,16 @@
     "downloadLimitReached": "The download limit has been reached.",
     "password": "Password",
     "required": "Required",
-    "openFolder": "Open folder"
+    "openFolder": "Open folder",
+    "depositInto": "Drop off files for {owner}",
+    "yourName": "Your name (optional)",
+    "yourNamePlaceholder": "Anonymous",
+    "dropHere": "Drag files here or click to browse",
+    "newFolder": "New folder",
+    "importFiles": "Upload files",
+    "newFolderPrompt": "Folder name",
+    "renamePrompt": "New name",
+    "deleteConfirm": "Delete \"{name}\"?"
   },
   "shares": {
     "linkToast": "Link: {url}",
