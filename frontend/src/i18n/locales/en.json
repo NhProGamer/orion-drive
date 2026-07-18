@@ -209,7 +209,9 @@
     "importFiles": "Upload files",
     "newFolderPrompt": "Folder name",
     "renamePrompt": "New name",
-    "deleteConfirm": "Delete \"{name}\"?"
+    "deleteConfirm": "Delete \"{name}\"?",
+    "editOffice": "Edit in Office",
+    "viewOffice": "Open in Office"
   },
   "shares": {
     "linkToast": "Link: {url}",

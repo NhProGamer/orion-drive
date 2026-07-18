@@ -18,23 +18,23 @@ const wopiTokenTTL = 10 * time.Hour
 
 // wopiFile verifies the access_token, checks it is bound to :id, and loads the
 // user and file. It writes a 401 and returns false on failure.
-func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, ok bool) {
+func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite, ok bool) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
-		return 0, 0, false
+		return 0, 0, false, false
 	}
-	tf, tu, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
+	tf, tu, tw, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
 	if err != nil || tf != id {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		return 0, 0, false
+		return 0, 0, false, false
 	}
-	return tu, id, true
+	return tu, id, tw, true
 }
 
 // WopiCheckFileInfo returns file metadata to the Office editor (WOPI GET).
 func (ctl *Controller) WopiCheckFileInfo(c *gin.Context) {
-	uid, id, ok := ctl.wopiFile(c)
+	uid, id, canWrite, ok := ctl.wopiFile(c)
 	if !ok {
 		return
 	}
@@ -59,15 +59,15 @@ func (ctl *Controller) WopiCheckFileInfo(c *gin.Context) {
 		"UserId":           fmt.Sprintf("%d", uid),
 		"UserFriendlyName": u.DisplayName(),
 		"Version":          version,
-		"UserCanWrite":     true,
-		"SupportsUpdate":   true,
+		"UserCanWrite":     canWrite,
+		"SupportsUpdate":   canWrite,
 		"SupportsLocks":    false,
 	})
 }
 
 // WopiGetFile streams the file's content to the editor (WOPI GET contents).
 func (ctl *Controller) WopiGetFile(c *gin.Context) {
-	uid, id, ok := ctl.wopiFile(c)
+	uid, id, _, ok := ctl.wopiFile(c)
 	if !ok {
 		return
 	}
@@ -89,8 +89,12 @@ func (ctl *Controller) WopiGetFile(c *gin.Context) {
 
 // WopiPutFile saves editor changes as a new version (WOPI POST contents).
 func (ctl *Controller) WopiPutFile(c *gin.Context) {
-	uid, id, ok := ctl.wopiFile(c)
+	uid, id, canWrite, ok := ctl.wopiFile(c)
 	if !ok {
+		return
+	}
+	if !canWrite {
+		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
 	u, err := ctl.dep.Repo.User.GetByID(c.Request.Context(), uid)
@@ -143,21 +147,48 @@ func (ctl *Controller) OfficeLaunch(c *gin.Context) {
 		c.String(http.StatusNotFound, "file not found")
 		return
 	}
-	token, err := ctl.dep.WOPI.Sign(id, u.ID, wopiTokenTTL)
+	// The owner always edits their own file.
+	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true)
+}
+
+// OfficeLaunchShare opens a shared Office file in the editor for an anonymous
+// visitor. Read shares open view-only; write shares open editable; deposit
+// shares (blind) cannot open files at all. The file is resolved within the
+// shared subtree and the WOPI token is minted against the share owner.
+func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
+	if !ctl.dep.Config.WOPI.Enabled() {
+		c.String(http.StatusBadRequest, "online Office editing is not configured")
+		return
+	}
+	fileID, ownerID, canWrite, name, err := ctl.dep.Shares.OfficeTarget(
+		c.Request.Context(), c.Param("token"), c.Query("path"), c.Query("password"))
+	if err != nil {
+		c.String(http.StatusForbidden, "cannot open this document")
+		return
+	}
+	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite)
+}
+
+// serveOfficeLauncher mints a WOPI token bound to (fileID, uid, canWrite) and
+// writes the auto-submitting launch page for the online editor.
+func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite bool) {
+	token, err := ctl.dep.WOPI.Sign(fileID, uid, canWrite, wopiTokenTTL)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "cannot start the editor")
 		return
 	}
-
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
-	wopiSrc := fmt.Sprintf("%s/wopi/files/%d", base, id)
+	if base == "" {
+		base = requestOrigin(c)
+	}
+	wopiSrc := fmt.Sprintf("%s/wopi/files/%d", base, fileID)
 	// {type} (if present) → word/cell/slide by file kind; {src} → encoded WOPISrc.
-	action := strings.ReplaceAll(ctl.dep.Config.WOPI.EditURLTemplate, "{type}", officeType(f.Name))
+	action := strings.ReplaceAll(ctl.dep.Config.WOPI.EditURLTemplate, "{type}", officeType(name))
 	action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
 	ttlMs := time.Now().Add(wopiTokenTTL).UnixMilli()
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(http.StatusOK, officeLauncherHTML(f.Name, action, token, ttlMs))
+	c.String(http.StatusOK, officeLauncherHTML(name, action, token, ttlMs))
 }
 
 // officeLauncherHTML builds the auto-submitting WOPI launch page.

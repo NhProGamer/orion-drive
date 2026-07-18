@@ -209,7 +209,9 @@
     "importFiles": "Envoyer des fichiers",
     "newFolderPrompt": "Nom du dossier",
     "renamePrompt": "Nouveau nom",
-    "deleteConfirm": "Supprimer « {name} » ?"
+    "deleteConfirm": "Supprimer « {name} » ?",
+    "editOffice": "Éditer dans Office",
+    "viewOffice": "Ouvrir dans Office"
   },
   "shares": {
     "linkToast": "Lien : {url}",

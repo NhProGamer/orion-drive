@@ -197,6 +197,7 @@ type PublicView struct {
 	IsDir       bool   `json:"is_dir"`
 	Size        int64  `json:"size"`
 	Permission  string `json:"permission"`
+	Wopi        bool   `json:"wopi"` // set by the controller: online Office editing available
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
 	Exhausted   bool   `json:"exhausted"`
@@ -564,6 +565,29 @@ func (s *Service) tagProvenance(ctx context.Context, file *model.File, token, co
 	}
 	file.Props = model.MustJSON(props)
 	_ = s.repo.File.Update(ctx, file)
+}
+
+// OfficeTarget authorizes a share and resolves an Office file within it for
+// online editing. Read shares grant view-only editing, write shares grant full
+// editing, and deposit (blind) shares are refused. It returns the file id, the
+// owner's id (the WOPI token is minted against the owner), the write permission
+// and the file name.
+func (s *Service) OfficeTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return 0, 0, false, "", err
+	}
+	if share.Blind() {
+		return 0, 0, false, "", ErrForbidden
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return 0, 0, false, "", err
+	}
+	if target.IsFolder() {
+		return 0, 0, false, "", ErrNotAFile
+	}
+	return target.ID, share.UserID, share.CanModify(), target.Name, nil
 }
 
 // authorize validates a share's expiry and password (but not its download limit,

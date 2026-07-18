@@ -309,6 +309,13 @@ export const api = {
     const s = q.toString()
     return `/api/v1/share/${token}/archive` + (s ? `?${s}` : '')
   },
+  shareOfficeUrl: (token: string, path?: string, password?: string) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    if (password) q.set('password', password)
+    const s = q.toString()
+    return `/api/v1/share/${token}/office` + (s ? `?${s}` : '')
+  },
 
   // WebDAV credentials
   webdavAccounts: () => get<WebdavAccountList>('/webdav/accounts'),
@@ -358,6 +365,7 @@ export interface ShareView {
   is_dir: boolean
   size: number
   permission: SharePermission
+  wopi: boolean
   has_password: boolean
   expired: boolean
   exhausted: boolean

@@ -19,9 +19,10 @@ var ErrInvalidToken = errors.New("invalid or expired WOPI token")
 var b64 = base64.RawURLEncoding
 
 type payload struct {
-	FileID uint  `json:"f"`
-	UID    uint  `json:"u"`
-	Exp    int64 `json:"e"`
+	FileID   uint  `json:"f"`
+	UID      uint  `json:"u"`
+	CanWrite bool  `json:"w,omitempty"`
+	Exp      int64 `json:"e"`
 }
 
 // Token binds a file and user, signed with the server secret.
@@ -30,9 +31,10 @@ type Token struct{ secret []byte }
 // NewToken builds a token signer/verifier from the session secret.
 func NewToken(secret string) *Token { return &Token{secret: []byte(secret)} }
 
-// Sign issues an access token for (fileID, uid) valid for ttl.
-func (t *Token) Sign(fileID, uid uint, ttl time.Duration) (string, error) {
-	body, err := json.Marshal(payload{FileID: fileID, UID: uid, Exp: time.Now().Add(ttl).Unix()})
+// Sign issues an access token for (fileID, uid) valid for ttl. canWrite records
+// whether the holder may save changes back (false = view-only).
+func (t *Token) Sign(fileID, uid uint, canWrite bool, ttl time.Duration) (string, error) {
+	body, err := json.Marshal(payload{FileID: fileID, UID: uid, CanWrite: canWrite, Exp: time.Now().Add(ttl).Unix()})
 	if err != nil {
 		return "", err
 	}
@@ -40,8 +42,8 @@ func (t *Token) Sign(fileID, uid uint, ttl time.Duration) (string, error) {
 	return enc + "." + b64.EncodeToString(t.mac([]byte(enc))), nil
 }
 
-// Verify checks a token and returns the bound file and user IDs.
-func (t *Token) Verify(token string) (fileID, uid uint, err error) {
+// Verify checks a token and returns the bound file, user, and write permission.
+func (t *Token) Verify(token string) (fileID, uid uint, canWrite bool, err error) {
 	var body, sig string
 	for i := 0; i < len(token); i++ {
 		if token[i] == '.' {
@@ -50,24 +52,24 @@ func (t *Token) Verify(token string) (fileID, uid uint, err error) {
 		}
 	}
 	if body == "" || sig == "" {
-		return 0, 0, ErrInvalidToken
+		return 0, 0, false, ErrInvalidToken
 	}
 	got, err := b64.DecodeString(sig)
 	if err != nil || !hmac.Equal(t.mac([]byte(body)), got) {
-		return 0, 0, ErrInvalidToken
+		return 0, 0, false, ErrInvalidToken
 	}
 	raw, err := b64.DecodeString(body)
 	if err != nil {
-		return 0, 0, ErrInvalidToken
+		return 0, 0, false, ErrInvalidToken
 	}
 	var p payload
 	if err := json.Unmarshal(raw, &p); err != nil {
-		return 0, 0, ErrInvalidToken
+		return 0, 0, false, ErrInvalidToken
 	}
 	if time.Now().Unix() > p.Exp {
-		return 0, 0, ErrInvalidToken
+		return 0, 0, false, ErrInvalidToken
 	}
-	return p.FileID, p.UID, nil
+	return p.FileID, p.UID, p.CanWrite, nil
 }
 
 func (t *Token) mac(body []byte) []byte {

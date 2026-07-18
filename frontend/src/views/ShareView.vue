@@ -7,7 +7,7 @@ import {
   FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
-import { kindFromName, fmtSize } from '@/lib/format'
+import { kindFromName, fmtSize, isOffice } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
@@ -36,6 +36,11 @@ const fileInput = ref<HTMLInputElement | null>(null)
 
 const canWrite = computed(() => data.value?.permission === 'write')
 const isDeposit = computed(() => data.value?.permission === 'deposit')
+const officeLabel = computed(() => (canWrite.value ? t('shareView.editOffice') : t('shareView.viewOffice')))
+
+function openOffice(path?: string) {
+  window.open(api.shareOfficeUrl(token, path, password.value || undefined), '_blank')
+}
 
 const meta = computed(() => (data.value ? metaFor(kindFromName(data.value.name)) : metaFor('file')))
 const unavailable = computed(() => data.value && (data.value.expired || data.value.exhausted))
@@ -260,6 +265,14 @@ async function download() {
                   <span class="share-name">{{ e.name }}</span>
                   <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
                 </button>
+                <button
+                  v-if="data.wopi && !e.is_dir && isOffice(e.name)"
+                  class="share-row-act"
+                  :title="officeLabel"
+                  @click.stop="openOffice(e.path)"
+                >
+                  <FileText :size="14" />
+                </button>
                 <template v-if="canWrite">
                   <button class="share-row-act" :title="t('common.rename')" @click.stop="renameEntry(e)"><Pencil :size="14" /></button>
                   <button class="share-row-act danger" :title="t('common.delete')" @click.stop="deleteEntry(e)"><Trash2 :size="14" /></button>
@@ -311,6 +324,14 @@ async function download() {
                 @keyup.enter="data.is_dir ? openList('') : download()" />
             </label>
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
+            <button
+              v-if="data.wopi && !data.is_dir && isOffice(data.name)"
+              class="btn btn-secondary"
+              style="width: 100%; height: 42px"
+              @click="openOffice()"
+            >
+              <FileText :size="16" />{{ officeLabel }}
+            </button>
             <button class="btn btn-primary" style="width: 100%; height: 42px" @click="data.is_dir ? openList('') : download()">
               <component :is="data.is_dir ? FolderOpen : Download" :size="16" />
               {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}

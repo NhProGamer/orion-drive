@@ -214,4 +214,5 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	api.POST("/share/:token/rename", ctl.ShareRename)
 	api.POST("/share/:token/move", ctl.ShareMove)
 	api.POST("/share/:token/delete", ctl.ShareDelete)
+	api.GET("/share/:token/office", ctl.OfficeLaunchShare)
 }
