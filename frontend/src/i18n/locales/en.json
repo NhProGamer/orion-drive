@@ -330,7 +330,8 @@
   },
   "uploads": {
     "done": "Upload complete",
-    "active": "Uploading {n} file… | Uploading {n} files…"
+    "active": "Uploading {n} file… | Uploading {n} files…",
+    "left": "{time} left"
   },
   "files": {
     "fileSaved": "File saved",

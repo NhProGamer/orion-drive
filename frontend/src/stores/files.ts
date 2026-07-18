@@ -13,6 +13,8 @@ export interface Upload {
   name: string
   size: number
   progress: number
+  loaded: number // bytes uploaded so far
+  speed: number // bytes/s (smoothed), 0 when done
   done: boolean
 }
 
@@ -508,11 +510,27 @@ export const useFilesStore = defineStore('files', {
     },
 
     async uploadOne(file: File, parent: string) {
-      this.uploads.push({ id: ++uploadSeq, name: file.name, size: file.size, progress: 0, done: false })
+      this.uploads.push({ id: ++uploadSeq, name: file.name, size: file.size, progress: 0, loaded: 0, speed: 0, done: false })
       // Mutate the reactive array element (not the raw object we just pushed),
       // otherwise Vue never sees the progress changes.
       const up = this.uploads[this.uploads.length - 1]
       const pct = (bytes: number) => (file.size ? Math.min(99, Math.round((bytes / file.size) * 100)) : 99)
+      // Throughput: sampled every ~300ms and smoothed with an exponential moving
+      // average so the displayed rate/ETA stays steady rather than jumping.
+      let lastT = performance.now()
+      let lastLoaded = 0
+      const onProgress = (loaded: number) => {
+        up.loaded = loaded
+        up.progress = pct(loaded)
+        const now = performance.now()
+        const dt = now - lastT
+        if (dt >= 300) {
+          const inst = ((loaded - lastLoaded) / dt) * 1000
+          up.speed = up.speed ? up.speed * 0.6 + inst * 0.4 : inst
+          lastT = now
+          lastLoaded = loaded
+        }
+      }
       try {
         const init = await api.initUpload(parent, file.name, file.size)
         const { session_id, chunk_size, num_chunks } = init
@@ -520,18 +538,18 @@ export const useFilesStore = defineStore('files', {
         for (let i = 0; i < num_chunks; i++) {
           const start = i * chunk_size
           const end = Math.min(file.size, start + chunk_size)
-          await api.putChunk(session_id, i, file.slice(start, end), (sent) => {
-            up.progress = pct(uploaded + sent)
-          })
+          await api.putChunk(session_id, i, file.slice(start, end), (sent) => onProgress(uploaded + sent))
           uploaded = end
-          up.progress = pct(uploaded)
+          onProgress(uploaded)
         }
         await api.completeUpload(session_id)
         up.progress = 100
+        up.loaded = file.size
       } catch (e: any) {
         this.ui().toast(t('files.uploadFailed', { name: file.name }) + (e?.message ? ` : ${e.message}` : ''), 'x')
       } finally {
         up.done = true
+        up.speed = 0
       }
     },
   },

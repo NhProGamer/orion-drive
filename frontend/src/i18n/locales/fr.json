@@ -330,7 +330,8 @@
   },
   "uploads": {
     "done": "Importation terminée",
-    "active": "Importation de {n} fichier… | Importation de {n} fichiers…"
+    "active": "Importation de {n} fichier… | Importation de {n} fichiers…",
+    "left": "{time} restant"
   },
   "files": {
     "fileSaved": "Fichier enregistré",

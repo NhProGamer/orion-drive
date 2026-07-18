@@ -1955,6 +1955,19 @@ html[data-halo='off'] body::before {
   color: var(--fg-0);
   border-bottom: 1px solid var(--border-subtle);
 }
+.uploads-stats {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+/* Scroll the file rows when many files upload at once; the header stays put. */
+.uploads-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
 .upload-item {
   display: flex;
   align-items: center;
@@ -1999,7 +2012,7 @@ html[data-halo='off'] body::before {
   font-size: 10px;
   color: var(--fg-3);
   flex: none;
-  width: 34px;
+  width: 60px;
   text-align: right;
 }
 

@@ -85,6 +85,21 @@ export function fmtSize(bytes: number): string {
   return s + ' ' + units[i]
 }
 
+/** Compact duration, e.g. "45 s", "2 min 5 s", "1 h 3 min". */
+export function fmtDuration(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return ''
+  const s = Math.round(seconds)
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  if (m < 60) {
+    const r = s % 60
+    return r ? `${m} min ${r} s` : `${m} min`
+  }
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm ? `${h} h ${rm} min` : `${h} h`
+}
+
 /** Relative-then-absolute date, formatted for the active locale. */
 export function fmtDate(iso: string): string {
   const loc = currentLocale()
