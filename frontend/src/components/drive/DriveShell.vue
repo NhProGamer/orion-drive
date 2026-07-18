@@ -11,7 +11,7 @@ import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 import type { FileNode } from '@/lib/api'
-import { fmtSize, isArchive, isOffice } from '@/lib/format'
+import { fmtSize, isArchive } from '@/lib/format'
 import { bannerFor } from '@/lib/branding'
 import LanguageMenu from '@/components/LanguageMenu.vue'
 import SearchFiltersBar from './SearchFiltersBar.vue'
@@ -149,7 +149,7 @@ function ctxItems(): MenuItem[] {
   if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
     items.push({ id: 'extract', label: t('shell.extractHere'), icon: FolderInput })
   }
-  if (!files.readOnly && !multi && n && n.type === 'file' && isOffice(n.name) && auth.wopiEnabled) {
+  if (!files.readOnly && !multi && n && n.type === 'file' && ui.canEditOffice(n.name)) {
     items.push({ id: 'office', label: t('shell.editWithOffice'), icon: FileText })
   }
   if (!multi && n && auth.canShare) {
@@ -342,6 +342,7 @@ const dropTargetName = computed(() => {
 onMounted(() => {
   files.init()
   ui.watchPointer()
+  ui.loadOffice()
   document.addEventListener('keydown', onKey)
 })
 onUnmounted(() => document.removeEventListener('keydown', onKey))

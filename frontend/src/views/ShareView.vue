@@ -7,7 +7,7 @@ import {
   FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
-import { kindFromName, fmtSize, isOffice } from '@/lib/format'
+import { kindFromName, fmtSize } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
@@ -36,7 +36,11 @@ const fileInput = ref<HTMLInputElement | null>(null)
 
 const canWrite = computed(() => data.value?.permission === 'write')
 const isDeposit = computed(() => data.value?.permission === 'deposit')
-const officeLabel = computed(() => (canWrite.value ? t('shareView.editOffice') : t('shareView.viewOffice')))
+// Edit label only when the share grants write AND the format is editable on the
+// document server; otherwise it opens view-only.
+function officeLabel(name: string): string {
+  return canWrite.value && ui.canEditOffice(name) ? t('shareView.editOffice') : t('shareView.viewOffice')
+}
 
 function openOffice(path?: string) {
   window.open(api.shareOfficeUrl(token, path, password.value || undefined), '_blank')
@@ -56,6 +60,7 @@ const crumbs = computed(() => {
 })
 
 onMounted(async () => {
+  ui.loadOffice()
   try {
     data.value = await api.shareView(token)
     // Read/write folders auto-open the listing; a deposit share is blind (no
@@ -266,9 +271,9 @@ async function download() {
                   <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
                 </button>
                 <button
-                  v-if="data.wopi && !e.is_dir && isOffice(e.name)"
+                  v-if="!e.is_dir && ui.canViewOffice(e.name)"
                   class="share-row-act"
-                  :title="officeLabel"
+                  :title="officeLabel(e.name)"
                   @click.stop="openOffice(e.path)"
                 >
                   <FileText :size="14" />
@@ -325,12 +330,12 @@ async function download() {
             </label>
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
             <button
-              v-if="data.wopi && !data.is_dir && isOffice(data.name)"
+              v-if="!data.is_dir && ui.canViewOffice(data.name)"
               class="btn btn-secondary"
               style="width: 100%; height: 42px"
               @click="openOffice()"
             >
-              <FileText :size="16" />{{ officeLabel }}
+              <FileText :size="16" />{{ officeLabel(data.name) }}
             </button>
             <button class="btn btn-primary" style="width: 100%; height: 42px" @click="data.is_dir ? openList('') : download()">
               <component :is="data.is_dir ? FolderOpen : Download" :size="16" />

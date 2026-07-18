@@ -35,8 +35,9 @@ type Dependency struct {
 	Shares *share.Service
 	Tasks  *queue.Queue
 	Auth   *auth.Authenticator
-	Signer *auth.Signer
-	WOPI   *wopi.Token
+	Signer   *auth.Signer
+	WOPI     *wopi.Token
+	WOPIDisc *wopi.Discovery
 }
 
 // Init opens the database and assembles the dependency container. It does not
@@ -85,8 +86,9 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		Shares: share.New(repo, files),
 		Tasks:  tasks,
 		Auth:   authn,
-		Signer: auth.NewSigner(cfg.System.SessionSecret),
-		WOPI:   wopi.NewToken(cfg.System.SessionSecret),
+		Signer:   auth.NewSigner(cfg.System.SessionSecret),
+		WOPI:     wopi.NewToken(cfg.System.SessionSecret),
+		WOPIDisc: wopi.NewDiscovery(cfg.WOPI.Discovery(), time.Hour),
 	}
 	return dep, nil
 }

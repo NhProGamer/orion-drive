@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { api } from '@/lib/api'
+import { ext } from '@/lib/format'
 
 export interface Toast {
   id: number
@@ -18,8 +20,39 @@ export const useUiStore = defineStore('ui', {
     // Touch device (coarse pointer): drives the mobile interaction model
     // (tap-to-open, long-press selection, bottom-sheet menus).
     coarse: window.matchMedia?.('(pointer: coarse)').matches ?? false,
+    // Office formats the configured document server can edit/view (from WOPI
+    // discovery). Empty until loaded, or when Office editing is not configured.
+    officeEdit: [] as string[],
+    officeView: [] as string[],
+    officeLoaded: false,
   }),
+  getters: {
+    // Whether a file can be edited / opened in the online Office editor. The
+    // discovery extension lists are lower-cased; ext() upper-cases, so normalise.
+    canEditOffice:
+      (s) =>
+      (name: string): boolean =>
+        s.officeEdit.includes(ext(name).toLowerCase()),
+    canViewOffice:
+      (s) =>
+      (name: string): boolean => {
+        const e = ext(name).toLowerCase()
+        return s.officeView.includes(e) || s.officeEdit.includes(e)
+      },
+  },
   actions: {
+    // Load the online Office format lists once (best-effort).
+    async loadOffice() {
+      if (this.officeLoaded) return
+      this.officeLoaded = true
+      try {
+        const r = await api.officeFormats()
+        this.officeEdit = r.edit || []
+        this.officeView = r.view || []
+      } catch {
+        this.officeLoaded = false
+      }
+    },
     // Track pointer changes for hybrid devices (e.g. tablet + keyboard).
     watchPointer() {
       const mq = window.matchMedia?.('(pointer: coarse)')

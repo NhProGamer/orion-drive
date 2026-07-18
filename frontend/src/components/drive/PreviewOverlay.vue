@@ -3,10 +3,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, Download, Save, Eye, Pencil, FileQuestion, Crop } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
-import { previewKind, isMarkdown, isOffice } from '@/lib/format'
+import { previewKind, isMarkdown } from '@/lib/format'
 import { renderMarkdown } from '@/lib/markdown'
 import { useFilesStore } from '@/stores/files'
-import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import EpubViewer from './EpubViewer.vue'
 import ImageEditor from './ImageEditor.vue'
 
@@ -16,8 +16,8 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
 const files = useFilesStore()
-const auth = useAuthStore()
-const office = computed(() => isOffice(props.node.name) && auth.wopiEnabled)
+const ui = useUiStore()
+const office = computed(() => ui.canEditOffice(props.node.name))
 const kind = computed(() => previewKind(props.node.name))
 const src = computed(() => api.inlineUrl(props.node.id))
 const markdown = computed(() => isMarkdown(props.node.name))

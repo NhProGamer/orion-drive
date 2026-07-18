@@ -7,11 +7,25 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/NhProGamer/orion-drive/pkg/serializer"
+	"github.com/NhProGamer/orion-drive/pkg/wopi"
 	"github.com/gin-gonic/gin"
 )
+
+// legacyOfficeExts is the fixed format list used only when the document server
+// exposes no WOPI discovery but a legacy EditURLTemplate is configured.
+var legacyOfficeExts = []string{
+	"docx", "doc", "xlsx", "xls", "pptx", "ppt", "odt", "ods", "odp", "csv", "txt", "rtf",
+}
+
+func isLegacyOfficeExt(ext string) bool {
+	return slices.Contains(legacyOfficeExts, ext)
+}
 
 // wopiTokenTTL is how long a WOPI access token stays valid.
 const wopiTokenTTL = 10 * time.Hour
@@ -29,7 +43,37 @@ func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite, 
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return 0, 0, false, false
 	}
+	// Proof-key check (opt-in): prove the call really came from the doc server.
+	if !ctl.wopiProofOK(c) {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return 0, 0, false, false
+	}
 	return tu, id, tw, true
+}
+
+// wopiProofOK verifies the WOPI proof-key signature when enabled. It fails
+// closed only when verification is configured and possible: with no keys yet
+// discovered it lets the request through (best-effort), but with keys present it
+// requires a valid X-WOPI-Proof.
+func (ctl *Controller) wopiProofOK(c *gin.Context) bool {
+	if !ctl.dep.Config.WOPI.VerifyProof {
+		return true
+	}
+	keys := ctl.dep.WOPIDisc.ProofKeys(c.Request.Context())
+	if keys == nil {
+		return true
+	}
+	proof := c.GetHeader("X-WOPI-Proof")
+	tsStr := c.GetHeader("X-WOPI-TimeStamp")
+	if proof == "" || tsStr == "" {
+		return false
+	}
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return false
+	}
+	full := requestOrigin(c) + c.Request.URL.RequestURI()
+	return keys.Verify(c.Query("access_token"), full, ts, proof, c.GetHeader("X-WOPI-ProofOld"))
 }
 
 // WopiCheckFileInfo returns file metadata to the Office editor (WOPI GET).
@@ -114,6 +158,24 @@ func (ctl *Controller) WopiPutFile(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// OfficeFormats reports which extensions the document server can edit or view,
+// so the UI offers the right action per file. Empty when Office is not set up.
+func (ctl *Controller) OfficeFormats(c *gin.Context) {
+	cfg := ctl.dep.Config.WOPI
+	if !cfg.Enabled() {
+		respond(c, serializer.OK(gin.H{"enabled": false, "edit": []string{}, "view": []string{}}))
+		return
+	}
+	ctx := c.Request.Context()
+	edit := ctl.dep.WOPIDisc.EditExts(ctx)
+	view := ctl.dep.WOPIDisc.ViewExts(ctx)
+	if len(edit) == 0 && len(view) == 0 && cfg.EditURLTemplate != "" {
+		// Discovery unavailable but a legacy template is configured.
+		edit, view = legacyOfficeExts, legacyOfficeExts
+	}
+	respond(c, serializer.OK(gin.H{"enabled": true, "edit": edit, "view": view}))
+}
+
 // officeType maps a file extension to the OnlyOffice WOPI editor type segment
 // (word | cell | slide) used in the action URL.
 func officeType(name string) string {
@@ -169,22 +231,39 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite)
 }
 
-// serveOfficeLauncher mints a WOPI token bound to (fileID, uid, canWrite) and
-// writes the auto-submitting launch page for the online editor.
+// serveOfficeLauncher resolves the editor URL for the file's format from the
+// document server's WOPI discovery, mints a token bound to (fileID, uid, write)
+// and writes the auto-submitting launch page. The write grant is downgraded to
+// view when the format has no editable action, and the request is rejected when
+// the format is not supported at all.
 func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite bool) {
-	token, err := ctl.dep.WOPI.Sign(fileID, uid, canWrite, wopiTokenTTL)
-	if err != nil {
-		c.String(http.StatusInternalServerError, "cannot start the editor")
-		return
-	}
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
 	if base == "" {
 		base = requestOrigin(c)
 	}
 	wopiSrc := fmt.Sprintf("%s/wopi/files/%d", base, fileID)
-	// {type} (if present) → word/cell/slide by file kind; {src} → encoded WOPISrc.
-	action := strings.ReplaceAll(ctl.dep.Config.WOPI.EditURLTemplate, "{type}", officeType(name))
-	action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
+
+	var action string
+	editable := false
+	if urlsrc, ed, ok := ctl.dep.WOPIDisc.Action(c.Request.Context(), ext, canWrite); ok {
+		action = wopi.BuildActionURL(urlsrc, wopiSrc)
+		editable = ed
+	} else if tmpl := ctl.dep.Config.WOPI.EditURLTemplate; tmpl != "" && isLegacyOfficeExt(ext) {
+		// Legacy fallback when discovery is unavailable or lacks this extension.
+		action = strings.ReplaceAll(tmpl, "{type}", officeType(name))
+		action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
+		editable = canWrite
+	} else {
+		c.String(http.StatusBadRequest, "this file type cannot be opened in the online editor")
+		return
+	}
+
+	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, wopiTokenTTL)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "cannot start the editor")
+		return
+	}
 	ttlMs := time.Now().Add(wopiTokenTTL).UnixMilli()
 
 	c.Header("Content-Type", "text/html; charset=utf-8")

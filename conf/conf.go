@@ -99,18 +99,39 @@ type Slave struct {
 	StoragePath string `ini:"StoragePath"`
 }
 
-// WOPI configures online Office editing via a WOPI client (Collabra Online,
+// WOPI configures online Office editing via a WOPI client (Collabora Online,
 // OnlyOffice Docs, ...). When ServerURL is empty, Office editing is disabled.
-// EditURLTemplate builds the editor URL from the WOPI source; it must contain
-// the {src} placeholder (URL-encoded WOPISrc), e.g. for Collabora:
+//
+// The set of editable/viewable formats and their editor URLs is discovered from
+// the document server's WOPI discovery.xml (DiscoveryURL, defaulting to
+// ServerURL + /hosting/discovery). EditURLTemplate is an optional legacy
+// fallback used only when discovery is unavailable and has no entry for a file;
+// it must contain the {src} placeholder (URL-encoded WOPISrc), e.g.
 // https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}
 type WOPI struct {
 	ServerURL       string `ini:"ServerURL"`
+	DiscoveryURL    string `ini:"DiscoveryURL"`
 	EditURLTemplate string `ini:"EditURLTemplate"`
+	// VerifyProof enforces WOPI proof-key signature checks on editor callbacks
+	// (X-WOPI-Proof). Off by default since some servers (e.g. OnlyOffice) do not
+	// sign requests; enable it with Collabora/Office Online for defence in depth.
+	VerifyProof bool `ini:"VerifyProof"`
 }
 
 // Enabled reports whether online Office editing is configured.
-func (w WOPI) Enabled() bool { return w.ServerURL != "" && w.EditURLTemplate != "" }
+func (w WOPI) Enabled() bool { return w.ServerURL != "" }
+
+// Discovery returns the WOPI discovery document URL, defaulting to the
+// conventional /hosting/discovery path on the document server.
+func (w WOPI) Discovery() string {
+	if w.DiscoveryURL != "" {
+		return w.DiscoveryURL
+	}
+	if w.ServerURL == "" {
+		return ""
+	}
+	return strings.TrimRight(w.ServerURL, "/") + "/hosting/discovery"
+}
 
 // WebDAV toggles the WebDAV endpoint (/dav). It is enabled by default; users
 // still need to create dedicated WebDAV credentials to connect. Set Enable to

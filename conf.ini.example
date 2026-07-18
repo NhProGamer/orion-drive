@@ -69,20 +69,30 @@ StoragePath = data/slave-storage
 
 [WOPI]
 ; Online Office editing via a WOPI client (OnlyOffice Docs, Collabora Online).
-; ServerURL is the Office server base. EditURLTemplate builds the editor action URL:
-;   {src}  -> the URL-encoded WOPISrc (required)
-;   {type} -> word|cell|slide per document (optional; lets .docx/.xlsx/.pptx all work)
+; Set ServerURL to the document server base — that alone enables Office editing.
 ; OrionDrive opens the editor via a WOPI form POST + iframe (a plain GET on the
 ; action URL returns 404 — this is expected). SiteURL must be reachable by the
-; Office server (for its WOPI callbacks). Both empty disables Office editing.
-; OnlyOffice example:
+; document server for its WOPI callbacks.
+;
+; Which formats can be edited/viewed, and each editor URL, are read from the
+; server's WOPI discovery document (DiscoveryURL, default ServerURL +
+; /hosting/discovery). This is the recommended, vendor-neutral setup.
 ;   ServerURL = https://office.example.com
+;
+; DiscoveryURL overrides the discovery location if it is not at the default path.
+;   DiscoveryURL = https://office.example.com/hosting/discovery
+;
+; EditURLTemplate is an optional legacy fallback, used only when discovery is
+; unavailable and has no entry for a file. {src} -> URL-encoded WOPISrc
+; (required); {type} -> word|cell|slide per document (optional).
 ;   EditURLTemplate = https://office.example.com/hosting/wopi/{type}/edit?WOPISrc={src}
-; Collabora example:
-;   ServerURL = https://collabora.example.com
-;   EditURLTemplate = https://collabora.example.com/browser/dist/cool.html?WOPISrc={src}
+;
+; VerifyProof enforces WOPI proof-key signature checks on editor callbacks. Off
+; by default (OnlyOffice does not sign); enable with Collabora/Office Online.
 ServerURL =
+DiscoveryURL =
 EditURLTemplate =
+VerifyProof = false
 
 [Redis]
 ; Set Server (host:port) to back the cache (upload sessions, OIDC states, ...)

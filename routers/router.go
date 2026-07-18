@@ -94,6 +94,10 @@ func registerAuthRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *
 	}
 
 	api.GET("/user/me", ctl.Me)
+
+	// Public: which formats online Office can edit/view (for the SPA and the
+	// public share page). Empty when Office editing is not configured.
+	api.GET("/office/formats", ctl.OfficeFormats)
 }
 
 func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
