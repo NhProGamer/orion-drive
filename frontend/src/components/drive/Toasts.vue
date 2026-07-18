@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Info, Trash2, RotateCcw, FolderPlus, Download, X, FolderInput } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useUiStore } from '@/stores/ui'
-import type { LucideIcon } from 'lucide-vue-next'
+import { notifIcon } from '@/lib/notifIcons'
 
 const ui = useUiStore()
 
-const ICONS: Record<string, LucideIcon> = {
-  info: Info,
-  trash: Trash2,
-  restore: RotateCcw,
-  'folder-plus': FolderPlus,
-  download: Download,
-  move: FolderInput,
-  x: X,
-}
-const iconFor = computed(() => (name: string) => ICONS[name] || Info)
+// Cap how many toasts float at once so they never run off the screen; fewer on
+// short viewports and touch devices. Overflow still lives in the bell dropdown.
+const winH = ref(window.innerHeight)
+const onResize = () => (winH.value = window.innerHeight)
+onMounted(() => window.addEventListener('resize', onResize))
+onUnmounted(() => window.removeEventListener('resize', onResize))
+
+const maxVisible = computed(() => {
+  const fit = Math.floor((winH.value - 120) / 64)
+  return Math.max(1, Math.min(ui.coarse ? 3 : 5, fit))
+})
+const visible = computed(() => ui.toasts.slice(-maxVisible.value))
 </script>
 
 <template>
   <div class="toasts">
-    <div v-for="t in ui.toasts" :key="t.id" class="toast">
-      <component :is="iconFor(t.icon)" :size="15" />
+    <div v-for="t in visible" :key="t.id" class="toast">
+      <component :is="notifIcon(t.icon)" :size="15" />
       <span>{{ t.msg }}</span>
       <button v-if="t.action" class="toast-action" @click="ui.runAction(t)">{{ t.action.label }}</button>
     </div>

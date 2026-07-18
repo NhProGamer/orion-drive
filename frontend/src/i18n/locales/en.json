@@ -366,5 +366,12 @@
     "since30d": "Last 30 days",
     "since365d": "Last year",
     "clearFilters": "Clear filters"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "clear": "Clear",
+    "now": "Just now",
+    "minsAgo": "{n} min ago"
   }
 }

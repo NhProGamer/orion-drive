@@ -6,8 +6,9 @@ import {
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
-  Sheet, Presentation,
+  Sheet, Presentation, Bell,
 } from 'lucide-vue-next'
+import { notifIcon } from '@/lib/notifIcons'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -51,6 +52,7 @@ const dialog = ref<Dialog>(null)
 const menu = ref<{ x: number; y: number; items: MenuItem[] } | null>(null)
 const newMenuOpen = ref(false)
 const accountMenuOpen = ref(false)
+const notifOpen = ref(false)
 const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
 const webdavOpen = ref(false)
@@ -86,6 +88,22 @@ function closeMenus() {
   menu.value = null
   newMenuOpen.value = false
   accountMenuOpen.value = false
+  notifOpen.value = false
+}
+function toggleNotifs() {
+  notifOpen.value = !notifOpen.value
+  if (notifOpen.value) {
+    accountMenuOpen.value = false
+    newMenuOpen.value = false
+    ui.markNotifsRead()
+  }
+}
+// Compact relative time for a notification (epoch ms).
+function notifTime(ms: number): string {
+  const s = Math.floor((Date.now() - ms) / 1000)
+  if (s < 60) return t('notifications.now')
+  if (s < 3600) return t('notifications.minsAgo', { n: Math.floor(s / 60) })
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 // Close the mobile drawer (called from its in-drawer actions).
 function closeSidebar() {
@@ -360,7 +378,7 @@ function isTyping(e: KeyboardEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (dialog.value) dialog.value = null
-    else if (menu.value || newMenuOpen.value || accountMenuOpen.value) closeMenus()
+    else if (menu.value || newMenuOpen.value || accountMenuOpen.value || notifOpen.value) closeMenus()
     else if (files.previewId) files.previewId = null
     else files.clearSel()
   } else if ((e.key === 'Delete' || e.key === 'Backspace') && files.sel.length && !isTyping(e)) {
@@ -377,13 +395,22 @@ const dropTargetName = computed(() => {
   return files.view === 'drive' ? c[c.length - 1].name : t('shell.myDrive')
 })
 
+// Close the topbar dropdowns when clicking anywhere outside them (the toggles
+// and panels stop propagation, so only true outside clicks reach here).
+function onDocClick() {
+  if (newMenuOpen.value || accountMenuOpen.value || notifOpen.value) closeMenus()
+}
 onMounted(() => {
   files.init()
   ui.watchPointer()
   ui.loadOffice()
   document.addEventListener('keydown', onKey)
+  document.addEventListener('click', onDocClick)
 })
-onUnmounted(() => document.removeEventListener('keydown', onKey))
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKey)
+  document.removeEventListener('click', onDocClick)
+})
 </script>
 
 <template>
@@ -465,6 +492,26 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <button class="icon-btn" :title="ui.theme === 'dark' ? t('shell.lightTheme') : t('shell.darkTheme')" @click="ui.toggleTheme">
             <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
           </button>
+          <div class="notif-wrap">
+            <button class="icon-btn notif-bell" :class="{ active: notifOpen }" :title="t('notifications.title')" @click.stop="toggleNotifs">
+              <Bell :size="16" />
+              <span v-if="ui.unreadCount" class="notif-badge">{{ ui.unreadCount > 9 ? '9+' : ui.unreadCount }}</span>
+            </button>
+            <div v-if="notifOpen" class="menu notif-panel" @click.stop>
+              <div class="notif-head">
+                <span>{{ t('notifications.title') }}</span>
+                <button v-if="ui.notifications.length" class="notif-clear" @click="ui.clearNotifs()">{{ t('notifications.clear') }}</button>
+              </div>
+              <div class="notif-list">
+                <div v-if="!ui.notifications.length" class="notif-empty">{{ t('notifications.empty') }}</div>
+                <div v-for="n in ui.notifications" :key="n.id" class="notif-item">
+                  <component :is="notifIcon(n.icon)" :size="15" />
+                  <span class="notif-msg">{{ n.msg }}</span>
+                  <span class="notif-time">{{ notifTime(n.time) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="account-wrap">
             <button class="avatar" :title="auth.me?.nick" @click.stop="accountMenuOpen = !accountMenuOpen">
               <img v-if="auth.me?.avatar" :src="auth.me.avatar" alt="" />

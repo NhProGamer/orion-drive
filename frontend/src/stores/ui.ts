@@ -9,7 +9,17 @@ export interface Toast {
   action: { label: string; fn: () => void } | null
 }
 
+// A notification is the persisted history of a toast, collected behind the bell.
+export interface Notification {
+  id: number
+  msg: string
+  icon: string
+  time: number
+  read: boolean
+}
+
 let toastSeq = 0
+const MAX_NOTIFS = 50
 
 /** UI-only state: theme, view mode and transient toasts. */
 export const useUiStore = defineStore('ui', {
@@ -26,8 +36,11 @@ export const useUiStore = defineStore('ui', {
     officeView: [] as string[],
     officeNew: [] as string[],
     officeLoaded: false,
+    // Notification history shown in the bell dropdown (newest first).
+    notifications: [] as Notification[],
   }),
   getters: {
+    unreadCount: (s) => s.notifications.filter((n) => !n.read).length,
     // Whether a file can be edited / opened in the online Office editor. The
     // discovery extension lists are lower-cased; ext() upper-cases, so normalise.
     canEditOffice:
@@ -72,9 +85,12 @@ export const useUiStore = defineStore('ui', {
       localStorage.setItem('od-mode', m)
     },
     toast(msg: string, icon = 'info', action: Toast['action'] = null) {
-      const t: Toast = { id: ++toastSeq, msg, icon, action }
-      this.toasts.push(t)
-      setTimeout(() => this.dismiss(t.id), 4000)
+      const id = ++toastSeq
+      this.toasts.push({ id, msg, icon, action })
+      // Keep a persisted copy in the notification history (capped).
+      this.notifications.unshift({ id, msg, icon, time: Date.now(), read: false })
+      if (this.notifications.length > MAX_NOTIFS) this.notifications.length = MAX_NOTIFS
+      setTimeout(() => this.dismiss(id), 4000)
     },
     dismiss(id: number) {
       this.toasts = this.toasts.filter((t) => t.id !== id)
@@ -82,6 +98,12 @@ export const useUiStore = defineStore('ui', {
     runAction(t: Toast) {
       t.action?.fn()
       this.dismiss(t.id)
+    },
+    markNotifsRead() {
+      this.notifications.forEach((n) => (n.read = true))
+    },
+    clearNotifs() {
+      this.notifications = []
     },
   },
 })
