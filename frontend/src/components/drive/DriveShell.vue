@@ -114,6 +114,10 @@ function bgCtx(ev: MouseEvent) {
       { id: 'newfolder', label: t('shell.newFolder'), icon: FolderPlus },
       { id: 'import', label: t('shell.importFiles'), icon: Upload },
       { id: 'importfolder', label: t('shell.importFolder'), icon: FolderUp },
+      ...(officeCreateItems.value.length ? [{ sep: true } as MenuItem] : []),
+      ...officeCreateItems.value.map(
+        (it): MenuItem => ({ id: `office:${it.ext}`, label: t(it.labelKey), icon: it.icon }),
+      ),
     ],
   }
 }
@@ -175,6 +179,12 @@ function ctxItems(): MenuItem[] {
 function menuAction(id: string) {
   const sel = files.selNodes
   menu.value = null
+  if (id.startsWith('office:')) {
+    const ext = id.slice('office:'.length)
+    const typ = OFFICE_NEW_TYPES.find((t) => t.exts.includes(ext))
+    if (typ) newOffice({ ext, nameKey: typ.nameKey })
+    return
+  }
   switch (id) {
     case 'open': if (sel[0]) files.openFolder(sel[0]); break
     case 'preview': if (sel[0]) files.openNode(sel[0]); break
