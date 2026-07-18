@@ -12,12 +12,12 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 
 const ui = useUiStore()
 
-// Permission (only meaningful for folder shares).
+// Permission: read/write apply to files and folders; deposit is folder-only.
 const permission = ref<SharePermission>(props.share.permission)
-const permOptions: { value: SharePermission; label: string }[] = [
-  { value: 'read', label: t('shareDialog.permRead') },
-  { value: 'write', label: t('shareDialog.permWrite') },
-  { value: 'deposit', label: t('shareDialog.permDeposit') },
+const permOptions = [
+  { value: 'read' as SharePermission, label: t('shareDialog.permRead') },
+  { value: 'write' as SharePermission, label: t('shareDialog.permWrite') },
+  ...(props.share.is_dir ? [{ value: 'deposit' as SharePermission, label: t('shareDialog.permDeposit') }] : []),
 ]
 
 // Password: keep existing unless the user changes the toggle / types a new one.
@@ -49,7 +49,7 @@ async function save() {
     expires_days: expiresDays.value === '' ? 0 : Number(expiresDays.value),
     max_downloads: maxDownloads.value === '' ? 0 : Number(maxDownloads.value),
   }
-  if (props.share.is_dir) input.permission = permission.value
+  input.permission = permission.value
   // Password intent: unchecked -> remove (""); checked+typed -> set; checked+empty -> keep (omit).
   if (!hasPassword.value) input.password = ''
   else if (password.value) input.password = password.value
@@ -73,7 +73,7 @@ async function save() {
       <h2><Pencil :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('shareEdit.title', { name: share.name }) }}</h2>
 
       <div style="display: flex; flex-direction: column; gap: 12px">
-        <div v-if="share.is_dir" style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
           <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
           <div class="seg">
             <button

@@ -170,7 +170,8 @@
     "permWrite": "Édition",
     "permWriteHint": "Voir, envoyer, modifier et supprimer",
     "permDeposit": "Dépôt",
-    "permDepositHint": "Envoi uniquement, sans voir le contenu"
+    "permDepositHint": "Envoi uniquement, sans voir le contenu",
+    "permWriteFileHint": "Voir, télécharger et éditer le document en ligne"
   },
   "shareEdit": {
     "title": "Modifier le partage « {name} »",

@@ -170,7 +170,8 @@
     "permWrite": "Edit",
     "permWriteHint": "View, upload, edit and delete",
     "permDeposit": "Drop-off",
-    "permDepositHint": "Upload only, without seeing the contents"
+    "permDepositHint": "Upload only, without seeing the contents",
+    "permWriteFileHint": "View, download and edit the document online"
   },
   "shareEdit": {
     "title": "Edit share “{name}”",

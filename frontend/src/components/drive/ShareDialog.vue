@@ -21,11 +21,14 @@ const loading = ref(false)
 const result = ref<{ url: string } | null>(null)
 const copied = ref(false)
 
-// Write/deposit only apply to folders; a file share is always read-only.
-const permOptions: { value: SharePermission; label: string; hint: string }[] = [
-  { value: 'read', label: t('shareDialog.permRead'), hint: t('shareDialog.permReadHint') },
-  { value: 'write', label: t('shareDialog.permWrite'), hint: t('shareDialog.permWriteHint') },
-  { value: 'deposit', label: t('shareDialog.permDeposit'), hint: t('shareDialog.permDepositHint') },
+// Read and write apply to both files (write = Office editing) and folders;
+// deposit (blind drop box) is folder-only.
+const permOptions = [
+  { value: 'read' as SharePermission, label: t('shareDialog.permRead'), hint: t('shareDialog.permReadHint') },
+  { value: 'write' as SharePermission, label: t('shareDialog.permWrite'), hint: isFolder ? t('shareDialog.permWriteHint') : t('shareDialog.permWriteFileHint') },
+  ...(isFolder
+    ? [{ value: 'deposit' as SharePermission, label: t('shareDialog.permDeposit'), hint: t('shareDialog.permDepositHint') }]
+    : []),
 ]
 
 async function create() {
@@ -33,7 +36,7 @@ async function create() {
   try {
     result.value = await api.createShare({
       file_id: props.node.id,
-      permission: isFolder ? permission.value : 'read',
+      permission: permission.value,
       password: password.value || undefined,
       expires_days: expiresDays.value ? Number(expiresDays.value) : undefined,
       max_downloads: maxDownloads.value ? Number(maxDownloads.value) : undefined,
@@ -62,7 +65,7 @@ async function copy() {
 
       <template v-if="!result">
         <div style="display: flex; flex-direction: column; gap: 12px">
-          <div v-if="isFolder" style="display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
             <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
             <div class="seg">
               <button

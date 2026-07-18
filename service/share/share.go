@@ -77,8 +77,9 @@ func (s *Service) Create(ctx context.Context, user *model.User, opts CreateOptio
 	if err != nil {
 		return nil, err
 	}
-	// Write and deposit shares only make sense on a folder.
-	if perm != model.SharePermRead && !f.IsFolder() {
+	// A deposit (blind drop box) only makes sense on a folder; read and write
+	// apply to both files (write = Office editing) and folders.
+	if perm == model.SharePermDeposit && !f.IsFolder() {
 		return nil, ErrNotAFolder
 	}
 
@@ -132,8 +133,8 @@ func (s *Service) Update(ctx context.Context, user *model.User, token string, op
 		if !validPermission(*opts.Permission) {
 			return nil, ErrBadPermission
 		}
-		// A write/deposit share must point at a folder.
-		if *opts.Permission != model.SharePermRead {
+		// Only a deposit share must point at a folder; write applies to files too.
+		if *opts.Permission == model.SharePermDeposit {
 			f, err := s.repo.File.GetByIDUnscoped(ctx, share.UserID, share.FileID)
 			if err != nil {
 				return nil, err
