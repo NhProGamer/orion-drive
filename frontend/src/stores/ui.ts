@@ -24,6 +24,7 @@ export const useUiStore = defineStore('ui', {
     // discovery). Empty until loaded, or when Office editing is not configured.
     officeEdit: [] as string[],
     officeView: [] as string[],
+    officeNew: [] as string[],
     officeLoaded: false,
   }),
   getters: {
@@ -49,6 +50,7 @@ export const useUiStore = defineStore('ui', {
         const r = await api.officeFormats()
         this.officeEdit = r.edit || []
         this.officeView = r.view || []
+        this.officeNew = r.new || []
       } catch {
         this.officeLoaded = false
       }

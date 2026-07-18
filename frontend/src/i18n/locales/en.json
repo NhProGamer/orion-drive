@@ -292,7 +292,14 @@
     "moveToTrash": "Move to trash",
     "logout": "Sign out",
     "details": "Details",
-    "select": "Select"
+    "select": "Select",
+    "newDocument": "New document",
+    "newSpreadsheet": "New spreadsheet",
+    "newPresentation": "New presentation",
+    "newDocumentTitle": "New document",
+    "untitledDocument": "Untitled document",
+    "untitledSpreadsheet": "Untitled spreadsheet",
+    "untitledPresentation": "Untitled presentation"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

@@ -18,6 +18,7 @@ const sampleDiscovery = `<?xml version="1.0"?>
   <net-zone name="external-https">
     <app name="Word">
       <action name="edit" ext="docx" urlsrc="https://docs.example/word/edit?&lt;ui=UI_LLCC&amp;&gt;&lt;rs=DC_LLCC&amp;&gt;WOPISrc="/>
+      <action name="editnew" ext="docx" urlsrc="https://docs.example/word/new?WOPISrc="/>
       <action name="view" ext="pdf" urlsrc="https://docs.example/word/view?WOPISrc="/>
     </app>
     <app name="Excel">
@@ -52,6 +53,16 @@ func TestDiscoveryParse(t *testing.T) {
 	}
 	if got := d.ViewExts(ctx); len(got) != 3 { // docx, xlsx, pdf
 		t.Fatalf("view exts = %v", got)
+	}
+	// docx has an editnew action; xlsx does not.
+	if _, ok := d.NewAction(ctx, "docx"); !ok {
+		t.Fatal("docx should be creatable")
+	}
+	if _, ok := d.NewAction(ctx, "xlsx"); ok {
+		t.Fatal("xlsx should not be creatable")
+	}
+	if got := d.NewExts(ctx); len(got) != 1 || got[0] != "docx" {
+		t.Fatalf("new exts = %v", got)
 	}
 }
 

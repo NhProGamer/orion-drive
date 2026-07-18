@@ -119,6 +119,7 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.PUT("/file/text", ctl.SaveText)
 	f.PUT("/file/blob/:id", ctl.SaveBlob)
 	f.GET("/file/office/:id", ctl.OfficeLaunch)
+	f.POST("/file/office/new", ctl.OfficeNew)
 
 	f.GET("/file/versions/:id", ctl.ListVersions)
 	f.POST("/file/version/restore", ctl.RestoreVersion)

@@ -292,7 +292,14 @@
     "moveToTrash": "Déplacer vers la corbeille",
     "logout": "Se déconnecter",
     "details": "Détails",
-    "select": "Sélectionner"
+    "select": "Sélectionner",
+    "newDocument": "Nouveau document",
+    "newSpreadsheet": "Nouvelle feuille de calcul",
+    "newPresentation": "Nouvelle présentation",
+    "newDocumentTitle": "Nouveau document",
+    "untitledDocument": "Document sans titre",
+    "untitledSpreadsheet": "Feuille sans titre",
+    "untitledPresentation": "Présentation sans titre"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

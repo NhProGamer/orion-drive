@@ -169,11 +169,52 @@ func (ctl *Controller) OfficeFormats(c *gin.Context) {
 	ctx := c.Request.Context()
 	edit := ctl.dep.WOPIDisc.EditExts(ctx)
 	view := ctl.dep.WOPIDisc.ViewExts(ctx)
+	// "new" are formats the server can create blank (editnew action). This needs
+	// a real document server, so there is no legacy fallback for it.
+	create := ctl.dep.WOPIDisc.NewExts(ctx)
 	if len(edit) == 0 && len(view) == 0 && cfg.EditURLTemplate != "" {
 		// Discovery unavailable but a legacy template is configured.
 		edit, view = legacyOfficeExts, legacyOfficeExts
 	}
-	respond(c, serializer.OK(gin.H{"enabled": true, "edit": edit, "view": view}))
+	respond(c, serializer.OK(gin.H{"enabled": true, "edit": edit, "view": view, "new": create}))
+}
+
+type officeNewReq struct {
+	Parent string `json:"parent"`
+	Name   string `json:"name"`
+}
+
+// OfficeNew creates a blank document of a WOPI-creatable format in a folder and
+// returns it, so the caller can open it in the editor. The extension must have
+// an editnew action in the document server's discovery; the file is stored empty
+// and the editor initialises the blank content on first save.
+func (ctl *Controller) OfficeNew(c *gin.Context) {
+	if !ctl.dep.Config.WOPI.Enabled() {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "online Office editing is not configured"))
+		return
+	}
+	var req officeNewReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	ext := strings.ToLower(strings.TrimPrefix(path.Ext(req.Name), "."))
+	if _, ok := ctl.dep.WOPIDisc.NewAction(c.Request.Context(), ext); !ok {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "this file type cannot be created"))
+		return
+	}
+	parentID, err := parseParentID(req.Parent)
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
+		return
+	}
+	u := ctl.user(c)
+	f, err := ctl.dep.Files.WriteFile(c.Request.Context(), u, parentID, req.Name, strings.NewReader(""), 0)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(toDTO(f, u.DisplayName())))
 }
 
 // officeType maps a file extension to the OnlyOffice WOPI editor type segment
@@ -209,8 +250,8 @@ func (ctl *Controller) OfficeLaunch(c *gin.Context) {
 		c.String(http.StatusNotFound, "file not found")
 		return
 	}
-	// The owner always edits their own file.
-	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true)
+	// The owner always edits their own file; an empty one opens as a new document.
+	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true, f.Size == 0)
 }
 
 // OfficeLaunchShare opens a shared Office file in the editor for an anonymous
@@ -228,7 +269,7 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 		c.String(http.StatusForbidden, "cannot open this document")
 		return
 	}
-	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite)
+	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite, false)
 }
 
 // serveOfficeLauncher resolves the editor URL for the file's format from the
@@ -236,7 +277,7 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 // and writes the auto-submitting launch page. The write grant is downgraded to
 // view when the format has no editable action, and the request is rejected when
 // the format is not supported at all.
-func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite bool) {
+func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite, preferNew bool) {
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
 	if base == "" {
@@ -246,17 +287,28 @@ func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, nam
 
 	var action string
 	editable := false
-	if urlsrc, ed, ok := ctl.dep.WOPIDisc.Action(c.Request.Context(), ext, canWrite); ok {
-		action = wopi.BuildActionURL(urlsrc, wopiSrc)
-		editable = ed
-	} else if tmpl := ctl.dep.Config.WOPI.EditURLTemplate; tmpl != "" && isLegacyOfficeExt(ext) {
-		// Legacy fallback when discovery is unavailable or lacks this extension.
-		action = strings.ReplaceAll(tmpl, "{type}", officeType(name))
-		action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
-		editable = canWrite
-	} else {
-		c.String(http.StatusBadRequest, "this file type cannot be opened in the online editor")
-		return
+	ctx := c.Request.Context()
+	// A freshly-created empty document opens via the editnew action so the server
+	// initialises blank content; existing files use the normal edit/view action.
+	if preferNew {
+		if urlsrc, ok := ctl.dep.WOPIDisc.NewAction(ctx, ext); ok {
+			action = wopi.BuildActionURL(urlsrc, wopiSrc)
+			editable = true
+		}
+	}
+	if action == "" {
+		if urlsrc, ed, ok := ctl.dep.WOPIDisc.Action(ctx, ext, canWrite); ok {
+			action = wopi.BuildActionURL(urlsrc, wopiSrc)
+			editable = ed
+		} else if tmpl := ctl.dep.Config.WOPI.EditURLTemplate; tmpl != "" && isLegacyOfficeExt(ext) {
+			// Legacy fallback when discovery is unavailable or lacks this extension.
+			action = strings.ReplaceAll(tmpl, "{type}", officeType(name))
+			action = strings.ReplaceAll(action, "{src}", url.QueryEscape(wopiSrc))
+			editable = canWrite
+		} else {
+			c.String(http.StatusBadRequest, "this file type cannot be opened in the online editor")
+			return
+		}
 	}
 
 	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, wopiTokenTTL)

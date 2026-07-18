@@ -43,6 +43,7 @@ type Discovery struct {
 	mu      sync.RWMutex
 	edit    map[string]string // ext → edit urlsrc
 	view    map[string]string // ext → view urlsrc
+	create  map[string]string // ext → editnew urlsrc (blank-document creation)
 	proof   *ProofKeys
 	fetched time.Time
 	ok      bool
@@ -60,6 +61,7 @@ func NewDiscovery(discoveryURL string, ttl time.Duration) *Discovery {
 		client: &http.Client{Timeout: 10 * time.Second},
 		edit:   map[string]string{},
 		view:   map[string]string{},
+		create: map[string]string{},
 	}
 }
 
@@ -111,6 +113,7 @@ func (d *Discovery) refresh(ctx context.Context) error {
 
 	edit := map[string]string{}
 	view := map[string]string{}
+	create := map[string]string{}
 	for _, app := range doc.NetZone.Apps {
 		for _, a := range app.Actions {
 			ext := strings.ToLower(strings.TrimPrefix(a.Ext, "."))
@@ -118,9 +121,17 @@ func (d *Discovery) refresh(ctx context.Context) error {
 				continue
 			}
 			switch a.Name {
-			case "edit", "editnew":
+			case "edit":
 				if _, seen := edit[ext]; !seen {
 					edit[ext] = a.URLSrc
+				}
+			case "editnew":
+				// editnew implies the format is both editable and creatable.
+				if _, seen := edit[ext]; !seen {
+					edit[ext] = a.URLSrc
+				}
+				if _, seen := create[ext]; !seen {
+					create[ext] = a.URLSrc
 				}
 			case "view", "embedview":
 				if _, seen := view[ext]; !seen {
@@ -131,7 +142,7 @@ func (d *Discovery) refresh(ctx context.Context) error {
 	}
 
 	d.mu.Lock()
-	d.edit, d.view = edit, view
+	d.edit, d.view, d.create = edit, view, create
 	d.proof = parseProofKeys(doc.ProofKey)
 	d.fetched = time.Now()
 	d.ok = true
@@ -161,6 +172,24 @@ func (d *Discovery) Action(ctx context.Context, ext string, wantEdit bool) (urls
 		return u, false, true
 	}
 	return "", false, false
+}
+
+// NewAction returns the editnew launch URL for creating a blank ext document.
+func (d *Discovery) NewAction(ctx context.Context, ext string) (urlsrc string, ok bool) {
+	d.ensure(ctx)
+	ext = strings.ToLower(strings.TrimPrefix(ext, "."))
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	u := d.create[ext]
+	return u, u != ""
+}
+
+// NewExts returns the sorted extensions the server can create blank (editnew).
+func (d *Discovery) NewExts(ctx context.Context) []string {
+	d.ensure(ctx)
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return sortedKeys(d.create)
 }
 
 // EditExts returns the sorted extensions that can be edited.

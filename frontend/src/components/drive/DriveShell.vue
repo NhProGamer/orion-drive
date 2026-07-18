@@ -6,6 +6,7 @@ import {
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
+  Sheet, Presentation,
 } from 'lucide-vue-next'
 import { useFilesStore, type View } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
@@ -42,6 +43,7 @@ const dialogInput = ref<HTMLInputElement>()
 type Dialog =
   | { type: 'rename'; id: number; value: string }
   | { type: 'folder'; value: string }
+  | { type: 'office'; value: string; ext: string }
   | { type: 'purge'; ids: number[] }
   | { type: 'emptytrash' }
   | null
@@ -214,6 +216,26 @@ function openNewFolder() {
   dialog.value = { type: 'folder', value: t('shell.newFolder') }
   focusDialog()
 }
+
+// Blank-document types offered in the New menu, filtered to the formats the
+// document server can create (WOPI editnew), preferring OOXML over ODF.
+const OFFICE_NEW_TYPES = [
+  { exts: ['docx', 'odt'], icon: FileText, labelKey: 'shell.newDocument', nameKey: 'shell.untitledDocument' },
+  { exts: ['xlsx', 'ods'], icon: Sheet, labelKey: 'shell.newSpreadsheet', nameKey: 'shell.untitledSpreadsheet' },
+  { exts: ['pptx', 'odp'], icon: Presentation, labelKey: 'shell.newPresentation', nameKey: 'shell.untitledPresentation' },
+]
+const officeCreateItems = computed(() =>
+  OFFICE_NEW_TYPES.map((typ) => {
+    const ext = typ.exts.find((e) => ui.officeNew.includes(e))
+    return ext ? { ...typ, ext } : null
+  }).filter((x): x is NonNullable<typeof x> => x !== null),
+)
+function newOffice(item: { ext: string; nameKey: string }) {
+  closeMenus()
+  sidebarOpen.value = false
+  dialog.value = { type: 'office', value: `${t(item.nameKey)}.${item.ext}`, ext: item.ext }
+  focusDialog()
+}
 function focusDialog() {
   nextTick(() => {
     dialogInput.value?.focus()
@@ -228,6 +250,12 @@ async function confirmDialog() {
     if (v) await files.rename(d.id, v)
   } else if (d.type === 'folder') {
     await files.createFolder(d.value.trim() || t('shell.newFolder'))
+  } else if (d.type === 'office') {
+    const name = d.value.trim()
+    if (name) {
+      const node = await files.createOffice(name)
+      if (node) files.openOffice(node)
+    }
   } else if (d.type === 'purge') {
     await files.purge(d.ids)
   } else if (d.type === 'emptytrash') {
@@ -373,6 +401,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />{{ t('shell.newFolder') }}</button>
           <button class="menu-item" @click="triggerUpload"><Upload :size="16" />{{ t('shell.importFiles') }}</button>
           <button class="menu-item" @click="triggerFolderUpload"><FolderUp :size="16" />{{ t('shell.importFolder') }}</button>
+          <template v-if="officeCreateItems.length">
+            <div class="menu-sep"></div>
+            <button v-for="it in officeCreateItems" :key="it.ext" class="menu-item" @click="newOffice(it)">
+              <component :is="it.icon" :size="16" />{{ t(it.labelKey) }}
+            </button>
+          </template>
         </div>
       </div>
       <nav :aria-label="t('shell.mainNav')">
@@ -592,6 +626,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         <template v-else-if="dialog.type === 'folder'">
           <h2>{{ t('shell.newFolder') }}</h2>
           <input ref="dialogInput" v-model="dialog.value" class="input" type="text" :placeholder="t('shell.folderNamePlaceholder')" @keyup.enter="confirmDialog" />
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>
+          </div>
+        </template>
+        <template v-else-if="dialog.type === 'office'">
+          <h2>{{ t('shell.newDocumentTitle') }}</h2>
+          <input ref="dialogInput" v-model="dialog.value" class="input" type="text" @keyup.enter="confirmDialog" />
           <div class="dialog-actions">
             <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
             <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>

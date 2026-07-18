@@ -299,6 +299,14 @@ export const useFilesStore = defineStore('files', {
       this.ui().toast(t('files.folderCreated', { name }), 'folder-plus')
     },
 
+    // Create a blank Office document in the current folder and return it, so the
+    // caller can open it in the online editor.
+    async createOffice(name: string) {
+      const node = await api.officeNew(this.currentParentParam, name)
+      await this.load()
+      return node
+    },
+
     async rename(id: number, name: string) {
       await api.rename(id, name)
       await this.load()

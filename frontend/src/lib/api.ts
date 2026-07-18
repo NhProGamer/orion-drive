@@ -323,7 +323,9 @@ export const api = {
     post<WebdavCreated>('/webdav/accounts', input),
   deleteWebdavAccount: (id: number) => http.delete(`/webdav/accounts/${id}`),
 
-  officeFormats: () => get<{ enabled: boolean; edit: string[]; view: string[] }>('/office/formats'),
+  officeFormats: () =>
+    get<{ enabled: boolean; edit: string[]; view: string[]; new: string[] }>('/office/formats'),
+  officeNew: (parent: string, name: string) => post<FileNode>('/file/office/new', { parent, name }),
 
   logout: () => post<{ logout_url: string }>('/auth/logout'),
 
