@@ -46,17 +46,12 @@ var writeMethods = map[string]bool{
 // authenticate with dedicated WebDAV credentials (HTTP Basic), not the OIDC
 // session, since WebDAV clients cannot perform an interactive OIDC flow.
 func Handler(mgr *filemanager.Manager, repo *repository.Repository) http.Handler {
-	dav := &xwebdav.Handler{
-		Prefix:     Prefix,
-		FileSystem: NewFS(mgr, repo),
-		LockSystem: xwebdav.NewMemLS(),
-	}
-	return &authHandler{repo: repo, dav: dav}
+	return &authHandler{repo: repo, fs: NewFS(mgr, repo)}
 }
 
 type authHandler struct {
 	repo *repository.Repository
-	dav  *xwebdav.Handler
+	fs   *FS
 }
 
 func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,8 +80,15 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.repo.WebDAV.TouchLastUsed(r.Context(), acct.ID)
 
+	// Build the WebDAV handler per request so the lock system is bound to this
+	// user (locks are persisted in the DB and isolated per user).
+	dav := &xwebdav.Handler{
+		Prefix:     Prefix,
+		FileSystem: h.fs,
+		LockSystem: newLocks(h.repo, user.ID),
+	}
 	ctx := withUser(r.Context(), user)
-	h.dav.ServeHTTP(w, r.WithContext(ctx))
+	dav.ServeHTTP(w, r.WithContext(ctx))
 }
 
 func unauthorized(w http.ResponseWriter) {

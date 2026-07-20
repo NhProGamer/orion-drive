@@ -15,6 +15,7 @@ type Repository struct {
 	Share      *ShareRepo
 	DirectLink *DirectLinkRepo
 	WebDAV     *WebDAVAccountRepo
+	WebDAVLock *WebDAVLockRepo
 }
 
 // New builds a Repository bound to db.
@@ -29,5 +30,6 @@ func New(db *gorm.DB) *Repository {
 		Share:      &ShareRepo{db: db},
 		DirectLink: &DirectLinkRepo{db: db},
 		WebDAV:     &WebDAVAccountRepo{db: db},
+		WebDAVLock: &WebDAVLockRepo{db: db},
 	}
 }

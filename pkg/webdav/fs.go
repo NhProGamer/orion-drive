@@ -6,11 +6,15 @@ package webdav
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -180,7 +184,10 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 		return nil, os.ErrPermission
 	}
 
-	if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+	// Write intent (PUT) sets O_WRONLY or O_CREATE/O_TRUNC. A plain O_RDWR (used
+	// by PROPPATCH) must NOT be treated as a write, or it would truncate the file;
+	// it falls through to the read/dir path, which carries the dead-prop handler.
+	if flag&os.O_WRONLY != 0 || flag&(os.O_CREATE|os.O_TRUNC) != 0 {
 		parentID, leaf, err := f.resolveParent(ctx, user, name)
 		if err != nil {
 			return nil, err
@@ -199,7 +206,7 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	return &readFile{rc: rc, info: newInfo(target)}, nil
+	return &readFile{davNode: davNode{fs: f, ctx: ctx, user: user, target: target}, rc: rc, info: newInfo(target)}, nil
 }
 
 // openDir builds a directory File whose Readdir lists target's children (or the
@@ -218,7 +225,7 @@ func (f *FS) openDir(ctx context.Context, user *model.User, target *model.File) 
 	for i := range kids {
 		infos = append(infos, newInfo(&kids[i]))
 	}
-	return &dirFile{info: newInfo(target), children: infos}, nil
+	return &dirFile{davNode: davNode{fs: f, ctx: ctx, user: user, target: target}, info: newInfo(target), children: infos}, nil
 }
 
 // samePtr reports whether two *uint are equal (both nil, or same value).
@@ -256,8 +263,156 @@ func newInfo(target *model.File) *fileInfo {
 	return &fileInfo{name: target.Name, size: target.Size, mode: 0o644, modTime: target.UpdatedAt}
 }
 
+// --- Dead (custom) properties + RFC 4331 quota properties --------------------
+//
+// x/net/webdav calls DeadProps/Patch on the File returned by OpenFile, so both
+// regular files and collections implement webdav.DeadPropsHolder through the
+// embedded davNode. Custom properties set via PROPPATCH are persisted in the
+// File's Props JSON (namespaced under "dav"); collections additionally expose
+// computed quota-used-bytes / quota-available-bytes so clients show free space.
+
+// davProp is one stored dead property.
+type davProp struct {
+	Space    string `json:"s"`
+	Local    string `json:"l"`
+	Lang     string `json:"lang,omitempty"`
+	InnerXML []byte `json:"x"`
+}
+
+// davNode gives a WebDAV File its dead-property behaviour. target is nil for the
+// drive root (a collection with no File row, so it cannot persist props).
+type davNode struct {
+	fs     *FS
+	ctx    context.Context
+	user   *model.User
+	target *model.File
+}
+
+func (n davNode) isCollection() bool { return n.target == nil || n.target.IsFolder() }
+
+func isQuotaProp(name xml.Name) bool {
+	return name.Space == "DAV:" && (name.Local == "quota-available-bytes" || name.Local == "quota-used-bytes")
+}
+
+// DeadProps returns the stored custom properties plus, for collections, the
+// computed quota properties.
+func (n davNode) DeadProps() (map[xml.Name]xwebdav.Property, error) {
+	props := map[xml.Name]xwebdav.Property{}
+	if n.target != nil {
+		for _, p := range decodeDavProps(n.target) {
+			nm := xml.Name{Space: p.Space, Local: p.Local}
+			props[nm] = xwebdav.Property{XMLName: nm, Lang: p.Lang, InnerXML: p.InnerXML}
+		}
+	}
+	if n.isCollection() {
+		if used, total, err := n.fs.mgr.Capacity(n.ctx, n.user); err == nil {
+			add := func(local string, v int64) {
+				nm := xml.Name{Space: "DAV:", Local: local}
+				props[nm] = xwebdav.Property{XMLName: nm, InnerXML: []byte(strconv.FormatInt(v, 10))}
+			}
+			if total > 0 { // only advertise availability when the quota is bounded
+				avail := total - used
+				if avail < 0 {
+					avail = 0
+				}
+				add("quota-available-bytes", avail)
+			}
+			add("quota-used-bytes", used)
+		}
+	}
+	return props, nil
+}
+
+// Patch applies a PROPPATCH: sets/removes custom properties on the File. Quota
+// properties are computed and read-only; the root has no File row to store on.
+func (n davNode) Patch(patches []xwebdav.Proppatch) ([]xwebdav.Propstat, error) {
+	if n.target == nil {
+		return failPatch(patches, http.StatusForbidden), nil
+	}
+	for _, patch := range patches {
+		for _, prop := range patch.Props {
+			if isQuotaProp(prop.XMLName) {
+				return failPatch(patches, http.StatusForbidden), nil
+			}
+		}
+	}
+	// Reload for the freshest Props, then apply and persist.
+	f, err := n.fs.repo.File.GetByIDUnscoped(n.ctx, n.user.ID, n.target.ID)
+	if err != nil {
+		return nil, err
+	}
+	m := map[xml.Name]davProp{}
+	for _, p := range decodeDavProps(f) {
+		m[xml.Name{Space: p.Space, Local: p.Local}] = p
+	}
+	var ok []xwebdav.Property
+	for _, patch := range patches {
+		for _, prop := range patch.Props {
+			if patch.Remove {
+				delete(m, prop.XMLName)
+			} else {
+				m[prop.XMLName] = davProp{Space: prop.XMLName.Space, Local: prop.XMLName.Local, Lang: prop.Lang, InnerXML: prop.InnerXML}
+			}
+			ok = append(ok, xwebdav.Property{XMLName: prop.XMLName})
+		}
+	}
+	list := make([]davProp, 0, len(m))
+	for _, p := range m {
+		list = append(list, p)
+	}
+	setDavProps(f, list)
+	if err := n.fs.repo.File.Update(n.ctx, f); err != nil {
+		return nil, err
+	}
+	return []xwebdav.Propstat{{Props: ok, Status: http.StatusOK}}, nil
+}
+
+// failPatch reports the given status for every property in patches.
+func failPatch(patches []xwebdav.Proppatch, status int) []xwebdav.Propstat {
+	var props []xwebdav.Property
+	for _, patch := range patches {
+		for _, prop := range patch.Props {
+			props = append(props, xwebdav.Property{XMLName: prop.XMLName})
+		}
+	}
+	return []xwebdav.Propstat{{Props: props, Status: status}}
+}
+
+// decodeDavProps reads the stored dead properties from a File's Props JSON.
+func decodeDavProps(f *model.File) []davProp {
+	var wrap map[string]json.RawMessage
+	if f.Props.Unmarshal(&wrap) != nil || wrap == nil {
+		return nil
+	}
+	raw, ok := wrap["dav"]
+	if !ok {
+		return nil
+	}
+	var list []davProp
+	_ = json.Unmarshal(raw, &list)
+	return list
+}
+
+// setDavProps writes the dead properties into a File's Props JSON, preserving
+// any other keys (e.g. provenance) already stored there.
+func setDavProps(f *model.File, list []davProp) {
+	wrap := map[string]json.RawMessage{}
+	_ = f.Props.Unmarshal(&wrap)
+	if wrap == nil {
+		wrap = map[string]json.RawMessage{}
+	}
+	if len(list) == 0 {
+		delete(wrap, "dav")
+	} else {
+		b, _ := json.Marshal(list)
+		wrap["dav"] = b
+	}
+	f.Props = model.MustJSON(wrap)
+}
+
 // readFile is a read-only regular file backed by a seekable content stream.
 type readFile struct {
+	davNode
 	rc   driver.ReadSeekCloser
 	info os.FileInfo
 }
@@ -271,6 +426,7 @@ func (r *readFile) Stat() (fs.FileInfo, error)          { return r.info, nil }
 
 // dirFile is a directory: Readdir yields its children; content ops are invalid.
 type dirFile struct {
+	davNode
 	info     os.FileInfo
 	children []fs.FileInfo
 	off      int
