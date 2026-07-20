@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -43,13 +44,26 @@ func (m *Manager) Thumbnail(ctx context.Context, user *model.User, id uint) ([]b
 		m.removeEntity(ctx, e.ID) // stale — regenerate below
 	}
 
-	data, err := m.generateThumb(ctx, f, kind)
+	// Collapse concurrent requests for the same file+version into one generation
+	// (thundering-herd guard). The winner re-checks the cache — another request
+	// may have just produced it — then generates and stores.
+	key := fmt.Sprintf("thumb:%d:%d", f.ID, *f.PrimaryEntityID)
+	v, err, _ := m.thumbSF.Do(key, func() (any, error) {
+		if e, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil && e.DecodeProps().ThumbOf == *f.PrimaryEntityID {
+			return m.readEntityBytes(ctx, e)
+		}
+		data, gerr := m.generateThumb(ctx, f, kind)
+		if gerr != nil {
+			return nil, gerr
+		}
+		// Caching failures are non-fatal: still return the freshly generated image.
+		_ = m.storeThumb(ctx, user, f, data)
+		return data, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	// Caching failures are non-fatal: still return the freshly generated image.
-	_ = m.storeThumb(ctx, user, f, data)
-	return data, nil
+	return v.([]byte), nil
 }
 
 // generateThumb builds thumbnail bytes for a file.
@@ -67,6 +81,13 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 		}
 		return thumb.Image(data)
 	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF:
+		// External generators are heavy: cap how many run at once.
+		select {
+		case m.thumbSem <- struct{}{}:
+			defer func() { <-m.thumbSem }()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {

@@ -17,18 +17,30 @@ import (
 	"path/filepath"
 	"strings"
 
-	// Register the image decoders used by the built-in generator.
+	// Register the image decoders used by the built-in generator. WebP, BMP and
+	// TIFF are pure-Go, so those formats no longer need the vips binary.
 	_ "image/gif"
 	_ "image/png"
+
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp"
 
 	"golang.org/x/image/draw"
 )
 
-// MaxDim is the longest edge (px) of a generated thumbnail.
-const MaxDim = 400
+// Defaults for the tunable settings; overridden by Configure.
+const (
+	defaultMaxDim  = 400
+	defaultQuality = 82
+)
 
-// jpegQuality is the encoding quality for thumbnails.
-const jpegQuality = 82
+// Tunable settings, set at startup by Configure. maxDim is the longest edge (px)
+// of a generated thumbnail; jpegQuality is the JPEG encoding quality.
+var (
+	maxDim      = defaultMaxDim
+	jpegQuality = defaultQuality
+)
 
 // Thumbnail strategies returned by Kind.
 const (
@@ -44,9 +56,9 @@ const (
 // Kind reports the thumbnail strategy for a file extension, or "" if none.
 func Kind(ext string) string {
 	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
-	case "jpg", "jpeg", "png", "gif":
+	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif":
 		return KindImage
-	case "webp", "tiff", "tif", "bmp", "heic", "heif", "avif", "jxl", "jp2", "jpx":
+	case "heic", "heif", "avif", "jxl", "jp2", "jpx":
 		return KindVIPS
 	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf",
 		"rw2", "pef", "srw", "k25", "kdc", "dcr", "mrw", "x3f", "3fr", "mef", "iiq", "mos", "raw":
@@ -64,45 +76,129 @@ func Kind(ext string) string {
 	}
 }
 
-// has reports whether an external binary is on PATH.
+// External-tool settings, set at startup by Configure. Empty binary paths fall
+// back to the default names (resolved on PATH); the disable flags force a
+// generator off even when its binary is present.
+var (
+	disabled                                           bool
+	binFFmpeg                                          = "ffmpeg"
+	binVips                                            = "vips"
+	binPoppler                                         = "pdftoppm"
+	binLibre                                           string // "" → soffice, then libreoffice
+	binLibRaw                                          string // "" → simple_dcraw, then dcraw_emu
+	disVideo, disAudio, disVips, disRaw, disPDF, disDoc bool
+)
+
+// Options configures the thumbnail generators. A zero value keeps the defaults.
+type Options struct {
+	Disable         bool // master switch: disable all thumbnails
+	MaxDim, Quality int  // 0 keeps the default
+	DisableVideo, DisableAudio, DisableVips, DisableRaw, DisablePDF, DisableDocument bool
+	// Binary path overrides (empty = default name resolved on PATH).
+	FFmpegPath, VipsPath, PopplerPath, LibreOfficePath, LibRawPath string
+}
+
+// Configure applies runtime settings; called once at startup.
+func Configure(o Options) {
+	disabled = o.Disable
+	if o.MaxDim > 0 {
+		maxDim = o.MaxDim
+	}
+	if o.Quality > 0 {
+		jpegQuality = o.Quality
+	}
+	disVideo, disAudio = o.DisableVideo, o.DisableAudio
+	disVips, disRaw = o.DisableVips, o.DisableRaw
+	disPDF, disDoc = o.DisablePDF, o.DisableDocument
+	if o.FFmpegPath != "" {
+		binFFmpeg = o.FFmpegPath
+	}
+	if o.VipsPath != "" {
+		binVips = o.VipsPath
+	}
+	if o.PopplerPath != "" {
+		binPoppler = o.PopplerPath
+	}
+	binLibre = o.LibreOfficePath
+	binLibRaw = o.LibRawPath
+}
+
+// has reports whether an external binary is on PATH (or is an explicit path).
 func has(bin string) bool {
+	if bin == "" {
+		return false
+	}
 	_, err := exec.LookPath(bin)
 	return err == nil
 }
 
+// libreBin resolves the LibreOffice binary, honouring the override.
+func libreBin() string {
+	if binLibre != "" {
+		return binLibre
+	}
+	if has("soffice") {
+		return "soffice"
+	}
+	if has("libreoffice") {
+		return "libreoffice"
+	}
+	return ""
+}
+
+// libRawBin resolves the LibRaw preview extractor, honouring the override.
+func libRawBin() string {
+	if binLibRaw != "" {
+		return binLibRaw
+	}
+	if has("simple_dcraw") {
+		return "simple_dcraw"
+	}
+	if has("dcraw_emu") {
+		return "dcraw_emu"
+	}
+	return ""
+}
+
 // FFmpegAvailable reports whether ffmpeg is present (video/audio thumbnails).
-func FFmpegAvailable() bool { return has("ffmpeg") }
+func FFmpegAvailable() bool { return has(binFFmpeg) }
 
 // VipsAvailable reports whether libvips is present (extended image formats).
-func VipsAvailable() bool { return has("vips") }
+func VipsAvailable() bool { return has(binVips) }
 
 // RawAvailable reports whether a LibRaw tool is present (camera RAW).
-func RawAvailable() bool { return has("simple_dcraw") || has("dcraw_emu") }
+func RawAvailable() bool { return libRawBin() != "" }
 
 // PopplerAvailable reports whether pdftoppm is present (PDF rasterisation).
-func PopplerAvailable() bool { return has("pdftoppm") }
+func PopplerAvailable() bool { return has(binPoppler) }
 
 // LibreOfficeAvailable reports whether documents can be thumbnailed (LibreOffice
 // converts them to PDF, which poppler then rasterises).
 func LibreOfficeAvailable() bool {
-	return (has("soffice") || has("libreoffice")) && PopplerAvailable()
+	return libreBin() != "" && PopplerAvailable()
 }
 
-// Available reports whether the host can generate a thumbnail for the strategy.
+// Available reports whether the host can generate a thumbnail for the strategy,
+// honouring both binary presence and the configured disable flags.
 func Available(kind string) bool {
+	if disabled {
+		return false
+	}
 	switch kind {
 	case KindImage:
 		return true
-	case KindVideo, KindAudio:
-		return FFmpegAvailable()
+	case KindVideo:
+		return !disVideo && FFmpegAvailable()
+	case KindAudio:
+		return !disAudio && FFmpegAvailable()
 	case KindVIPS:
-		return VipsAvailable()
+		return !disVips && VipsAvailable()
 	case KindRaw:
-		return RawAvailable()
+		return !disRaw && RawAvailable()
 	case KindPDF:
-		return PopplerAvailable()
+		return !disPDF && PopplerAvailable()
 	case KindDocument:
-		return LibreOfficeAvailable()
+		return !disDoc && LibreOfficeAvailable()
 	default:
 		return false
 	}
@@ -119,12 +215,12 @@ func Image(data []byte) ([]byte, error) {
 
 // Video extracts a frame from the video at path and returns a JPEG thumbnail.
 func Video(ctx context.Context, path string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "ffmpeg",
+	cmd := exec.CommandContext(ctx, binFFmpeg,
 		"-loglevel", "error",
 		"-ss", "1",
 		"-i", path,
 		"-frames:v", "1",
-		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", MaxDim),
+		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", maxDim),
 		"-f", "image2", "-vcodec", "mjpeg",
 		"-",
 	)
@@ -143,12 +239,12 @@ func Video(ctx context.Context, path string) ([]byte, error) {
 // Audio extracts embedded cover art from the audio file at path and returns it
 // as a JPEG thumbnail. Fails when the file has no embedded artwork.
 func Audio(ctx context.Context, path string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "ffmpeg",
+	cmd := exec.CommandContext(ctx, binFFmpeg,
 		"-loglevel", "error",
 		"-i", path,
 		"-an", "-map", "0:v:0",
 		"-frames:v", "1",
-		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", MaxDim),
+		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2", maxDim),
 		"-f", "image2", "-vcodec", "mjpeg",
 		"-",
 	)
@@ -162,7 +258,7 @@ func Audio(ctx context.Context, path string) ([]byte, error) {
 }
 
 // VIPS thumbnails an extended-format image (HEIC/AVIF/TIFF/WebP/...) with libvips,
-// which auto-orients and scales within MaxDim.
+// which auto-orients and scales within maxDim.
 func VIPS(ctx context.Context, path string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "thumb-")
 	if err != nil {
@@ -170,8 +266,8 @@ func VIPS(ctx context.Context, path string) ([]byte, error) {
 	}
 	defer os.RemoveAll(dir)
 	out := filepath.Join(dir, "out.jpg")
-	cmd := exec.CommandContext(ctx, "vips", "thumbnail", path,
-		fmt.Sprintf("%s[Q=%d]", out, jpegQuality), fmt.Sprintf("%d", MaxDim))
+	cmd := exec.CommandContext(ctx, binVips, "thumbnail", path,
+		fmt.Sprintf("%s[Q=%d]", out, jpegQuality), fmt.Sprintf("%d", maxDim))
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
@@ -183,9 +279,9 @@ func VIPS(ctx context.Context, path string) ([]byte, error) {
 // Raw extracts the embedded preview from a camera RAW file with LibRaw and scales
 // it down.
 func Raw(ctx context.Context, path string) ([]byte, error) {
-	bin := "simple_dcraw"
-	if !has(bin) {
-		bin = "dcraw_emu"
+	bin := libRawBin()
+	if bin == "" {
+		return nil, fmt.Errorf("thumb: no LibRaw tool available")
 	}
 	cmd := exec.CommandContext(ctx, bin, "-e", path)
 	var errBuf bytes.Buffer
@@ -224,8 +320,8 @@ func PDF(ctx context.Context, path string) ([]byte, error) {
 	}
 	defer os.RemoveAll(dir)
 	prefix := filepath.Join(dir, "page")
-	cmd := exec.CommandContext(ctx, "pdftoppm", "-jpeg", "-f", "1", "-l", "1",
-		"-scale-to", fmt.Sprintf("%d", MaxDim), path, prefix)
+	cmd := exec.CommandContext(ctx, binPoppler, "-jpeg", "-f", "1", "-l", "1",
+		"-scale-to", fmt.Sprintf("%d", maxDim), path, prefix)
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
@@ -247,9 +343,9 @@ func Document(ctx context.Context, path string) ([]byte, error) {
 	}
 	defer os.RemoveAll(dir)
 
-	bin := "soffice"
-	if !has(bin) {
-		bin = "libreoffice"
+	bin := libreBin()
+	if bin == "" {
+		return nil, fmt.Errorf("thumb: no LibreOffice binary available")
 	}
 	cmd := exec.CommandContext(ctx, bin, "--headless", "--convert-to", "pdf", "--outdir", dir, path)
 	// LibreOffice needs a writable profile; isolate it in the temp dir.
@@ -266,20 +362,20 @@ func Document(ctx context.Context, path string) ([]byte, error) {
 	return PDF(ctx, pdfs[0])
 }
 
-// scale resizes src so its longest edge is at most MaxDim, preserving aspect.
+// scale resizes src so its longest edge is at most maxDim, preserving aspect.
 func scale(src image.Image) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
-	if w <= MaxDim && h <= MaxDim {
+	if w <= maxDim && h <= maxDim {
 		return src
 	}
 	tw, th := w, h
 	if w >= h {
-		tw = MaxDim
-		th = h * MaxDim / w
+		tw = maxDim
+		th = h * maxDim / w
 	} else {
-		th = MaxDim
-		tw = w * MaxDim / h
+		th = maxDim
+		tw = w * maxDim / h
 	}
 	if tw < 1 {
 		tw = 1

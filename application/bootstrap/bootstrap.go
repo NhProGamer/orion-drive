@@ -18,6 +18,7 @@ import (
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
+	"github.com/NhProGamer/orion-drive/pkg/thumb"
 	"github.com/NhProGamer/orion-drive/pkg/wopi"
 	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/NhProGamer/orion-drive/service/share"
@@ -63,6 +64,23 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 			return nil, err
 		}
 	}
+	thumb.Configure(thumb.Options{
+		Disable:         cfg.Thumbnail.Disable,
+		MaxDim:          cfg.Thumbnail.MaxDim,
+		Quality:         cfg.Thumbnail.Quality,
+		DisableVideo:    cfg.Thumbnail.DisableVideo,
+		DisableAudio:    cfg.Thumbnail.DisableAudio,
+		DisableVips:     cfg.Thumbnail.DisableVips,
+		DisableRaw:      cfg.Thumbnail.DisableRaw,
+		DisablePDF:      cfg.Thumbnail.DisablePDF,
+		DisableDocument: cfg.Thumbnail.DisableDocument,
+		FFmpegPath:      cfg.Thumbnail.FFmpegPath,
+		VipsPath:        cfg.Thumbnail.VipsPath,
+		PopplerPath:     cfg.Thumbnail.PopplerPath,
+		LibreOfficePath: cfg.Thumbnail.LibreOfficePath,
+		LibRawPath:      cfg.Thumbnail.LibRawPath,
+	})
+
 	tasks := queue.New(4)
 	files := filemanager.NewManager(repo, c, tmpDir, cipher, tasks)
 	files.SetArchiveLimits(filemanager.ArchiveLimits{

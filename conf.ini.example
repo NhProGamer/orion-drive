@@ -117,6 +117,30 @@ TimeoutSeconds = 0
 ; Set to a negative value to disable. The resumable-upload chunk PUT is exempt.
 SharePublicRatePerMin = 120
 
+[Thumbnail]
+; Preview-thumbnail generation. JPG/PNG/GIF/WebP/BMP/TIFF are handled in pure Go;
+; richer formats use external tools when present: ffmpeg (video frames, audio
+; cover art), libvips (HEIC/AVIF/JXL/...), LibRaw (camera RAW), LibreOffice +
+; poppler (Office/ODF and PDF). Each is skipped when its binary is missing.
+; Disable          : master off-switch for all thumbnails.
+; MaxDim / Quality : longest edge in px (default 400) and JPEG quality (default 82).
+; DisableVideo/Audio/Vips/Raw/PDF/Document : force a generator off even if present.
+; *Path            : override a binary location (default: found on PATH).
+Disable = false
+MaxDim = 0
+Quality = 0
+DisableVideo = false
+DisableAudio = false
+DisableVips = false
+DisableRaw = false
+DisablePDF = false
+DisableDocument = false
+FFmpegPath =
+VipsPath =
+PopplerPath =
+LibreOfficePath =
+LibRawPath =
+
 [Redis]
 ; Set Server (host:port) to back the cache (upload sessions, OIDC states, ...)
 ; with Redis instead of in-process memory — required when running several

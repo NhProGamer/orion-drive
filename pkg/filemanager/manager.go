@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
 	"github.com/NhProGamer/orion-drive/repository"
+	"golang.org/x/sync/singleflight"
 )
 
 // Common errors surfaced to the API layer.
@@ -39,13 +41,27 @@ type Manager struct {
 	cipher  *encrypt.Cipher // nil when at-rest encryption is not configured
 	queue   *queue.Queue
 	archive ArchiveLimits // extraction safety limits (with defaults applied)
+	// thumbSF collapses concurrent thumbnail requests for the same file into a
+	// single generation; thumbSem caps concurrent external-tool generations so a
+	// burst of video/office thumbnails can't exhaust CPU or request workers.
+	thumbSF  singleflight.Group
+	thumbSem chan struct{}
 }
 
 // NewManager builds a Manager. tmpDir is where in-progress uploads are staged;
 // cipher, when non-nil, encrypts objects for policies that request it; queue
 // runs background archive jobs.
 func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, cipher *encrypt.Cipher, q *queue.Queue) *Manager {
-	return &Manager{repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q, archive: ArchiveLimits{}.withDefaults()}
+	// Cap concurrent external thumbnail generations at half the cores (min 2).
+	n := runtime.NumCPU() / 2
+	if n < 2 {
+		n = 2
+	}
+	return &Manager{
+		repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q,
+		archive:  ArchiveLimits{}.withDefaults(),
+		thumbSem: make(chan struct{}, n),
+	}
 }
 
 // SetArchiveLimits overrides the extraction safety limits; zero fields keep

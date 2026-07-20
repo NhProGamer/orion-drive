@@ -36,8 +36,8 @@ func assertJPEGThumb(t *testing.T, data []byte) {
 	if format != "jpeg" {
 		t.Fatalf("format = %s, want jpeg", format)
 	}
-	if b := img.Bounds(); b.Dx() > MaxDim || b.Dy() > MaxDim {
-		t.Fatalf("thumbnail %dx%d exceeds MaxDim %d", b.Dx(), b.Dy(), MaxDim)
+	if b := img.Bounds(); b.Dx() > maxDim || b.Dy() > maxDim {
+		t.Fatalf("thumbnail %dx%d exceeds maxDim %d", b.Dx(), b.Dy(), maxDim)
 	}
 }
 

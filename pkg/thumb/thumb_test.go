@@ -37,8 +37,8 @@ func TestImageScalesDown(t *testing.T) {
 		t.Fatalf("format = %s, want jpeg", format)
 	}
 	b := img.Bounds()
-	if b.Dx() != MaxDim {
-		t.Fatalf("width = %d, want %d", b.Dx(), MaxDim)
+	if b.Dx() != maxDim {
+		t.Fatalf("width = %d, want %d", b.Dx(), maxDim)
 	}
 	// Aspect ratio preserved: 1000x600 -> 400x240.
 	if b.Dy() != 240 {
@@ -65,7 +65,9 @@ func TestKind(t *testing.T) {
 		".mp4":  KindVideo,
 		".mp3":  KindAudio,
 		".heic": KindVIPS,
-		".webp": KindVIPS,
+		".webp": KindImage, // pure-Go now
+		".bmp":  KindImage,
+		".tiff": KindImage,
 		".cr2":  KindRaw,
 		".nef":  KindRaw,
 		".docx": KindDocument,

@@ -22,8 +22,29 @@ type Config struct {
 	WOPI     WOPI
 	WebDAV   WebDAV
 	Redis    Redis
-	Archive  Archive
-	Security Security
+	Archive   Archive
+	Security  Security
+	Thumbnail Thumbnail
+}
+
+// Thumbnail tunes preview generation. All generators are enabled by default when
+// their tool is present; the Disable* flags force one off, and the *Path fields
+// override the binary location. Zero MaxDim/Quality keep the built-in defaults.
+type Thumbnail struct {
+	Disable         bool `ini:"Disable"`
+	MaxDim          int  `ini:"MaxDim"`
+	Quality         int  `ini:"Quality"`
+	DisableVideo    bool `ini:"DisableVideo"`
+	DisableAudio    bool `ini:"DisableAudio"`
+	DisableVips     bool `ini:"DisableVips"`
+	DisableRaw      bool `ini:"DisableRaw"`
+	DisablePDF      bool `ini:"DisablePDF"`
+	DisableDocument bool `ini:"DisableDocument"`
+	FFmpegPath      string `ini:"FFmpegPath"`
+	VipsPath        string `ini:"VipsPath"`
+	PopplerPath     string `ini:"PopplerPath"`
+	LibreOfficePath string `ini:"LibreOfficePath"`
+	LibRawPath      string `ini:"LibRawPath"`
 }
 
 // Security holds hardening knobs. A zero value uses the built-in default.
