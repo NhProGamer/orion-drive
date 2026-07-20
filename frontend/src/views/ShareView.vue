@@ -79,7 +79,8 @@ async function openList(p: string) {
     curPath.value = p
     opened.value = true
   } catch (e: any) {
-    error.value = e?.code === 401 ? t('shareView.passwordIncorrect') : e?.message || t('shareView.accessDenied')
+    if (e?.code === 42900) error.value = t('shareView.tooManyRequests')
+    else error.value = e?.code === 401 ? t('shareView.passwordIncorrect') : e?.message || t('shareView.accessDenied')
   }
 }
 
@@ -178,6 +179,7 @@ async function download() {
   try {
     const r = await fetch(probe)
     if (r.status === 401) return void (error.value = t('shareView.passwordIncorrect'))
+    if (r.status === 429) return void (error.value = t('shareView.tooManyRequests'))
     if (r.status === 403) return void (error.value = t('shareView.linkUnavailable'))
     if (!r.ok) return void (error.value = t('shareView.downloadFailed'))
   } catch {

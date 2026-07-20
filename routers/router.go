@@ -56,7 +56,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	api := r.Group(constants.APIPrefix)
 	registerAuthRoutes(api, ctl, dep)
 	registerFileRoutes(api, ctl)
-	registerShareRoutes(api, ctl)
+	registerShareRoutes(api, ctl, dep)
 	registerAdminRoutes(api, ctl, dep)
 
 	// Public direct-link content (no authentication).
@@ -196,28 +196,34 @@ func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	a.DELETE("/policies/:id", ctl.AdminDeletePolicy)
 }
 
-func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
+func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *bootstrap.Dependency) {
 	// Authenticated: manage your own shares.
 	api.POST("/share", middleware.RequireAuth(), ctl.CreateShare)
 	api.GET("/share", middleware.RequireAuth(), ctl.ListShares)
 	api.PATCH("/share/:token", middleware.RequireAuth(), ctl.UpdateShare)
 	api.DELETE("/share/:token", middleware.RequireAuth(), ctl.DeleteShare)
 
-	// Public: view, browse and download a shared file or folder (no authentication).
-	api.GET("/share/:token", ctl.ShareView)
-	api.GET("/share/:token/list", ctl.ShareList)
-	api.GET("/share/:token/content", ctl.ShareDownload)
-	api.GET("/share/:token/archive", ctl.ShareArchive)
+	// Public share endpoints (no authentication) are rate-limited per client IP to
+	// blunt password brute-forcing and anonymous-write abuse. The resumable-upload
+	// chunk PUT is excluded — a large file legitimately sends many chunks quickly,
+	// and it is already bounded by the (secret) session id and the quota.
+	rl := middleware.RateLimit(dep.Cache, dep.Config.Security.SharePublicRate(), "share")
 
-	// Public: write into a write/deposit share (no authentication). Each handler
-	// enforces the share's permission, password/expiry and subtree confinement.
-	api.POST("/share/:token/folder", ctl.ShareCreateFolder)
-	api.POST("/share/:token/upload", ctl.ShareInitUpload)
+	// Public: view, browse and download a shared file or folder.
+	api.GET("/share/:token", rl, ctl.ShareView)
+	api.GET("/share/:token/list", rl, ctl.ShareList)
+	api.GET("/share/:token/content", rl, ctl.ShareDownload)
+	api.GET("/share/:token/archive", rl, ctl.ShareArchive)
+
+	// Public: write into a write/deposit share. Each handler also enforces the
+	// share's permission, password/expiry and subtree confinement.
+	api.POST("/share/:token/folder", rl, ctl.ShareCreateFolder)
+	api.POST("/share/:token/upload", rl, ctl.ShareInitUpload)
 	api.POST("/share/:token/upload/:sid/chunk", ctl.SharePutChunk)
-	api.POST("/share/:token/upload/:sid/complete", ctl.ShareCompleteUpload)
-	api.DELETE("/share/:token/upload/:sid", ctl.ShareCancelUpload)
-	api.POST("/share/:token/rename", ctl.ShareRename)
-	api.POST("/share/:token/move", ctl.ShareMove)
-	api.POST("/share/:token/delete", ctl.ShareDelete)
-	api.GET("/share/:token/office", ctl.OfficeLaunchShare)
+	api.POST("/share/:token/upload/:sid/complete", rl, ctl.ShareCompleteUpload)
+	api.DELETE("/share/:token/upload/:sid", rl, ctl.ShareCancelUpload)
+	api.POST("/share/:token/rename", rl, ctl.ShareRename)
+	api.POST("/share/:token/move", rl, ctl.ShareMove)
+	api.POST("/share/:token/delete", rl, ctl.ShareDelete)
+	api.GET("/share/:token/office", rl, ctl.OfficeLaunchShare)
 }

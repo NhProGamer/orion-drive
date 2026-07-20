@@ -212,7 +212,8 @@
     "renamePrompt": "Nouveau nom",
     "deleteConfirm": "Supprimer « {name} » ?",
     "editOffice": "Éditer dans Office",
-    "viewOffice": "Ouvrir dans Office"
+    "viewOffice": "Ouvrir dans Office",
+    "tooManyRequests": "Trop de requêtes, réessayez dans un instant"
   },
   "shares": {
     "linkToast": "Lien : {url}",

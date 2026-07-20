@@ -23,6 +23,23 @@ type Config struct {
 	WebDAV   WebDAV
 	Redis    Redis
 	Archive  Archive
+	Security Security
+}
+
+// Security holds hardening knobs. A zero value uses the built-in default.
+type Security struct {
+	// SharePublicRatePerMin caps requests per client IP per minute on the public
+	// share endpoints (password guessing, anonymous writes). Default 120; set to
+	// a negative value to disable.
+	SharePublicRatePerMin int `ini:"SharePublicRatePerMin"`
+}
+
+// SharePublicRate resolves the effective public-share rate limit.
+func (s Security) SharePublicRate() int {
+	if s.SharePublicRatePerMin == 0 {
+		return 120
+	}
+	return s.SharePublicRatePerMin
 }
 
 // Archive tunes the safety limits applied when extracting archives (defence

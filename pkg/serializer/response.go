@@ -18,6 +18,7 @@ const (
 	CodeForbidden    = 40300
 	CodeNotFound     = 40400
 	CodeConflict     = 40900
+	CodeTooManyReqs  = 42900
 	CodeInternal     = 50000
 )
 
@@ -42,6 +43,8 @@ func (r Response) HTTPStatus() int {
 		return http.StatusNotFound
 	case CodeConflict:
 		return http.StatusConflict
+	case CodeTooManyReqs:
+		return http.StatusTooManyRequests
 	default:
 		return http.StatusInternalServerError
 	}

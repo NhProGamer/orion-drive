@@ -111,6 +111,12 @@ MaxRatio = 0
 RatioFloorMB = 0
 TimeoutSeconds = 0
 
+[Security]
+; SharePublicRatePerMin caps requests per client IP per minute on the public
+; share endpoints (password guessing, anonymous uploads/edits). Default 120.
+; Set to a negative value to disable. The resumable-upload chunk PUT is exempt.
+SharePublicRatePerMin = 120
+
 [Redis]
 ; Set Server (host:port) to back the cache (upload sessions, OIDC states, ...)
 ; with Redis instead of in-process memory — required when running several
