@@ -100,6 +100,19 @@ export function fmtDuration(seconds: number): string {
   return rm ? `${h} h ${rm} min` : `${h} h`
 }
 
+/** Coarse ETA for a live estimate: whole seconds under a minute, whole minutes
+ * above (dropping the noisy seconds component so the label stops flickering). */
+export function fmtEta(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return ''
+  const s = Math.round(seconds)
+  if (s < 60) return `${s} s`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm ? `${h} h ${rm} min` : `${h} h`
+}
+
 /** Relative-then-absolute date, formatted for the active locale. */
 export function fmtDate(iso: string): string {
   const loc = currentLocale()

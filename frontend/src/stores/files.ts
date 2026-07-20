@@ -515,8 +515,13 @@ export const useFilesStore = defineStore('files', {
       // otherwise Vue never sees the progress changes.
       const up = this.uploads[this.uploads.length - 1]
       const pct = (bytes: number) => (file.size ? Math.min(99, Math.round((bytes / file.size) * 100)) : 99)
-      // Throughput: sampled every ~300ms and smoothed with an exponential moving
-      // average so the displayed rate/ETA stays steady rather than jumping.
+      // Throughput smoothing. Upload progress callbacks fire at irregular
+      // intervals, so a fixed-weight average jumps around. Instead use an
+      // exponential moving average with a *time constant* (TAU): the weight of
+      // each sample is derived from how much time actually elapsed, which makes
+      // the smoothing independent of the callback cadence and steadies the rate
+      // (and therefore the ETA). ~3s of memory rides out chunk-boundary bursts.
+      const TAU = 3000
       let lastT = performance.now()
       let lastLoaded = 0
       const onProgress = (loaded: number) => {
@@ -524,9 +529,10 @@ export const useFilesStore = defineStore('files', {
         up.progress = pct(loaded)
         const now = performance.now()
         const dt = now - lastT
-        if (dt >= 300) {
+        if (dt >= 200) {
           const inst = ((loaded - lastLoaded) / dt) * 1000
-          up.speed = up.speed ? up.speed * 0.6 + inst * 0.4 : inst
+          const alpha = 1 - Math.exp(-dt / TAU)
+          up.speed = up.speed ? up.speed + alpha * (inst - up.speed) : inst
           lastT = now
           lastLoaded = loaded
         }
