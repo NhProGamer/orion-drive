@@ -409,6 +409,12 @@ func (s *Service) writeParent(ctx context.Context, token, subPath, password stri
 	if !need(share) {
 		return nil, nil, nil, ErrForbidden
 	}
+	// A blind (deposit) share must never reveal its structure: pin writes to the
+	// share root and ignore any subPath, so a visitor can't probe subfolder
+	// existence/names via resolve() error differences.
+	if share.Blind() {
+		subPath = ""
+	}
 	target, err := s.resolve(ctx, share, subPath)
 	if err != nil {
 		return nil, nil, nil, err
@@ -489,8 +495,22 @@ func (s *Service) CancelUpload(ctx context.Context, token, sid string) error {
 }
 
 // shareUpload loads the owner and the share-scoped upload session, validating
-// that the session was created for this token.
+// that the session was created for this token. It revalidates the share on every
+// call so an upload started before the share was revoked/expired/downgraded is
+// not allowed to finish. The password is not re-checked (the chunk/complete
+// endpoints don't carry it), so only deletion/expiry/permission changes stop an
+// in-flight upload.
 func (s *Service) shareUpload(ctx context.Context, token, sid string) (*model.User, *filemanager.UploadSession, error) {
+	share, err := s.repo.Share.GetByToken(ctx, token)
+	if err != nil {
+		return nil, nil, err
+	}
+	if share.Expired() {
+		return nil, nil, ErrExpired
+	}
+	if !share.CanUpload() {
+		return nil, nil, ErrForbidden
+	}
 	sess, err := s.files.GetShareSession(token, sid)
 	if err != nil {
 		return nil, nil, err
@@ -685,12 +705,26 @@ func cleanPath(p string) string {
 
 const tokenAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-// randToken returns a URL-safe random token of length n.
+// randToken returns a URL-safe random token of length n, using rejection
+// sampling so every alphabet symbol is equally likely (a plain byte % 62 would
+// over-weight the first 8 symbols).
 func randToken(n int) string {
+	// Largest multiple of the alphabet size that fits in a byte; bytes at or above
+	// it are rejected to keep the distribution uniform.
+	const limit = 256 - (256 % len(tokenAlphabet))
+	out := make([]byte, n)
 	buf := make([]byte, n)
-	_, _ = rand.Read(buf)
-	for i := range buf {
-		buf[i] = tokenAlphabet[int(buf[i])%len(tokenAlphabet)]
+	for i := 0; i < n; {
+		_, _ = rand.Read(buf)
+		for _, b := range buf {
+			if int(b) >= limit {
+				continue
+			}
+			out[i] = tokenAlphabet[int(b)%len(tokenAlphabet)]
+			if i++; i == n {
+				break
+			}
+		}
 	}
-	return string(buf)
+	return string(out)
 }
