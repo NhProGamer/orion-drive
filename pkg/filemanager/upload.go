@@ -196,8 +196,19 @@ func (m *Manager) PutChunk(ctx context.Context, user *model.User, id string, ind
 
 	offset := int64(index) * s.ChunkSize
 	sw := &sectionWriter{f: f, off: offset}
-	if _, err := io.Copy(sw, r); err != nil {
+	// Cap the chunk to the negotiated size. Without this a client can stream an
+	// unbounded body into the staging file and exhaust the disk before the total
+	// is ever checked (the declared total is quota-checked at InitUpload, and the
+	// number of chunks is bounded, so per-chunk capping bounds on-disk bytes).
+	n, err := io.Copy(sw, io.LimitReader(r, s.ChunkSize))
+	if err != nil {
 		return nil, err
+	}
+	if n == s.ChunkSize {
+		var probe [1]byte
+		if extra, _ := io.ReadFull(r, probe[:]); extra > 0 {
+			return nil, fmt.Errorf("chunk %d exceeds the negotiated chunk size", index)
+		}
 	}
 
 	s.Received[index] = true
