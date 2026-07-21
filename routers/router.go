@@ -90,10 +90,10 @@ func registerAuthRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *
 	auth.GET("/oidc/callback", ctl.OIDCCallback)
 	auth.POST("/logout", ctl.Logout)
 
-	// Development-only local login, available when running in debug mode.
-	if dep.Config.System.Mode == "debug" {
-		auth.GET("/dev-login", ctl.DevLogin)
-	}
+	// Development-only local login. Compiled in only with `-tags dev` AND when
+	// running in debug mode, so a production build can never expose it even if
+	// misconfigured to Mode=debug.
+	registerDevRoutes(auth, ctl, dep)
 
 	api.GET("/user/me", ctl.Me)
 
