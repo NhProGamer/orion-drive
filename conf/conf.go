@@ -89,6 +89,12 @@ type System struct {
 	// TrashRetentionDays is how long trashed files are kept before the background
 	// cleanup purges them permanently. 0 disables auto-purge.
 	TrashRetentionDays int `ini:"TrashRetentionDays"`
+	// TrustedProxies is a comma-separated list of reverse-proxy IPs/CIDRs whose
+	// X-Forwarded-For is trusted for client-IP resolution. Empty (default) trusts
+	// none — the client IP is the direct peer — so a client cannot spoof its IP
+	// to evade per-IP rate limits. Set it to your reverse proxy for correct
+	// per-client limiting.
+	TrustedProxies string `ini:"TrustedProxies"`
 }
 
 // AdminEmailSet returns the lower-cased admin emails as a lookup set.

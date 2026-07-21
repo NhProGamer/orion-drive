@@ -24,6 +24,18 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	}
 
 	r := gin.New()
+	// Trust only the configured reverse proxies for X-Forwarded-For; otherwise a
+	// client could spoof its IP to evade per-IP rate limiting. Empty list trusts
+	// none (client IP = direct peer).
+	var proxies []string
+	for _, p := range strings.Split(dep.Config.System.TrustedProxies, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			proxies = append(proxies, p)
+		}
+	}
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		return nil, err
+	}
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logging(dep.Logger))
 

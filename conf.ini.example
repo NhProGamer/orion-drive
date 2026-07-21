@@ -23,6 +23,10 @@ AdminGroups =
 ; Days a file stays in the trash before the background job purges it permanently.
 ; 0 disables auto-purge. Default: 30.
 TrashRetentionDays = 30
+; Comma-separated reverse-proxy IPs/CIDRs whose X-Forwarded-For is trusted for
+; client-IP resolution (per-IP rate limiting). Empty trusts none (client IP =
+; direct peer). Set to your proxy, e.g. 127.0.0.1,::1 or 10.0.0.0/8
+TrustedProxies =
 
 [Database]
 ; sqlite | postgres | mysql
