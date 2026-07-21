@@ -145,5 +145,7 @@ func newLogger(cfg *conf.Config) *slog.Logger {
 	if cfg.System.Mode == "debug" {
 		level = slog.LevelDebug
 	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	l := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	slog.SetDefault(l) // so package-level helpers (e.g. controllers.fail) log too
+	return l
 }

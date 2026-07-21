@@ -3,6 +3,7 @@ package controllers
 
 import (
 	"errors"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -41,7 +42,10 @@ func fail(c *gin.Context, err error) {
 	case errors.Is(err, filemanager.ErrLocked):
 		respond(c, serializer.Err(serializer.CodeConflict, err.Error()))
 	default:
-		respond(c, serializer.Err(serializer.CodeInternal, err.Error()))
+		// Log the real error server-side but return a generic message: raw
+		// internal errors leak DB/driver/filesystem detail to the client.
+		slog.Error("request failed", "method", c.Request.Method, "path", c.Request.URL.Path, "error", err)
+		respond(c, serializer.Err(serializer.CodeInternal, "internal server error"))
 	}
 }
 
