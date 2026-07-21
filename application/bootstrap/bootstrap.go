@@ -46,6 +46,14 @@ type Dependency struct {
 func Init(cfg *conf.Config) (*Dependency, error) {
 	logger := newLogger(cfg)
 
+	// Fail closed on a weak session secret (it keys session and WOPI tokens).
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	if cfg.SessionSecretWeak() {
+		logger.Warn("running with a weak/default SessionSecret; acceptable only in debug mode — never expose this instance")
+	}
+
 	db, err := OpenDatabase(cfg)
 	if err != nil {
 		return nil, err

@@ -5,9 +5,12 @@
 [System]
 ; Listen address for the HTTP server.
 Listen = :5212
-; debug | release
-Mode = debug
-; Random secret used to sign sessions and JWTs. CHANGE THIS.
+; debug | release. Use release for any exposed instance. debug relaxes the
+; session-secret check; the dev-login shortcut also needs a `-tags dev` build.
+Mode = release
+; Secret keying session and WOPI tokens. MUST be changed for release mode (the
+; server refuses to start otherwise): use a long random value, e.g.
+;   openssl rand -base64 48
 SessionSecret = change-me-to-a-long-random-string
 ; Public base URL of this instance (used to build the OIDC redirect URI).
 SiteURL = http://localhost:5212

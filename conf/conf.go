@@ -197,12 +197,22 @@ type Redis struct {
 	DB       int    `ini:"DB"`
 }
 
-// Default returns a configuration populated with sane development defaults.
+// DefaultSessionSecret is the placeholder shipped in the example config. It is
+// rejected at startup outside debug mode (it keys session and WOPI tokens, so a
+// known value means anyone can forge an authenticated session).
+const DefaultSessionSecret = "change-me-to-a-long-random-string"
+
+// minSessionSecretLen is the shortest session secret accepted in release mode.
+const minSessionSecretLen = 16
+
+// Default returns a configuration populated with sane defaults. Mode defaults to
+// "release" (fail closed): debug mode relaxes the session-secret check and, when
+// built with -tags dev, exposes the unauthenticated dev-login shortcut.
 func Default() *Config {
 	return &Config{
 		System: System{
 			Listen:             ":5212",
-			Mode:               "debug",
+			Mode:               "release",
 			SessionSecret:      "change-me-to-a-long-random-string",
 			SiteURL:            "http://localhost:5212",
 			TrashRetentionDays: 30,
@@ -232,6 +242,24 @@ func Load(path string) (*Config, error) {
 
 	applyEnv(cfg)
 	return cfg, nil
+}
+
+// SessionSecretWeak reports whether the session secret is empty, the shipped
+// default, or shorter than the minimum length — any of which lets an attacker
+// forge session and WOPI tokens.
+func (c *Config) SessionSecretWeak() bool {
+	s := c.System.SessionSecret
+	return s == "" || s == DefaultSessionSecret || len(s) < minSessionSecretLen
+}
+
+// Validate enforces security-critical invariants after Load. In release mode a
+// weak session secret is fatal; debug mode only warns (see bootstrap) so local
+// development with the example config still works.
+func (c *Config) Validate() error {
+	if c.System.Mode != "debug" && c.SessionSecretWeak() {
+		return fmt.Errorf("System.SessionSecret is empty, the shipped default, or shorter than %d bytes: set a long random value (it keys session and WOPI tokens; a known value allows full authentication bypass)", minSessionSecretLen)
+	}
+	return nil
 }
 
 // mapSections maps each INI section onto the matching struct field.
