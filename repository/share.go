@@ -66,12 +66,32 @@ func (r *ShareRepo) IncrementViews(ctx context.Context, id uint) error {
 		UpdateColumn("views", gorm.Expr("views + 1")).Error
 }
 
-// RegisterDownload increments the download counter and decrements the remaining
-// allowance (when limited) in a single statement.
-func (r *ShareRepo) RegisterDownload(ctx context.Context, s *model.Share) error {
+// ReserveDownload atomically consumes one download: it increments the download
+// counter and, for a limited share, decrements the remaining allowance only
+// while it is still positive (WHERE remain_downloads > 0). It returns true when
+// a slot was reserved and false when the share is already exhausted. Doing the
+// check and decrement in one conditional UPDATE closes the TOCTOU race where N
+// concurrent requests all pass a stale in-memory Exhausted() check.
+func (r *ShareRepo) ReserveDownload(ctx context.Context, s *model.Share) (bool, error) {
+	q := r.db.WithContext(ctx).Model(&model.Share{}).Where("id = ?", s.ID)
 	updates := map[string]any{"downloads": gorm.Expr("downloads + 1")}
 	if s.RemainDownloads != nil {
+		q = q.Where("remain_downloads > 0")
 		updates["remain_downloads"] = gorm.Expr("remain_downloads - 1")
+	}
+	res := q.Updates(updates)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// RefundDownload reverses a ReserveDownload when the download ultimately fails
+// before any bytes were served.
+func (r *ShareRepo) RefundDownload(ctx context.Context, s *model.Share) error {
+	updates := map[string]any{"downloads": gorm.Expr("downloads - 1")}
+	if s.RemainDownloads != nil {
+		updates["remain_downloads"] = gorm.Expr("remain_downloads + 1")
 	}
 	return r.db.WithContext(ctx).Model(&model.Share{}).
 		Where("id = ?", s.ID).Updates(updates).Error

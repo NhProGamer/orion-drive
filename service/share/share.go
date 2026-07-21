@@ -218,22 +218,29 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 	}
 	_ = s.repo.Share.IncrementViews(ctx, share.ID)
 
-	owner := ""
-	if u, err := s.repo.User.GetByID(ctx, share.UserID); err == nil {
-		owner = u.DisplayName()
-	}
-	return &PublicView{
+	view := &PublicView{
 		Token:       share.Token,
-		Name:        f.Name,
-		IsDir:       f.IsFolder(),
-		Size:        f.Size,
 		Permission:  share.Perm(),
 		HasPassword: share.HasPassword(),
 		Expired:     share.Expired(),
 		Exhausted:   share.Exhausted(),
-		Downloads:   share.Downloads,
-		Owner:       owner,
-	}, nil
+	}
+	// Only reveal the file name, size, owner identity, and download count once the
+	// share is actually accessible. For a password-protected or expired share,
+	// merely holding the token must not leak this metadata (the client shows a
+	// password prompt / expired notice from the flags above instead).
+	if !share.HasPassword() && !share.Expired() {
+		owner := ""
+		if u, err := s.repo.User.GetByID(ctx, share.UserID); err == nil {
+			owner = u.DisplayName()
+		}
+		view.Name = f.Name
+		view.IsDir = f.IsFolder()
+		view.Size = f.Size
+		view.Downloads = share.Downloads
+		view.Owner = owner
+	}
+	return view, nil
 }
 
 // Entry is one item inside a shared folder listing.
@@ -327,11 +334,21 @@ func (s *Service) Download(ctx context.Context, token, subPath, password string)
 	if err != nil {
 		return nil, err
 	}
-	dt, err := s.files.Download(ctx, owner, target.ID)
+	// Atomically reserve the download slot BEFORE serving so concurrent requests
+	// can't overshoot the download cap (the earlier Exhausted() check is only a
+	// fast fail-early path on a possibly-stale value).
+	reserved, err := s.repo.Share.ReserveDownload(ctx, share)
 	if err != nil {
 		return nil, err
 	}
-	_ = s.repo.Share.RegisterDownload(ctx, share)
+	if !reserved {
+		return nil, ErrExhausted
+	}
+	dt, err := s.files.Download(ctx, owner, target.ID)
+	if err != nil {
+		_ = s.repo.Share.RefundDownload(ctx, share) // nothing served — give the slot back
+		return nil, err
+	}
 	return dt, nil
 }
 
@@ -357,7 +374,16 @@ func (s *Service) ArchiveTarget(ctx context.Context, token, subPath, password st
 	if err != nil {
 		return nil, nil, err
 	}
-	_ = s.repo.Share.RegisterDownload(ctx, share)
+	// Atomically reserve one download slot (see Download). The archive stream is
+	// started by the caller after headers are sent, so a failure there is not
+	// refunded — a whole-folder archive counts as one download.
+	reserved, err := s.repo.Share.ReserveDownload(ctx, share)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !reserved {
+		return nil, nil, ErrExhausted
+	}
 	return owner, target, nil
 }
 
