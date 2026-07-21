@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -46,7 +47,18 @@ func New(p *model.StoragePolicy) (driver.Handler, error) {
 		base:     strings.TrimRight(p.Server, "/"),
 		secret:   p.SecretKey,
 		basePath: p.BasePath,
-		client:   &http.Client{},
+		// Bound connect/TLS/response-header waits so a stalled slave can't hang a
+		// request indefinitely, without a blanket client Timeout that would kill
+		// legitimately long uploads/downloads mid-body.
+		client: &http.Client{
+			Transport: &http.Transport{
+				DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 30 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				IdleConnTimeout:       90 * time.Second,
+			},
+		},
 	}, nil
 }
 
