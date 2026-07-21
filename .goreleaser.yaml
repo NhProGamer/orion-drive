@@ -1,7 +1,7 @@
 # GoReleaser — build tagged SemVer releases (https://goreleaser.com).
 # On a pushed tag the `.gitea/workflows/release.yaml` CI job runs
-# `goreleaser release --clean` (with GITEA_TOKEN) to publish the archives.
-# Locally you can dry-run the build with `goreleaser release --clean --skip=publish`.
+# `goreleaser release --clean` (with GITEA_TOKEN) to attach the binary archives
+# to the Gitea release. Locally: `goreleaser release --clean --skip=publish`.
 version: 2
 project_name: orion-drive
 
@@ -37,40 +37,6 @@ archives:
       - README.md
       - LICENSE
       - conf.ini.example
-
-# Build an RPM (from the linux binaries) with the systemd unit and config.
-nfpms:
-  - id: rpm
-    ids: [orion-drive]
-    package_name: orion-drive
-    formats: [rpm]
-    vendor: OrionDrive
-    homepage: https://git.nhsoul.fr/nhpro/orion-drive
-    maintainer: nhpro <contact@clown.art>
-    description: Self-hosted file management — OrionDrive server (single binary, embedded SPA).
-    license: MIT
-    bindir: /usr/bin
-    contents:
-      - src: packaging/orion-drive.service
-        dst: /usr/lib/systemd/system/orion-drive.service
-      - src: conf.ini.example
-        dst: /etc/orion-drive/conf.ini.example
-        type: config|noreplace
-      - src: README.md
-        dst: /usr/share/doc/orion-drive/README.md
-      - src: LICENSE
-        dst: /usr/share/doc/orion-drive/LICENSE
-
-# Push the built RPMs to the Forgejo RPM package registry (needs a GITEA_TOKEN
-# with write:package scope). Runs as part of `goreleaser release`.
-publishers:
-  - name: forgejo-rpm
-    ids: [rpm]
-    cmd: >-
-      curl --fail-with-body -sS
-      -H "Authorization: token {{ .Env.GITEA_TOKEN }}"
-      --upload-file "{{ .ArtifactPath }}"
-      https://git.nhsoul.fr/api/packages/nhpro/rpm/upload
 
 checksum:
   name_template: "checksums.txt"
