@@ -52,5 +52,7 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
-          # A Forgejo access token with repository (contents) write scope.
+          # A Forgejo access token with repository (contents) write scope, and
+          # write:package scope so GoReleaser can push the RPM to the Forgejo RPM
+          # registry (api/packages/nhpro/rpm/upload).
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}

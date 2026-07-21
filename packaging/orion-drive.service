@@ -1,0 +1,27 @@
+[Unit]
+Description=OrionDrive server
+Documentation=https://git.nhsoul.fr/nhpro/orion-drive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Create /etc/orion-drive/conf.ini from the shipped conf.ini.example before first
+# start (set at least the OIDC issuer/client and, if unlimited, DBFile).
+ExecStart=/usr/bin/orion-drive server --config /etc/orion-drive/conf.ini
+# Runs as a transient system user; StateDirectory gives it /var/lib/orion-drive,
+# where the SQLite database and local storage live (relative to WorkingDirectory).
+DynamicUser=yes
+StateDirectory=orion-drive
+WorkingDirectory=/var/lib/orion-drive
+Restart=on-failure
+RestartSec=5
+
+# Hardening.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
