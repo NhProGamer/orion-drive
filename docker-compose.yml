@@ -19,8 +19,18 @@ services:
     environment:
       # ---- [System] ----
       OD_CONF_System_SiteURL: "http://localhost:5212" # public URL (OIDC redirect + share/link URLs)
-      OD_CONF_System_SessionSecret: "change-me-to-a-long-random-string" # CHANGE (openssl rand -hex 32)
-      OD_CONF_System_Mode: "release" # release | debug (debug enables the dev-login endpoint)
+      # REQUIRED: in release mode the server REFUSES TO START while this is empty,
+      # the shipped default, or shorter than 16 chars (it keys session + WOPI
+      # tokens). Generate one: openssl rand -hex 32
+      OD_CONF_System_SessionSecret: "change-me-to-a-long-random-string"
+      # release | debug. debug relaxes the session-secret check; the dev-login
+      # shortcut additionally needs an image built with `-tags dev` (the published
+      # image is NOT, so dev-login is unavailable regardless of this).
+      OD_CONF_System_Mode: "release"
+      # Reverse-proxy IPs/CIDRs whose X-Forwarded-For is trusted for client-IP
+      # resolution (per-IP rate limiting). Empty trusts none (client IP = direct
+      # peer). Behind a proxy set it, e.g. your Docker network: 172.16.0.0/12
+      # OD_CONF_System_TrustedProxies: ""
       # OD_CONF_System_Listen: ":5212"                # bind address (image default)
 
       # ---- [Database] ----
@@ -37,7 +47,7 @@ services:
       # OD_CONF_Database_SSLMode: "disable"        # postgres only
       # For MySQL: Type=mysql, `--profile mysql`, Host=mysql, Port=3306.
 
-      # ---- [OIDC] (SSO login; the only real auth — dev-login only exists in Mode=debug) ----
+      # ---- [OIDC] (SSO login; the only real auth — dev-login needs a `-tags dev` build) ----
       # OD_CONF_OIDC_Issuer: "https://accounts.google.com"
       # OD_CONF_OIDC_ClientID: ""
       # OD_CONF_OIDC_ClientSecret: ""
