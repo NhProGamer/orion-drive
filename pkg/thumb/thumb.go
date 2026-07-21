@@ -204,8 +204,22 @@ func Available(kind string) bool {
 	}
 }
 
+// maxImagePixels caps the decoded pixel count to defend against decompression
+// bombs — a tiny file whose header declares a gigapixel image would otherwise
+// allocate an enormous in-memory buffer. ~50 megapixels covers real photos.
+const maxImagePixels = 50_000_000
+
 // Image decodes an image and returns a scaled-down JPEG thumbnail.
 func Image(data []byte) ([]byte, error) {
+	// Check declared dimensions from the header (cheap, no full allocation)
+	// before decoding the whole image.
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("thumb: decode config: %w", err)
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
+		return nil, fmt.Errorf("thumb: image too large to thumbnail: %dx%d", cfg.Width, cfg.Height)
+	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("thumb: decode: %w", err)

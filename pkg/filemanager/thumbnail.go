@@ -68,6 +68,17 @@ func (m *Manager) Thumbnail(ctx context.Context, user *model.User, id uint) ([]b
 
 // generateThumb builds thumbnail bytes for a file.
 func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string) ([]byte, error) {
+	// Thumbnailing is memory/CPU heavy — an in-process image decode (a crafted
+	// image can be a decompression bomb) or an external generator. Cap how many
+	// run concurrently across ALL kinds so N crafted inputs can't exhaust the
+	// host (the image path previously bypassed this guard).
+	select {
+	case m.thumbSem <- struct{}{}:
+		defer func() { <-m.thumbSem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	switch kind {
 	case thumb.KindImage:
 		rc, err := m.openContent(ctx, f)
@@ -81,13 +92,6 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 		}
 		return thumb.Image(data)
 	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF:
-		// External generators are heavy: cap how many run at once.
-		select {
-		case m.thumbSem <- struct{}{}:
-			defer func() { <-m.thumbSem }()
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
 		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
