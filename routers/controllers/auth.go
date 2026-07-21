@@ -33,17 +33,19 @@ func (ctl *Controller) OIDCLogin(c *gin.Context) {
 func (ctl *Controller) OIDCCallback(c *gin.Context) {
 	claims, err := ctl.dep.Auth.Exchange(c.Request.Context(), c.Query("state"), c.Query("code"))
 	if err != nil {
-		respond(c, serializer.Err(serializer.CodeUnauthorized, err.Error()))
+		ctl.dep.Logger.Warn("OIDC exchange failed", "error", err)
+		respond(c, serializer.Err(serializer.CodeUnauthorized, "authentication failed"))
 		return
 	}
 	user, err := ctl.upsertUser(c.Request.Context(), claims)
 	if err != nil {
-		respond(c, serializer.Err(serializer.CodeInternal, err.Error()))
+		ctl.dep.Logger.Error("user provisioning failed", "error", err)
+		respond(c, serializer.Err(serializer.CodeInternal, "internal server error"))
 		return
 	}
 	ctl.issueSession(c, user)
 	// Keep the raw ID token so logout can end the SSO session (id_token_hint).
-	secure := c.Request.TLS != nil
+	secure := isSecureRequest(c)
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(constants.IDTokenCookieName, claims.IDToken, int(sessionTTL.Seconds()), "/", "", secure, true)
 	c.Redirect(http.StatusFound, "/")
@@ -66,11 +68,19 @@ func (ctl *Controller) Logout(c *gin.Context) {
 	respond(c, serializer.OK(gin.H{"logout_url": logoutURL}))
 }
 
+// isSecureRequest reports whether the request reached the user over HTTPS,
+// honouring a TLS-terminating reverse proxy's X-Forwarded-Proto. Used to set the
+// Secure cookie flag so session cookies aren't emitted without it on an HTTPS
+// site fronted by a proxy (where c.Request.TLS is nil).
+func isSecureRequest(c *gin.Context) bool {
+	return c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+}
+
 // requestOrigin reconstructs the browser-facing origin (scheme://host) of the
 // current request, honouring a reverse proxy's forwarded scheme.
 func requestOrigin(c *gin.Context) string {
 	scheme := "http"
-	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+	if isSecureRequest(c) {
 		scheme = "https"
 	}
 	return scheme + "://" + c.Request.Host
@@ -192,7 +202,7 @@ func (ctl *Controller) issueSession(c *gin.Context, u *model.User) {
 		respond(c, serializer.Err(serializer.CodeInternal, "failed to issue session"))
 		return
 	}
-	secure := c.Request.TLS != nil
+	secure := isSecureRequest(c)
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(constants.SessionCookieName, token, int(sessionTTL.Seconds()), "/", "", secure, true)
 	middleware.SetUser(c, u)
