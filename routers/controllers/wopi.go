@@ -38,10 +38,22 @@ func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite, 
 		c.AbortWithStatus(http.StatusBadRequest)
 		return 0, 0, false, false
 	}
-	tf, tu, tw, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
+	tf, tu, tw, ts, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
 	if err != nil || tf != id {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return 0, 0, false, false
+	}
+	// For a share-originated session, revalidate the share on every call so that
+	// deleting/expiring/downgrading it takes effect within the token lifetime
+	// (the token alone is otherwise a self-contained 10h capability). A write
+	// grant is downgraded to read-only if the share lost write permission.
+	if ts != "" {
+		cw, valid := ctl.dep.Shares.WOPIStillValid(c.Request.Context(), ts)
+		if !valid {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return 0, 0, false, false
+		}
+		tw = tw && cw
 	}
 	// Proof-key check (opt-in): prove the call really came from the doc server.
 	if !ctl.wopiProofOK(c) {
@@ -251,7 +263,8 @@ func (ctl *Controller) OfficeLaunch(c *gin.Context) {
 		return
 	}
 	// The owner always edits their own file; an empty one opens as a new document.
-	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true, f.Size == 0)
+	// No share token: the owner's own access never needs revalidation.
+	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true, f.Size == 0, "")
 }
 
 // OfficeLaunchShare opens a shared Office file in the editor for an anonymous
@@ -269,7 +282,8 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 		c.String(http.StatusForbidden, "cannot open this document")
 		return
 	}
-	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite, false)
+	// Bind the token to the share so each WOPI call revalidates it (revocation).
+	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite, false, c.Param("token"))
 }
 
 // serveOfficeLauncher resolves the editor URL for the file's format from the
@@ -277,7 +291,7 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 // and writes the auto-submitting launch page. The write grant is downgraded to
 // view when the format has no editable action, and the request is rejected when
 // the format is not supported at all.
-func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite, preferNew bool) {
+func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite, preferNew bool, shareToken string) {
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
 	if base == "" {
@@ -311,7 +325,7 @@ func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, nam
 		}
 	}
 
-	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, wopiTokenTTL)
+	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, shareToken, wopiTokenTTL)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "cannot start the editor")
 		return

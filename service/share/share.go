@@ -617,6 +617,24 @@ func (s *Service) OfficeTarget(ctx context.Context, token, subPath, password str
 	return target.ID, share.UserID, share.CanModify(), target.Name, nil
 }
 
+// WOPIStillValid revalidates a share-originated WOPI session on each host call so
+// revocation takes effect within the token lifetime. It returns whether the
+// share is still usable (exists, not expired, still grants view/edit) and the
+// currently effective write permission (a downgraded share drops to read-only).
+// The password is not re-checked — the document server does not carry it — so a
+// changed password does not end an in-flight session, only deletion/expiry/
+// permission changes do.
+func (s *Service) WOPIStillValid(ctx context.Context, token string) (canWrite, ok bool) {
+	share, err := s.repo.Share.GetByToken(ctx, token)
+	if err != nil || share.Expired() {
+		return false, false
+	}
+	if !share.CanDownload() && !share.CanModify() {
+		return false, false // downgraded to a blind/deposit share
+	}
+	return share.CanModify(), true
+}
+
 // authorize validates a share's expiry and password (but not its download limit,
 // which only gates actual downloads).
 func (s *Service) authorize(ctx context.Context, token, password string) (*model.Share, error) {
