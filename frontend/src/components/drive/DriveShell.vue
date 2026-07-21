@@ -6,7 +6,7 @@ import {
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
-  Sheet, Presentation, Bell,
+  Sheet, Presentation, Bell, KeyRound,
 } from 'lucide-vue-next'
 import { notifIcon } from '@/lib/notifIcons'
 import { useFilesStore, type View } from '@/stores/files'
@@ -28,6 +28,7 @@ import UploadsPanel from './UploadsPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
 import WebdavDialog from './WebdavDialog.vue'
+import TokensDialog from './TokensDialog.vue'
 import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
 
@@ -56,6 +57,7 @@ const notifOpen = ref(false)
 const dragDepth = ref(0)
 const shareNode = ref<FileNode | null>(null)
 const webdavOpen = ref(false)
+const tokensOpen = ref(false)
 const moveNodes = ref<FileNode[] | null>(null)
 // Off-canvas sidebar drawer (mobile only; ignored on wide layouts via CSS).
 const sidebarOpen = ref(false)
@@ -455,6 +457,7 @@ onUnmounted(() => {
         <div class="nav-sep"></div>
         <button class="nav-item" :class="{ active: files.view === 'storage' }" @click="gotoView('storage')"><Database :size="18" />{{ t('shell.storage') }}</button>
         <button class="nav-item" @click="webdavOpen = true; closeSidebar()"><Server :size="18" />{{ t('shell.webdavAccess') }}</button>
+        <button class="nav-item" @click="tokensOpen = true; closeSidebar()"><KeyRound :size="18" />{{ t('shell.apiTokens') }}</button>
       </nav>
       <div class="quota">
         <div class="quota-bar"><div class="quota-fill" :style="{ width: files.quotaPct + '%' }"></div></div>
@@ -717,6 +720,7 @@ onUnmounted(() => {
 
     <ShareDialog v-if="shareNode" :node="shareNode" @close="shareNode = null" />
     <WebdavDialog v-if="webdavOpen" @close="webdavOpen = false" />
+    <TokensDialog v-if="tokensOpen" @close="tokensOpen = false" />
     <MoveDialog v-if="moveNodes" :nodes="moveNodes" @close="moveNodes = null" @moved="moveNodes = null" />
 
     <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />

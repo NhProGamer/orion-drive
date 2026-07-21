@@ -16,6 +16,7 @@ type Repository struct {
 	DirectLink *DirectLinkRepo
 	WebDAV     *WebDAVAccountRepo
 	WebDAVLock *WebDAVLockRepo
+	APIToken   *APITokenRepo
 }
 
 // New builds a Repository bound to db.
@@ -31,5 +32,6 @@ func New(db *gorm.DB) *Repository {
 		DirectLink: &DirectLinkRepo{db: db},
 		WebDAV:     &WebDAVAccountRepo{db: db},
 		WebDAVLock: &WebDAVLockRepo{db: db},
+		APIToken:   &APITokenRepo{db: db},
 	}
 }

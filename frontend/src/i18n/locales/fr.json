@@ -300,7 +300,8 @@
     "newDocumentTitle": "Nouveau document",
     "untitledDocument": "Document sans titre",
     "untitledSpreadsheet": "Feuille sans titre",
-    "untitledPresentation": "Présentation sans titre"
+    "untitledPresentation": "Présentation sans titre",
+    "apiTokens": "Jetons d'API"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",
@@ -374,5 +375,26 @@
     "clear": "Effacer",
     "now": "À l'instant",
     "minsAgo": "il y a {n} min"
+  },
+  "tokens": {
+    "title": "Jetons d'accès personnels",
+    "intro": "Créez un jeton pour authentifier des clients non interactifs (applications natives, worker KDE, synchro) via l'en-tête Bearer.",
+    "newToken": "Nouveau jeton",
+    "tokenOnce": "Copiez-le maintenant : il ne sera plus jamais affiché.",
+    "existing": "Jetons existants",
+    "empty": "Aucun jeton",
+    "readOnly": "Lecture seule",
+    "lastUsed": "Dernière utilisation : {date}",
+    "expires": "expire le {date}",
+    "never": "jamais",
+    "revoke": "Révoquer",
+    "revokeConfirm": "Révoquer le jeton « {label} » ?",
+    "labelPlaceholder": "Nom (ex. Dolphin KDE)",
+    "expiresDays": "Jours",
+    "creating": "Création…",
+    "done": "Fermer",
+    "loadError": "Échec du chargement des jetons",
+    "createError": "Échec de création du jeton",
+    "revokeError": "Échec de la révocation"
   }
 }

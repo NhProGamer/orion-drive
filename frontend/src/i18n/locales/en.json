@@ -300,7 +300,8 @@
     "newDocumentTitle": "New document",
     "untitledDocument": "Untitled document",
     "untitledSpreadsheet": "Untitled spreadsheet",
-    "untitledPresentation": "Untitled presentation"
+    "untitledPresentation": "Untitled presentation",
+    "apiTokens": "API tokens"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",
@@ -374,5 +375,26 @@
     "clear": "Clear",
     "now": "Just now",
     "minsAgo": "{n} min ago"
+  },
+  "tokens": {
+    "title": "Personal access tokens",
+    "intro": "Create a token to authenticate non-interactive clients (native apps, the KDE worker, sync) via the Bearer header.",
+    "newToken": "New token",
+    "tokenOnce": "Copy it now — it will never be shown again.",
+    "existing": "Existing tokens",
+    "empty": "No tokens",
+    "readOnly": "Read-only",
+    "lastUsed": "Last used: {date}",
+    "expires": "expires {date}",
+    "never": "never",
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke token \"{label}\"?",
+    "labelPlaceholder": "Name (e.g. KDE Dolphin)",
+    "expiresDays": "Days",
+    "creating": "Creating…",
+    "done": "Close",
+    "loadError": "Failed to load tokens",
+    "createError": "Failed to create token",
+    "revokeError": "Failed to revoke"
   }
 }

@@ -121,6 +121,16 @@ export interface WebdavAccountList {
   url: string
 }
 
+export interface ApiTokenInfo {
+  id: number
+  label: string
+  prefix: string
+  read_only: boolean
+  expires_at: string | null
+  last_used_at: string | null
+  created_at: string
+}
+
 export interface WebdavCreated {
   account: WebdavAccount
   password: string
@@ -322,6 +332,12 @@ export const api = {
   createWebdavAccount: (input: { label?: string; read_only?: boolean }) =>
     post<WebdavCreated>('/webdav/accounts', input),
   deleteWebdavAccount: (id: number) => http.delete(`/webdav/accounts/${id}`),
+
+  // Personal access tokens (Bearer auth for native clients)
+  apiTokens: () => get<{ tokens: ApiTokenInfo[] }>('/tokens'),
+  createApiToken: (input: { label?: string; read_only?: boolean; expires_days?: number }) =>
+    post<{ token_info: ApiTokenInfo; token: string }>('/tokens', input),
+  deleteApiToken: (id: number) => http.delete(`/tokens/${id}`),
 
   officeFormats: () =>
     get<{ enabled: boolean; edit: string[]; view: string[]; new: string[] }>('/office/formats'),

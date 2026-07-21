@@ -51,6 +51,8 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 
 	r.Use(middleware.CORS(dep.Config.System.SiteURL))
 	r.Use(middleware.CurrentUser(dep.Signer, dep.Repo))
+	// A read-only personal access token may only issue safe (GET/HEAD) requests.
+	r.Use(middleware.EnforceReadOnlyToken())
 
 	ctl := controllers.New(dep)
 	api := r.Group(constants.APIPrefix)
@@ -150,6 +152,10 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.GET("/webdav/accounts", ctl.WebdavList)
 	f.POST("/webdav/accounts", ctl.WebdavCreate)
 	f.DELETE("/webdav/accounts/:id", ctl.WebdavDelete)
+
+	f.GET("/tokens", ctl.TokenList)
+	f.POST("/tokens", ctl.TokenCreate)
+	f.DELETE("/tokens/:id", ctl.TokenDelete)
 }
 
 // registerSlaveRoutes mounts the signed slave storage API backed by a local
