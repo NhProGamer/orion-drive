@@ -25,6 +25,14 @@ const gestures = useItemGestures({
 })
 const isDropTarget = computed(() => files.dragOverId === props.node.id)
 
+// A plain click opens the item (folder → navigate, file → preview), matching a
+// tap on touch. Selection is via the marquee, Ctrl/Cmd/Shift+click, or the
+// checkbox selection mode — a plain click never selects.
+function onClick(ev: MouseEvent) {
+  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) emit('select', props.node, ev)
+  else emit('open', props.node)
+}
+
 function onDragStart(ev: DragEvent) {
   if (!files.dndEnabled) return
   files.beginDrag(props.node)
@@ -68,7 +76,7 @@ const locLabel = computed(() =>
     class="card"
     :class="{ selected, 'drop-target': isDropTarget, 'select-mode': files.selectionMode }"
     :draggable="files.dndEnabled"
-    @click.stop="$emit('select', node, $event)"
+    @click.stop="onClick"
     @dblclick="$emit('open', node)"
     @contextmenu.stop="$emit('menu', node, $event)"
     @touchstart="gestures.onTouchStart"
