@@ -25,12 +25,17 @@ const gestures = useItemGestures({
 })
 const isDropTarget = computed(() => files.dragOverId === props.node.id)
 
-// A plain click opens the item (folder → navigate, file → preview), matching a
-// tap on touch. Selection is via the marquee, Ctrl/Cmd/Shift+click, or the
-// checkbox selection mode — a plain click never selects.
+// A plain desktop click previews the item in the side details panel; double-click
+// opens it (folder → navigate, file → full preview). Selection is via the marquee,
+// Ctrl/Cmd/Shift+click, or the checkbox mode — a plain click never selects. On
+// touch the tap gesture already opens, so the synthetic click is ignored.
 function onClick(ev: MouseEvent) {
-  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) emit('select', props.node, ev)
-  else emit('open', props.node)
+  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+    emit('select', props.node, ev)
+    return
+  }
+  if (ui.coarse) return
+  files.previewId = props.node.id
 }
 
 function onDragStart(ev: DragEvent) {

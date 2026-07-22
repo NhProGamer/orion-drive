@@ -17,11 +17,17 @@ const emit = defineEmits<{
 
 const files = useFilesStore()
 
-// Plain click opens the folder; selection is via the marquee, Ctrl/Cmd/Shift+
-// click, or checkbox mode — a plain click never selects.
+// A plain desktop click previews the folder in the side details panel;
+// double-click navigates into it. Selection is via the marquee, Ctrl/Cmd/Shift+
+// click, or checkbox mode — a plain click never selects. On touch the tap gesture
+// opens, so the synthetic click is ignored.
 function onClick(ev: MouseEvent) {
-  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) emit('select', props.node, ev)
-  else emit('open', props.node)
+  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+    emit('select', props.node, ev)
+    return
+  }
+  if (ui.coarse) return
+  files.previewId = props.node.id
 }
 const ui = useUiStore()
 const gestures = useItemGestures({

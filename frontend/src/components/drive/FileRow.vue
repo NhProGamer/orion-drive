@@ -6,6 +6,7 @@ import type { FileNode } from '@/lib/api'
 import { kindFromName, fmtSize, fmtDate } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useFilesStore } from '@/stores/files'
+import { useUiStore } from '@/stores/ui'
 import { useItemGestures } from '@/composables/useItemGestures'
 
 const { t } = useI18n()
@@ -18,12 +19,19 @@ const emit = defineEmits<{
 }>()
 
 const files = useFilesStore()
+const ui = useUiStore()
 
-// Plain click opens (folder → navigate, file → preview); selection is via the
-// marquee, Ctrl/Cmd/Shift+click, or checkbox mode — a plain click never selects.
+// A plain desktop click previews the item in the side details panel; double-click
+// opens it. Selection is via the marquee, Ctrl/Cmd/Shift+click, or the checkbox
+// mode — a plain click never selects. On touch the tap gesture opens, so the
+// synthetic click is ignored.
 function onClick(ev: MouseEvent) {
-  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) emit('select', props.node, ev)
-  else emit('open', props.node)
+  if (files.selectionMode || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+    emit('select', props.node, ev)
+    return
+  }
+  if (ui.coarse) return
+  files.previewId = props.node.id
 }
 const gestures = useItemGestures({
   onTap: () => (files.selectionMode ? files.toggleSel(props.node) : emit('open', props.node)),
