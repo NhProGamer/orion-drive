@@ -80,7 +80,7 @@ onMounted(load)
 <template>
   <div class="overlay" @click.self="emit('close')">
     <div class="dialog" style="max-width: 560px; width: 92vw">
-      <h2><Server :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('webdav.title') }}</h2>
+      <h2><Server :size="18" />{{ t('webdav.title') }}</h2>
       <p style="color: var(--fg-2); font-size: 12.5px; margin: -4px 0 4px">
         {{ t('webdav.intro') }}
       </p>

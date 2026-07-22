@@ -1035,9 +1035,17 @@ html[data-halo='off'] body::before {
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--fg-0);
+  /* Keep a leading icon on the title's baseline instead of wrapping above it. */
+  display: flex;
+  align-items: center;
+  gap: 8px;
   /* Long filenames (no spaces) must wrap inside the dialog, not overflow it. */
   overflow-wrap: anywhere;
   min-width: 0;
+}
+.dialog h2 svg {
+  flex: none;
+  color: var(--fg-2);
 }
 .dialog p {
   margin: 0;
@@ -1306,9 +1314,15 @@ html[data-halo='off'] body::before {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .dav-create .input {
   flex: 1;
+  min-width: 140px;
+}
+/* Match the 38px input height so the row's controls line up cleanly. */
+.dav-create .btn {
+  height: 38px;
 }
 .dav-ro {
   display: flex;
