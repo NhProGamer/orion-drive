@@ -963,6 +963,38 @@ html[data-halo='off'] body::before {
   background: var(--border-subtle);
   margin: var(--s-1) var(--s-2);
 }
+/* Non-interactive section label grouping a run of items. */
+.menu-header {
+  padding: 6px var(--s-3) 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+  user-select: none;
+}
+/* Submenu ("Open with …"): anchor the flyout to the parent row. */
+.menu-item.has-sub {
+  position: relative;
+}
+.sub-caret {
+  margin-left: auto;
+  color: var(--fg-2);
+  transition: transform var(--t-fast);
+}
+.sub-caret.open {
+  transform: rotate(90deg);
+}
+.menu .submenu {
+  position: absolute;
+  left: 100%;
+  top: calc(-1 * var(--s-1));
+  margin-left: var(--s-1);
+}
+/* Touch accordion child (submenu expanded inline in the bottom sheet). */
+.sub-child {
+  padding-left: calc(var(--s-3) + 22px);
+}
 
 /* Dialog */
 .overlay {

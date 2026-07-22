@@ -6,7 +6,7 @@ import {
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
-  Sheet, Presentation, Bell, KeyRound,
+  Sheet, Presentation, Bell, KeyRound, AppWindow,
 } from 'lucide-vue-next'
 import { notifIcon } from '@/lib/notifIcons'
 import { useFilesStore, type View } from '@/stores/files'
@@ -131,13 +131,14 @@ function bgCtx(ev: MouseEvent) {
     x: Math.min(ev.clientX, window.innerWidth - 240),
     y: Math.min(ev.clientY, window.innerHeight - 140),
     items: [
+      { header: t('shell.secCreate') },
       { id: 'newfolder', label: t('shell.newFolder'), icon: FolderPlus },
-      { id: 'import', label: t('shell.importFiles'), icon: Upload },
-      { id: 'importfolder', label: t('shell.importFolder'), icon: FolderUp },
-      ...(officeCreateItems.value.length ? [{ sep: true } as MenuItem] : []),
       ...officeCreateItems.value.map(
         (it): MenuItem => ({ id: `office:${it.ext}`, label: t(it.labelKey), icon: it.icon }),
       ),
+      { header: t('shell.secImport') },
+      { id: 'import', label: t('shell.importFiles'), icon: Upload },
+      { id: 'importfolder', label: t('shell.importFolder'), icon: FolderUp },
     ],
   }
 }
@@ -154,6 +155,8 @@ function ctxItems(): MenuItem[] {
   const multi = sel.length > 1
   const n = sel[0]
   const items: MenuItem[] = []
+
+  // Primary actions (open/preview + download).
   if (!multi && n) {
     if (n.type === 'folder') items.push({ id: 'open', label: t('common.open'), icon: Folder })
     else items.push({ id: 'preview', label: t('shell.preview'), icon: Eye })
@@ -166,29 +169,35 @@ function ctxItems(): MenuItem[] {
   } else {
     items.push({ id: 'download', label: t('common.download'), icon: Download })
   }
-  if (!files.readOnly && n && (multi || n.type === 'folder')) {
-    items.push({ id: 'archive', label: t('shell.downloadAsArchive'), icon: FileArchive })
+
+  // "Open with" — the home for external editors (WOPI Office now; whiteboard and
+  // sign later). Its own submenu so it reads as a distinct category.
+  if (!files.readOnly && !multi && n && n.type === 'file') {
+    const openWith: MenuItem[] = []
+    if (ui.canEditOffice(n.name)) openWith.push({ id: 'office', label: t('shell.office'), icon: FileText })
+    if (openWith.length) items.push({ label: t('shell.openWith'), icon: AppWindow, children: openWith })
   }
-  if (!files.readOnly && n) {
-    items.push({ id: 'compress', label: t('shell.compressToZip'), icon: FileArchive })
-  }
-  if (!files.readOnly && !multi && n && n.type === 'file' && isArchive(n.name)) {
-    items.push({ id: 'extract', label: t('shell.extractHere'), icon: FolderInput })
-  }
-  if (!files.readOnly && !multi && n && n.type === 'file' && ui.canEditOffice(n.name)) {
-    items.push({ id: 'office', label: t('shell.editWithOffice'), icon: FileText })
-  }
+
+  // Share.
   if (!multi && n && auth.canShare) {
+    items.push({ header: t('shell.secShare') })
     items.push({ id: 'share', label: t('common.share'), icon: Share2 })
     if (n.type === 'file') items.push({ id: 'directlink', label: t('shell.copyDirectLink'), icon: LinkIcon })
   }
+
+  // Organise (move/rename/star/lock + archive operations).
   if (!files.readOnly && n) {
-    items.push({ sep: true })
+    items.push({ header: t('shell.secOrganize') })
     items.push({ id: 'move', label: t('shell.moveTo'), icon: FolderInput })
     if (!multi) {
       items.push({ id: 'rename', label: t('common.rename'), icon: Pencil })
       items.push({ id: 'star', label: n.starred ? t('shell.unstar') : t('shell.star'), icon: Star })
       items.push({ id: 'lock', label: n.locked ? t('shell.unlock') : t('shell.lock'), icon: n.locked ? Unlock : Lock })
+    }
+    if (multi || n.type === 'folder') items.push({ id: 'archive', label: t('shell.downloadAsArchive'), icon: FileArchive })
+    items.push({ id: 'compress', label: t('shell.compressToZip'), icon: FileArchive })
+    if (!multi && n.type === 'file' && isArchive(n.name)) {
+      items.push({ id: 'extract', label: t('shell.extractHere'), icon: FolderInput })
     }
     items.push({ sep: true })
     items.push({ id: 'trash', label: t('shell.moveToTrash'), icon: Trash2, danger: true })
@@ -437,15 +446,14 @@ onUnmounted(() => {
           <Plus :size="16" />{{ t('shell.new') }}
         </button>
         <div v-if="newMenuOpen" class="menu new-menu" @click.stop>
+          <div class="menu-header">{{ t('shell.secCreate') }}</div>
           <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />{{ t('shell.newFolder') }}</button>
+          <button v-for="it in officeCreateItems" :key="it.ext" class="menu-item" @click="newOffice(it)">
+            <component :is="it.icon" :size="16" />{{ t(it.labelKey) }}
+          </button>
+          <div class="menu-header">{{ t('shell.secImport') }}</div>
           <button class="menu-item" @click="triggerUpload"><Upload :size="16" />{{ t('shell.importFiles') }}</button>
           <button class="menu-item" @click="triggerFolderUpload"><FolderUp :size="16" />{{ t('shell.importFolder') }}</button>
-          <template v-if="officeCreateItems.length">
-            <div class="menu-sep"></div>
-            <button v-for="it in officeCreateItems" :key="it.ext" class="menu-item" @click="newOffice(it)">
-              <component :is="it.icon" :size="16" />{{ t(it.labelKey) }}
-            </button>
-          </template>
         </div>
       </div>
       <nav :aria-label="t('shell.mainNav')">
