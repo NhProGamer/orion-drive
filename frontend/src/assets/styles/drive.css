@@ -996,6 +996,16 @@ html[data-halo='off'] body::before {
   padding-left: calc(var(--s-3) + 22px);
 }
 
+/* Rubber-band (marquee) selection rectangle. */
+.marquee {
+  position: fixed;
+  z-index: 55;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
 /* Dialog */
 .overlay {
   position: fixed;

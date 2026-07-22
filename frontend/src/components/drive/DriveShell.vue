@@ -112,6 +112,75 @@ function closeSidebar() {
   sidebarOpen.value = false
 }
 
+/* Rubber-band (marquee) selection — desktop pointers only (touch uses tap-select).
+   Drag on empty space to draw a rectangle; items it intersects get selected. */
+const marquee = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+let mqStart = { x: 0, y: 0 }
+let mqBase: number[] = []
+let mqRaf = 0
+let mqDragged = false
+
+// Clear the selection on a background click, unless we just finished a drag-select
+// (the pointerup of a marquee also fires a click on the container).
+function onContentClick() {
+  if (mqDragged) {
+    mqDragged = false
+    return
+  }
+  files.clearSel()
+}
+
+function onMarqueeDown(e: PointerEvent) {
+  if (ui.coarse || e.button !== 0) return
+  const el = e.target as HTMLElement
+  // Ignore starts on an item or any interactive control — only empty space marquees.
+  if (el.closest('[data-id], button, a, input, textarea, select, [role="button"]')) return
+  e.preventDefault() // suppress native text selection / drag while marqueeing
+  mqStart = { x: e.clientX, y: e.clientY }
+  // Ctrl/Cmd adds to the current selection; otherwise the marquee replaces it.
+  mqBase = e.ctrlKey || e.metaKey ? [...files.sel] : []
+  window.addEventListener('pointermove', onMarqueeMove)
+  window.addEventListener('pointerup', onMarqueeUp)
+}
+
+function onMarqueeMove(e: PointerEvent) {
+  const dx = e.clientX - mqStart.x
+  const dy = e.clientY - mqStart.y
+  if (!marquee.value && Math.hypot(dx, dy) < 5) return // small threshold so a click isn't a drag
+  const x = Math.min(e.clientX, mqStart.x)
+  const y = Math.min(e.clientY, mqStart.y)
+  marquee.value = { x, y, w: Math.abs(dx), h: Math.abs(dy) }
+  mqDragged = true
+  if (mqRaf) return
+  mqRaf = requestAnimationFrame(() => {
+    mqRaf = 0
+    const m = marquee.value
+    if (!m) return
+    const box = { left: m.x, top: m.y, right: m.x + m.w, bottom: m.y + m.h }
+    const hit = new Set(mqBase)
+    document.querySelectorAll<HTMLElement>('.content [data-id]').forEach((node) => {
+      const r = node.getBoundingClientRect()
+      if (!(r.right < box.left || r.left > box.right || r.bottom < box.top || r.top > box.bottom)) {
+        const id = Number(node.dataset.id)
+        if (!Number.isNaN(id)) hit.add(id)
+      }
+    })
+    files.sel = [...hit]
+  })
+}
+
+function onMarqueeUp() {
+  window.removeEventListener('pointermove', onMarqueeMove)
+  window.removeEventListener('pointerup', onMarqueeUp)
+  if (mqRaf) {
+    cancelAnimationFrame(mqRaf)
+    mqRaf = 0
+  }
+  marquee.value = null
+  // Reset the just-dragged guard even if no click follows (e.g. drag ended off-container).
+  setTimeout(() => (mqDragged = false), 0)
+}
+
 function onCtx(node: FileNode, ev: MouseEvent) {
   ev.preventDefault()
   // Right-click selects the item (without opening the details panel).
@@ -540,7 +609,12 @@ onUnmounted(() => {
       </header>
 
       <div class="workspace">
-        <main class="content" @click.self="files.clearSel" @contextmenu.prevent="bgCtx">
+        <main class="content" @click.self="onContentClick" @contextmenu.prevent="bgCtx" @pointerdown="onMarqueeDown">
+          <div
+            v-if="marquee"
+            class="marquee"
+            :style="{ left: marquee.x + 'px', top: marquee.y + 'px', width: marquee.w + 'px', height: marquee.h + 'px' }"
+          ></div>
           <!-- Header -->
           <div class="content-head">
             <template v-if="files.sel.length">
@@ -600,10 +674,11 @@ onUnmounted(() => {
             <template v-if="ui.mode === 'grid'">
               <section v-if="files.folders.length" class="section">
                 <span class="eyebrow">{{ t('shell.folders') }}</span>
-                <div class="folder-grid" @click.self="files.clearSel">
+                <div class="folder-grid" @click.self="onContentClick">
                   <FolderChip
                     v-for="n in files.folders"
                     :key="n.id"
+                    :data-id="n.id"
                     :node="n"
                     :selected="files.sel.includes(n.id)"
                     @select="files.select"
@@ -614,10 +689,11 @@ onUnmounted(() => {
               </section>
               <section v-if="files.files.length" class="section">
                 <span class="eyebrow">{{ t('shell.files') }}</span>
-                <div class="file-grid" @click.self="files.clearSel">
+                <div class="file-grid" @click.self="onContentClick">
                   <FileCard
                     v-for="n in files.files"
                     :key="n.id"
+                    :data-id="n.id"
                     :node="n"
                     :selected="files.sel.includes(n.id)"
                     @select="files.select"
@@ -640,6 +716,7 @@ onUnmounted(() => {
               <FileRow
                 v-for="n in files.orderedNodes"
                 :key="n.id"
+                :data-id="n.id"
                 :node="n"
                 :selected="files.sel.includes(n.id)"
                 @select="files.select"
