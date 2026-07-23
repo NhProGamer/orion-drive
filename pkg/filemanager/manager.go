@@ -100,6 +100,38 @@ func (m *Manager) List(ctx context.Context, user *model.User, parentID *uint) ([
 	return m.repo.File.ListChildren(ctx, user.ID, parentID)
 }
 
+// FolderSize returns the total size of every non-trashed file nested under the
+// folder, recursively. It walks the subtree one level at a time (owner-scoped);
+// a plain file returns its own size.
+func (m *Manager) FolderSize(ctx context.Context, user *model.User, id uint) (int64, error) {
+	root, err := m.repo.File.GetByID(ctx, user.ID, id)
+	if err != nil {
+		return 0, err
+	}
+	if !root.IsFolder() {
+		return root.Size, nil
+	}
+	var total int64
+	level := []uint{id}
+	// Depth bound guards against pathological or cyclic parent chains.
+	for depth := 0; depth < 4096 && len(level) > 0; depth++ {
+		kids, err := m.repo.File.ChildrenOfMany(ctx, user.ID, level)
+		if err != nil {
+			return 0, err
+		}
+		var next []uint
+		for i := range kids {
+			if kids[i].IsFolder() {
+				next = append(next, kids[i].ID)
+			} else {
+				total += kids[i].Size
+			}
+		}
+		level = next
+	}
+	return total, nil
+}
+
 // ListTrashed returns the user's recycle-bin contents.
 func (m *Manager) ListTrashed(ctx context.Context, user *model.User) ([]model.File, error) {
 	return m.repo.File.ListTrashed(ctx, user.ID)

@@ -18,7 +18,12 @@ const showThumb = computed(() => props.node.type === 'file' && canThumbnail(prop
 const thumbUrl = computed(() => api.thumbUrl(props.node.id))
 const thumbFailed = ref(false)
 watch(() => [props.node.id, props.node.modified], () => (thumbFailed.value = false))
-const sizeLabel = computed(() => (props.node.type === 'folder' ? '—' : fmtSize(props.node.size)))
+// Folders have no stored size; their total is computed on demand server-side.
+const folderSize = ref<number | null>(null)
+const sizeLabel = computed(() => {
+  if (props.node.type !== 'folder') return fmtSize(props.node.size)
+  return folderSize.value == null ? '…' : fmtSize(folderSize.value)
+})
 const dateLabel = computed(() => fmtDate(props.node.modified))
 
 const versions = ref<Version[]>([])
@@ -43,7 +48,16 @@ async function loadEntries() {
     entries.value = []
   }
 }
-watch(() => props.node.id, () => { loadVersions(); loadEntries() }, { immediate: true })
+async function loadFolderSize() {
+  folderSize.value = null
+  if (props.node.type !== 'folder') return
+  try {
+    folderSize.value = (await api.folderSize(props.node.id)).size
+  } catch {
+    folderSize.value = 0
+  }
+}
+watch(() => props.node.id, () => { loadVersions(); loadEntries(); loadFolderSize() }, { immediate: true })
 
 async function restore(v: Version) {
   await api.restoreVersion(props.node.id, v.id)

@@ -47,6 +47,20 @@ func (r *FileRepo) ListChildren(ctx context.Context, ownerID uint, parentID *uin
 	return files, err
 }
 
+// ChildrenOfMany returns the non-trashed direct children of any of parentIDs,
+// owner-scoped. Used to walk a subtree one level at a time (e.g. folder size).
+func (r *FileRepo) ChildrenOfMany(ctx context.Context, ownerID uint, parentIDs []uint) ([]model.File, error) {
+	var files []model.File
+	if len(parentIDs) == 0 {
+		return files, nil
+	}
+	err := r.db.WithContext(ctx).
+		Select("id", "type", "size", "parent_id").
+		Where("owner_id = ? AND parent_id IN ?", ownerID, parentIDs).
+		Find(&files).Error
+	return files, err
+}
+
 // ListChildrenUnscoped is like ListChildren but also returns trashed children,
 // used to walk a subtree that is itself in the recycle bin.
 func (r *FileRepo) ListChildrenUnscoped(ctx context.Context, ownerID uint, parentID *uint) ([]model.File, error) {

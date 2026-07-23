@@ -214,6 +214,7 @@ export const api = {
   restore: (ids: number[]) => post('/file/restore', { ids }),
   purge: (ids: number[]) => post('/file/purge', { ids }),
   emptyTrash: () => post<{ purged: number }>('/file/trash/empty'),
+  folderSize: (id: number) => get<{ size: number }>(`/file/folder-size/${id}`),
   contentUrl: (id: number) => `/api/v1/file/content/${id}`,
   inlineUrl: (id: number) => `/api/v1/file/content/${id}?inline=1`,
   thumbUrl: (id: number) => `/api/v1/file/thumb/${id}`,

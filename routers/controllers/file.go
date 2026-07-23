@@ -423,6 +423,21 @@ func (ctl *Controller) Capacity(c *gin.Context) {
 	respond(c, serializer.OK(gin.H{"used": used, "total": total}))
 }
 
+// FolderSize returns the recursive total size of a folder's contents.
+func (ctl *Controller) FolderSize(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		return
+	}
+	size, err := ctl.dep.Files.FolderSize(c.Request.Context(), ctl.user(c), id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"size": size}))
+}
+
 type initUploadReq struct {
 	Parent string `json:"parent"`
 	Name   string `json:"name"`
