@@ -459,28 +459,58 @@ func (d *dirFile) Readdir(count int) ([]fs.FileInfo, error) {
 	return batch, nil
 }
 
-// writeFile buffers a PUT to a temp file and commits it through the manager on
-// Close, so quota, versioning and at-rest encryption all apply.
+var errShortUpload = errors.New("upload shorter than the declared length")
+
+// writeFile handles a PUT so quota, versioning and at-rest encryption all apply.
+// When the client declares a Content-Length (the common case) the body is
+// streamed straight into storage and finalized only once the whole declared
+// length has arrived — a cut/short upload aborts and leaves any previous version
+// untouched (never commits a truncated file). With an unknown length (chunked
+// transfer) it falls back to buffering to a temp file committed on Close.
 type writeFile struct {
 	ctx      context.Context
 	mgr      *filemanager.Manager
 	user     *model.User
 	parentID *uint
 	name     string
-	tmp      *os.File
 	size     int64
+	expected int64 // declared Content-Length, or -1 when unknown (chunked)
 	closed   bool
+
+	// Streaming path (expected >= 0): body is piped into WriteFile as it arrives.
+	pw   *io.PipeWriter
+	done chan error
+	// Buffered path (expected < 0): body accumulated here, committed on Close.
+	tmp *os.File
 }
 
 func newWriteFile(ctx context.Context, mgr *filemanager.Manager, user *model.User, parentID *uint, name string) (*writeFile, error) {
+	w := &writeFile{ctx: ctx, mgr: mgr, user: user, parentID: parentID, name: name, expected: contentLengthFromCtx(ctx)}
+	if w.expected >= 0 {
+		pr, pw := io.Pipe()
+		w.pw = pw
+		w.done = make(chan error, 1)
+		go func() {
+			_, err := mgr.WriteFile(ctx, user, parentID, name, pr, w.expected)
+			_ = pr.CloseWithError(err) // unblock a pending Write if the commit failed early
+			w.done <- err
+		}()
+		return w, nil
+	}
 	tmp, err := os.CreateTemp("", "orion-dav-*")
 	if err != nil {
 		return nil, err
 	}
-	return &writeFile{ctx: ctx, mgr: mgr, user: user, parentID: parentID, name: name, tmp: tmp}, nil
+	w.tmp = tmp
+	return w, nil
 }
 
 func (w *writeFile) Write(p []byte) (int, error) {
+	if w.pw != nil {
+		n, err := w.pw.Write(p)
+		w.size += int64(n)
+		return n, err
+	}
 	n, err := w.tmp.Write(p)
 	w.size += int64(n)
 	return n, err
@@ -491,6 +521,24 @@ func (w *writeFile) Close() error {
 		return nil
 	}
 	w.closed = true
+
+	if w.pw != nil {
+		// A short body (cut connection) must never be committed: abort the pipe so
+		// the in-flight WriteFile fails and no new version is created.
+		if w.size != w.expected {
+			_ = w.pw.CloseWithError(errShortUpload)
+			if err := <-w.done; err != nil {
+				return mapErr(err)
+			}
+			return mapErr(errShortUpload)
+		}
+		_ = w.pw.Close() // EOF → the commit finalizes
+		if err := <-w.done; err != nil {
+			return mapErr(err)
+		}
+		return nil
+	}
+
 	defer func() {
 		_ = w.tmp.Close()
 		_ = os.Remove(w.tmp.Name())

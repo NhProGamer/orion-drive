@@ -18,7 +18,10 @@ const Prefix = "/dav"
 // ctxKey is the private context key type for the authenticated user.
 type ctxKey int
 
-const userKey ctxKey = 0
+const (
+	userKey ctxKey = 0
+	lenKey  ctxKey = 1
+)
 
 func withUser(ctx context.Context, u *model.User) context.Context {
 	return context.WithValue(ctx, userKey, u)
@@ -27,6 +30,19 @@ func withUser(ctx context.Context, u *model.User) context.Context {
 func userFromCtx(ctx context.Context) *model.User {
 	u, _ := ctx.Value(userKey).(*model.User)
 	return u
+}
+
+// withContentLength stashes the request's declared body length so a PUT can be
+// streamed straight to storage yet still reject a short/cut upload.
+func withContentLength(ctx context.Context, n int64) context.Context {
+	return context.WithValue(ctx, lenKey, n)
+}
+
+func contentLengthFromCtx(ctx context.Context) int64 {
+	if n, ok := ctx.Value(lenKey).(int64); ok {
+		return n
+	}
+	return -1
 }
 
 // writeMethods are the HTTP methods that modify storage; read-only accounts are
@@ -88,6 +104,7 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		LockSystem: newLocks(h.repo, user.ID),
 	}
 	ctx := withUser(r.Context(), user)
+	ctx = withContentLength(ctx, r.ContentLength)
 	dav.ServeHTTP(w, r.WithContext(ctx))
 }
 
