@@ -111,6 +111,12 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.repo.WebDAV.TouchLastUsed(r.Context(), acct.ID)
 
+	// SEARCH (RFC 5323) isn't handled by x/net/webdav; answer it ourselves.
+	if strings.EqualFold(r.Method, "SEARCH") {
+		h.handleSearch(w, r.WithContext(withUser(r.Context(), user)), user)
+		return
+	}
+
 	// Build the WebDAV handler per request so the lock system is bound to this
 	// user (locks are persisted in the DB and isolated per user).
 	dav := &xwebdav.Handler{
