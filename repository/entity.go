@@ -21,6 +21,28 @@ func (r *EntityRepo) GetByID(ctx context.Context, id uint) (*model.Entity, error
 	return &e, err
 }
 
+// HashesByIDs returns id → content hash for the given entity ids (skipping
+// entities without a stored hash). Used to build WebDAV ETags for a listing in
+// one query.
+func (r *EntityRepo) HashesByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
+	out := make(map[uint]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		ID   uint
+		Hash string
+	}
+	if err := r.db.WithContext(ctx).Model(&model.Entity{}).
+		Select("id", "hash").Where("id IN ? AND hash <> ''", ids).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		out[row.ID] = row.Hash
+	}
+	return out, nil
+}
+
 // Create inserts a new entity.
 func (r *EntityRepo) Create(ctx context.Context, e *model.Entity) error {
 	return r.db.WithContext(ctx).Create(e).Error

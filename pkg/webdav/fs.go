@@ -173,6 +173,8 @@ func (f *FS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Note: getetag is served from OpenFile(O_RDONLY).Stat() (see OpenFile), so we
+	// don't pay an entity lookup here on the many existence-check Stat calls.
 	return newInfo(target), nil
 }
 
@@ -202,11 +204,19 @@ func (f *FS) OpenFile(ctx context.Context, name string, flag int, _ os.FileMode)
 	if target == nil || target.IsFolder() {
 		return f.openDir(ctx, user, target)
 	}
+	// x/net/webdav reads properties (incl. getetag) via OpenFile(O_RDONLY).Stat(),
+	// so the content-hash ETag must live on this info, not just FS.Stat's.
+	info := newInfo(target)
+	if target.PrimaryEntityID != nil {
+		if e, err := f.repo.Entity.GetByID(ctx, *target.PrimaryEntityID); err == nil {
+			info.etag = e.Hash
+		}
+	}
 	rc, err := f.mgr.OpenContent(ctx, target)
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	return &readFile{davNode: davNode{fs: f, ctx: ctx, user: user, target: target}, rc: rc, info: newInfo(target)}, nil
+	return &readFile{davNode: davNode{fs: f, ctx: ctx, user: user, target: target}, rc: rc, info: info}, nil
 }
 
 // openDir builds a directory File whose Readdir lists target's children (or the
@@ -221,9 +231,22 @@ func (f *FS) openDir(ctx context.Context, user *model.User, target *model.File) 
 	if err != nil {
 		return nil, mapErr(err)
 	}
+	// Batch-load the children's content hashes (one query) so each entry gets a
+	// strong ETag without a per-file lookup.
+	entIDs := make([]uint, 0, len(kids))
+	for i := range kids {
+		if kids[i].PrimaryEntityID != nil {
+			entIDs = append(entIDs, *kids[i].PrimaryEntityID)
+		}
+	}
+	hashes, _ := f.repo.Entity.HashesByIDs(ctx, entIDs)
 	infos := make([]fs.FileInfo, 0, len(kids))
 	for i := range kids {
-		infos = append(infos, newInfo(&kids[i]))
+		info := newInfo(&kids[i])
+		if kids[i].PrimaryEntityID != nil {
+			info.etag = hashes[*kids[i].PrimaryEntityID]
+		}
+		infos = append(infos, info)
 	}
 	return &dirFile{davNode: davNode{fs: f, ctx: ctx, user: user, target: target}, info: newInfo(target), children: infos}, nil
 }
@@ -243,6 +266,7 @@ type fileInfo struct {
 	mode    os.FileMode
 	modTime time.Time
 	isDir   bool
+	etag    string // content hash of the primary entity, if known
 }
 
 func (fi *fileInfo) Name() string       { return fi.name }
@@ -251,6 +275,17 @@ func (fi *fileInfo) Mode() os.FileMode  { return fi.mode }
 func (fi *fileInfo) ModTime() time.Time { return fi.modTime }
 func (fi *fileInfo) IsDir() bool        { return fi.isDir }
 func (fi *fileInfo) Sys() any           { return nil }
+
+// ETag implements webdav.ETager: a strong, content-addressed ETag from the
+// object's SHA-256 when known, so identical content yields the same ETag and
+// conditional requests are exact. Falls back to x/net/webdav's default
+// (mtime+size) when no hash is stored (e.g. pre-hash files, folders).
+func (fi *fileInfo) ETag(context.Context) (string, error) {
+	if fi.etag != "" {
+		return `"` + fi.etag + `"`, nil
+	}
+	return "", xwebdav.ErrNotImplemented
+}
 
 // newInfo builds a fileInfo for target; a nil target is the drive root.
 func newInfo(target *model.File) *fileInfo {

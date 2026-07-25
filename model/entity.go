@@ -14,6 +14,9 @@ type Entity struct {
 	Type            int    `json:"type"`
 	Source          string `gorm:"size:1024;index" json:"source"` // path within the storage backend
 	Size            int64  `json:"size"`
+	// Hash is the SHA-256 (hex) of the object's plaintext content. Used for strong
+	// WebDAV ETags and (later) content-addressed deduplication.
+	Hash            string `gorm:"size:64;index" json:"hash"`
 	ReferenceCount  int    `json:"reference_count"`
 	StoragePolicyID uint   `json:"storage_policy_id"`
 	UploadSessionID string `gorm:"size:64;index" json:"-"`

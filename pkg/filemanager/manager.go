@@ -5,6 +5,7 @@ package filemanager
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -547,6 +548,11 @@ func (m *Manager) Download(ctx context.Context, user *model.User, id uint) (*Dow
 func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID *uint, name string, targetFileID *uint, policy *model.StoragePolicy, h driver.Handler, reader io.Reader, size int64) (*model.File, error) {
 	source := newSourcePath(user.ID, name)
 
+	// Hash the plaintext as it streams past (before any at-rest encryption), so
+	// the content hash is stable regardless of encryption/IV. No extra pass.
+	hasher := sha256.New()
+	reader = io.TeeReader(reader, hasher)
+
 	// Encrypt at rest when the policy requests it (local-serve backends only,
 	// since encrypted bytes must be decrypted by OrionDrive on the way out).
 	var entityProps model.JSON
@@ -573,6 +579,7 @@ func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID 
 		Type:            model.EntityTypeVersion,
 		Source:          source,
 		Size:            size,
+		Hash:            hex.EncodeToString(hasher.Sum(nil)),
 		ReferenceCount:  1,
 		StoragePolicyID: policy.ID,
 		CreatedByID:     user.ID,
