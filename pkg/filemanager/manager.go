@@ -216,6 +216,7 @@ func (m *Manager) CreateFolder(ctx context.Context, user *model.User, parentID *
 	if err := m.repo.File.Create(ctx, f); err != nil {
 		return nil, err
 	}
+	m.journalFile(ctx, user.ID, f, false)
 	return f, nil
 }
 
@@ -273,10 +274,14 @@ func (m *Manager) Rename(ctx context.Context, user *model.User, id uint, newName
 	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, f.ParentID, newName); err == nil && existing.ID != id {
 		return nil, ErrConflict
 	}
+	oldPath := m.pathString(ctx, user.ID, f, map[uint]string{})
 	f.Name = newName
 	if err := m.repo.File.Update(ctx, f); err != nil {
 		return nil, err
 	}
+	// The old href is gone, the new one appears.
+	m.journalPath(ctx, user.ID, oldPath, f.IsFolder(), true)
+	m.journalFile(ctx, user.ID, f, false)
 	return f, nil
 }
 
@@ -299,10 +304,13 @@ func (m *Manager) Move(ctx context.Context, user *model.User, ids []uint, destPa
 		if existing, err := m.repo.File.FindChildByName(ctx, user.ID, destParentID, f.Name); err == nil && existing.ID != id {
 			return ErrConflict
 		}
+		oldPath := m.pathString(ctx, user.ID, f, map[uint]string{})
 		f.ParentID = destParentID
 		if err := m.repo.File.Update(ctx, f); err != nil {
 			return err
 		}
+		m.journalPath(ctx, user.ID, oldPath, f.IsFolder(), true)
+		m.journalFile(ctx, user.ID, f, false)
 	}
 	return nil
 }
@@ -322,6 +330,11 @@ func (m *Manager) ToggleStar(ctx context.Context, user *model.User, id uint) (*m
 
 // Trash moves files to the recycle bin. Locked files are refused.
 func (m *Manager) Trash(ctx context.Context, user *model.User, ids []uint) error {
+	type member struct {
+		path  string
+		isDir bool
+	}
+	var members []member
 	for _, id := range ids {
 		f, err := m.repo.File.GetByID(ctx, user.ID, id)
 		if err != nil {
@@ -330,6 +343,7 @@ func (m *Manager) Trash(ctx context.Context, user *model.User, ids []uint) error
 		if f.IsLocked() {
 			return ErrLocked
 		}
+		members = append(members, member{m.pathString(ctx, user.ID, f, map[uint]string{}), f.IsFolder()})
 	}
 	// Trashing a folder trashes its whole subtree, so nothing is left orphaned
 	// (unreachable but not in the recycle bin).
@@ -337,7 +351,14 @@ func (m *Manager) Trash(ctx context.Context, user *model.User, ids []uint) error
 	if err != nil {
 		return err
 	}
-	return m.repo.File.Trash(ctx, user.ID, all)
+	if err := m.repo.File.Trash(ctx, user.ID, all); err != nil {
+		return err
+	}
+	// Journal the removals (top-level; a removed collection implies its subtree).
+	for _, mm := range members {
+		m.journalPath(ctx, user.ID, mm.path, mm.isDir, true)
+	}
+	return nil
 }
 
 // Restore returns files from the recycle bin.
@@ -346,7 +367,16 @@ func (m *Manager) Restore(ctx context.Context, user *model.User, ids []uint) err
 	if err != nil {
 		return err
 	}
-	return m.repo.File.Restore(ctx, user.ID, all)
+	if err := m.repo.File.Restore(ctx, user.ID, all); err != nil {
+		return err
+	}
+	// The restored members reappear (top-level; the client re-descends collections).
+	for _, id := range ids {
+		if f, err := m.repo.File.GetByID(ctx, user.ID, id); err == nil {
+			m.journalFile(ctx, user.ID, f, false)
+		}
+	}
+	return nil
 }
 
 // EmptyTrash permanently deletes every trashed file the user owns and returns
@@ -376,6 +406,18 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 	if err != nil {
 		return err
 	}
+	// Capture the top-level members' paths before they are gone, to journal
+	// tombstones (a purge is a hard delete — sync clients need the removal).
+	type member struct {
+		path  string
+		isDir bool
+	}
+	var members []member
+	for _, id := range ids {
+		if f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id); err == nil {
+			members = append(members, member{m.pathString(ctx, user.ID, f, map[uint]string{}), f.IsFolder()})
+		}
+	}
 	for _, id := range all {
 		f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)
 		if err != nil {
@@ -404,7 +446,13 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		user.StorageUsed = 0
 	}
 	_ = m.repo.User.Update(ctx, user)
-	return m.repo.File.Purge(ctx, user.ID, all)
+	if err := m.repo.File.Purge(ctx, user.ID, all); err != nil {
+		return err
+	}
+	for _, mm := range members {
+		m.journalPath(ctx, user.ID, mm.path, mm.isDir, true)
+	}
+	return nil
 }
 
 // removeEntity deletes an entity row and its physical object. The physical
@@ -672,6 +720,7 @@ func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID 
 
 	user.StorageUsed += size
 	_ = m.repo.User.Update(ctx, user)
+	m.journalFile(ctx, user.ID, file, false) // new file or new version → upsert
 	return file, nil
 }
 

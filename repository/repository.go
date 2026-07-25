@@ -17,6 +17,7 @@ type Repository struct {
 	WebDAV     *WebDAVAccountRepo
 	WebDAVLock *WebDAVLockRepo
 	APIToken   *APITokenRepo
+	FileChange *FileChangeRepo
 }
 
 // New builds a Repository bound to db.
@@ -33,5 +34,6 @@ func New(db *gorm.DB) *Repository {
 		WebDAV:     &WebDAVAccountRepo{db: db},
 		WebDAVLock: &WebDAVLockRepo{db: db},
 		APIToken:   &APITokenRepo{db: db},
+		FileChange: &FileChangeRepo{db: db},
 	}
 }

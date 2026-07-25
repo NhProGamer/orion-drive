@@ -111,9 +111,14 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.repo.WebDAV.TouchLastUsed(r.Context(), acct.ID)
 
-	// SEARCH (RFC 5323) isn't handled by x/net/webdav; answer it ourselves.
-	if strings.EqualFold(r.Method, "SEARCH") {
+	// SEARCH (RFC 5323) and REPORT (RFC 6578 sync-collection) aren't handled by
+	// x/net/webdav; answer them ourselves.
+	switch strings.ToUpper(r.Method) {
+	case "SEARCH":
 		h.handleSearch(w, r.WithContext(withUser(r.Context(), user)), user)
+		return
+	case "REPORT":
+		h.handleReport(w, r.WithContext(withUser(r.Context(), user)), user)
 		return
 	}
 
