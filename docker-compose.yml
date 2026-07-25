@@ -58,6 +58,11 @@ services:
       # OD_CONF_Storage_LocalBasePath: "/app/data/storage" # local policy base dir (image default)
       # 64-char hex (32-byte) AES-256 key for policies created with `policy add-local --encrypt`:
       # OD_CONF_Storage_EncryptionKey: ""
+      # Content-addressed deduplication: off (default) | user (safe, dedups a
+      # user's own uploads) | global (dedups across users — saves the most disk
+      # but a dedup hit leaks that another user already stored that exact content).
+      # Encrypted policies are never deduplicated.
+      # OD_CONF_Storage_Dedup: "off"
 
       # ---- [Slave] (set Secret to make this node a storage slave for a master) ----
       # OD_CONF_Slave_Secret: ""

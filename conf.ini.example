@@ -65,6 +65,15 @@ LocalBasePath = data/storage
 ; policies created with --encrypt. Generate with: openssl rand -hex 32
 ; Leave empty to disable encryption. Losing this key makes encrypted files unrecoverable.
 EncryptionKey =
+; Content-addressed deduplication of identical uploads:
+;   off    (default) — never share stored blobs
+;   user   — reuse a blob only among the SAME user's uploads (safe)
+;   global — reuse a blob across ALL users (max disk savings). SECURITY NOTE: a
+;            dedup hit can let one user infer that another already stored the
+;            exact same content (an existence-leak side channel). Only enable if
+;            that's acceptable for your threat model.
+; Encrypted policies are never deduplicated (each object has a random IV).
+Dedup = off
 
 [Slave]
 ; Set Secret to turn this node into a storage slave: it then exposes the signed

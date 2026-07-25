@@ -43,6 +43,41 @@ func (r *EntityRepo) HashesByIDs(ctx context.Context, ids []uint) (map[uint]stri
 	return out, nil
 }
 
+// FindDedupSource returns the storage Source of an existing object with the same
+// content hash on the same policy, for content-addressed deduplication. Matching
+// the policy also matches the encryption state (encryption is per-policy), so
+// callers only offer unencrypted policies here. scopeUserID limits the match to
+// one creator (per-user dedup); nil matches any user (global). Returns "" when
+// no reusable object exists.
+func (r *EntityRepo) FindDedupSource(ctx context.Context, hash string, policyID uint, scopeUserID *uint) (string, error) {
+	if hash == "" {
+		return "", nil
+	}
+	q := r.db.WithContext(ctx).Model(&model.Entity{}).
+		Where("hash = ? AND storage_policy_id = ?", hash, policyID)
+	if scopeUserID != nil {
+		q = q.Where("created_by_id = ?", *scopeUserID)
+	}
+	var e model.Entity
+	if err := q.Select("source").Order("id asc").First(&e).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return e.Source, nil
+}
+
+// CountBySource counts entities (other than excludeID) still referencing a
+// storage Source. Used before deleting a physical object so a blob shared via
+// deduplication is only removed once the last reference is gone.
+func (r *EntityRepo) CountBySource(ctx context.Context, source string, excludeID uint) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.Entity{}).
+		Where("source = ? AND id <> ?", source, excludeID).Count(&n).Error
+	return n, err
+}
+
 // Create inserts a new entity.
 func (r *EntityRepo) Create(ctx context.Context, e *model.Entity) error {
 	return r.db.WithContext(ctx).Create(e).Error

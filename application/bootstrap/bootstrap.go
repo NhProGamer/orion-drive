@@ -91,6 +91,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 
 	tasks := queue.New(4)
 	files := filemanager.NewManager(repo, c, tmpDir, cipher, tasks)
+	files.SetDedup(cfg.Storage.Dedup)
 	files.SetArchiveLimits(filemanager.ArchiveLimits{
 		MaxEntries:      cfg.Archive.MaxEntries,
 		MaxUncompressed: cfg.Archive.MaxSizeMB << 20,

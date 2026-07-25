@@ -146,6 +146,14 @@ type Storage struct {
 	// EncryptionKey is a 64-char hex (32-byte) AES-256 key enabling at-rest
 	// encryption for storage policies that request it. Empty disables encryption.
 	EncryptionKey string `ini:"EncryptionKey"`
+	// Dedup controls content-addressed deduplication of stored objects:
+	//   off    (default) — never share blobs
+	//   user   — reuse a blob only among the same user's uploads (safe)
+	//   global — reuse a blob across all users (max disk savings, but a dedup hit
+	//            can reveal to one user that another already stored that exact
+	//            content — an existence-leak side channel). Encrypted policies are
+	//            never deduplicated (random IV per object).
+	Dedup string `ini:"Dedup"`
 }
 
 // Slave turns this node into a storage slave when Secret is set: it exposes the

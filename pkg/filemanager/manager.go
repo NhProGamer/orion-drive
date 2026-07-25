@@ -47,6 +47,26 @@ type Manager struct {
 	// burst of video/office thumbnails can't exhaust CPU or request workers.
 	thumbSF  singleflight.Group
 	thumbSem chan struct{}
+	// dedup is the content-addressed deduplication mode: "off", "user" or "global".
+	dedup string
+}
+
+// Deduplication modes for SetDedup.
+const (
+	DedupOff    = "off"
+	DedupUser   = "user"
+	DedupGlobal = "global"
+)
+
+// SetDedup selects the content-addressed deduplication mode. An unknown/empty
+// value disables it.
+func (m *Manager) SetDedup(mode string) {
+	switch mode {
+	case DedupUser, DedupGlobal:
+		m.dedup = mode
+	default:
+		m.dedup = DedupOff
+	}
 }
 
 // NewManager builds a Manager. tmpDir is where in-progress uploads are staged;
@@ -387,16 +407,23 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 	return m.repo.File.Purge(ctx, user.ID, all)
 }
 
-// removeEntity deletes the physical object and its entity row.
+// removeEntity deletes an entity row and its physical object. The physical
+// object is removed only when no other entity still references the same Source,
+// so a blob shared via deduplication survives until its last reference is gone.
 func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
 	e, err := m.repo.Entity.GetByID(ctx, entityID)
 	if err != nil {
 		return
 	}
-	policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID)
-	if err == nil {
-		if h, err := m.driverForPolicy(policy); err == nil {
-			_, _ = h.Delete(ctx, e.Source)
+	shared := false
+	if n, err := m.repo.Entity.CountBySource(ctx, e.Source, entityID); err == nil && n > 0 {
+		shared = true
+	}
+	if !shared {
+		if policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID); err == nil {
+			if h, err := m.driverForPolicy(policy); err == nil {
+				_, _ = h.Delete(ctx, e.Source)
+			}
 		}
 	}
 	_ = m.repo.Entity.Delete(ctx, entityID)
@@ -575,11 +602,28 @@ func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID 
 		return nil, err
 	}
 
+	hashHex := hex.EncodeToString(hasher.Sum(nil))
+	// Content-addressed deduplication: when enabled and the policy is unencrypted
+	// (a random IV makes identical plaintext differ on disk), reuse an existing
+	// blob with the same content and drop the duplicate we just wrote. The entity
+	// row is still created (versions stay per-file) but shares the physical Source;
+	// removeEntity only deletes a blob once its last reference is gone.
+	if m.dedup != DedupOff && !m.policyEncrypts(policy) {
+		var scope *uint
+		if m.dedup == DedupUser {
+			scope = &user.ID
+		}
+		if existing, derr := m.repo.Entity.FindDedupSource(ctx, hashHex, policy.ID, scope); derr == nil && existing != "" && existing != source {
+			_, _ = h.Delete(ctx, source) // discard the duplicate we just streamed
+			source = existing
+		}
+	}
+
 	entity := &model.Entity{
 		Type:            model.EntityTypeVersion,
 		Source:          source,
 		Size:            size,
-		Hash:            hex.EncodeToString(hasher.Sum(nil)),
+		Hash:            hashHex,
 		ReferenceCount:  1,
 		StoragePolicyID: policy.ID,
 		CreatedByID:     user.ID,
