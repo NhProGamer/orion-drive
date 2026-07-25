@@ -1,9 +1,12 @@
 package webdav
 
 import (
+	"compress/gzip"
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
@@ -19,8 +22,9 @@ const Prefix = "/dav"
 type ctxKey int
 
 const (
-	userKey ctxKey = 0
-	lenKey  ctxKey = 1
+	userKey  ctxKey = 0
+	lenKey   ctxKey = 1
+	mtimeKey ctxKey = 2
 )
 
 func withUser(ctx context.Context, u *model.User) context.Context {
@@ -43,6 +47,17 @@ func contentLengthFromCtx(ctx context.Context) int64 {
 		return n
 	}
 	return -1
+}
+
+// withMtime stashes a client-supplied modification time (WebDAV X-OC-Mtime) so a
+// PUT can preserve the file's mtime.
+func withMtime(ctx context.Context, t time.Time) context.Context {
+	return context.WithValue(ctx, mtimeKey, t)
+}
+
+func mtimeFromCtx(ctx context.Context) (time.Time, bool) {
+	t, ok := ctx.Value(mtimeKey).(time.Time)
+	return t, ok
 }
 
 // writeMethods are the HTTP methods that modify storage; read-only accounts are
@@ -105,7 +120,52 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := withUser(r.Context(), user)
 	ctx = withContentLength(ctx, r.ContentLength)
+	// Honour a client-supplied modification time (rclone / ownCloud X-OC-Mtime).
+	if v := r.Header.Get("X-OC-Mtime"); v != "" {
+		if secs, perr := strconv.ParseInt(v, 10, 64); perr == nil && secs > 0 {
+			ctx = withMtime(ctx, time.Unix(secs, 0))
+			w.Header().Set("X-OC-Mtime", "accepted")
+		}
+	}
+
+	// gzip the (verbose, highly compressible) XML multistatus responses when the
+	// client accepts it. Not applied to GET so file downloads keep Range support
+	// and aren't needlessly recompressed.
+	if xmlResponseMethod(r.Method) && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		w = &gzipResponder{ResponseWriter: w, gz: gz}
+	}
+
 	dav.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// xmlResponseMethod reports whether the WebDAV method returns an XML multistatus
+// body worth compressing.
+func xmlResponseMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case "PROPFIND", "PROPPATCH":
+		return true
+	}
+	return false
+}
+
+// gzipResponder gzips the response body. Content-Encoding/Vary are set by the
+// caller before any write.
+type gzipResponder struct {
+	http.ResponseWriter
+	gz *gzip.Writer
+}
+
+func (g *gzipResponder) Write(b []byte) (int, error) { return g.gz.Write(b) }
+
+func (g *gzipResponder) Flush() {
+	_ = g.gz.Flush()
+	if f, ok := g.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func unauthorized(w http.ResponseWriter) {

@@ -100,6 +100,12 @@ func (m *Manager) List(ctx context.Context, user *model.User, parentID *uint) ([
 	return m.repo.File.ListChildren(ctx, user.ID, parentID)
 }
 
+// SetModified overrides a file's modification time (owner-scoped). Used to honour
+// a client-supplied WebDAV X-OC-Mtime so sync clients keep the original mtime.
+func (m *Manager) SetModified(ctx context.Context, user *model.User, id uint, t time.Time) error {
+	return m.repo.File.SetModifiedTime(ctx, user.ID, id, t)
+}
+
 // FolderSize returns the total size of every non-trashed file nested under the
 // folder, recursively. It walks the subtree one level at a time (owner-scoped);
 // a plain file returns its own size.

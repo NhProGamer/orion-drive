@@ -477,6 +477,8 @@ type writeFile struct {
 	expected int64 // declared Content-Length, or -1 when unknown (chunked)
 	closed   bool
 
+	file *model.File // the committed file, for post-commit mtime override
+
 	// Streaming path (expected >= 0): body is piped into WriteFile as it arrives.
 	pw   *io.PipeWriter
 	done chan error
@@ -491,7 +493,8 @@ func newWriteFile(ctx context.Context, mgr *filemanager.Manager, user *model.Use
 		w.pw = pw
 		w.done = make(chan error, 1)
 		go func() {
-			_, err := mgr.WriteFile(ctx, user, parentID, name, pr, w.expected)
+			f, err := mgr.WriteFile(ctx, user, parentID, name, pr, w.expected)
+			w.file = f
 			_ = pr.CloseWithError(err) // unblock a pending Write if the commit failed early
 			w.done <- err
 		}()
@@ -536,6 +539,7 @@ func (w *writeFile) Close() error {
 		if err := <-w.done; err != nil {
 			return mapErr(err)
 		}
+		w.applyMtime()
 		return nil
 	}
 
@@ -546,10 +550,25 @@ func (w *writeFile) Close() error {
 	if _, err := w.tmp.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	if _, err := w.mgr.WriteFile(w.ctx, w.user, w.parentID, w.name, io.LimitReader(w.tmp, w.size), w.size); err != nil {
+	f, err := w.mgr.WriteFile(w.ctx, w.user, w.parentID, w.name, io.LimitReader(w.tmp, w.size), w.size)
+	if err != nil {
 		return mapErr(err)
 	}
+	w.file = f
+	w.applyMtime()
 	return nil
+}
+
+// applyMtime persists a client-supplied modification time (X-OC-Mtime) onto the
+// just-committed file, so sync clients see their original mtime on the next
+// PROPFIND (getlastmodified). Best-effort: a failure doesn't fail the PUT.
+func (w *writeFile) applyMtime() {
+	if w.file == nil {
+		return
+	}
+	if t, ok := mtimeFromCtx(w.ctx); ok {
+		_ = w.mgr.SetModified(w.ctx, w.user, w.file.ID, t)
+	}
 }
 
 func (w *writeFile) Read([]byte) (int, error)         { return 0, os.ErrInvalid }

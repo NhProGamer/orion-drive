@@ -47,6 +47,15 @@ func (r *FileRepo) ListChildren(ctx context.Context, ownerID uint, parentID *uin
 	return files, err
 }
 
+// SetModifiedTime overrides a file's modification time (updated_at), owner-scoped.
+// UpdateColumn bypasses GORM's auto-update so the given time is stored verbatim
+// (used to honour a client-supplied mtime, e.g. WebDAV X-OC-Mtime).
+func (r *FileRepo) SetModifiedTime(ctx context.Context, ownerID, id uint, t time.Time) error {
+	return r.db.WithContext(ctx).Model(&model.File{}).
+		Where("owner_id = ? AND id = ?", ownerID, id).
+		UpdateColumn("updated_at", t).Error
+}
+
 // ChildrenOfMany returns the non-trashed direct children of any of parentIDs,
 // owner-scoped. Used to walk a subtree one level at a time (e.g. folder size).
 func (r *FileRepo) ChildrenOfMany(ctx context.Context, ownerID uint, parentIDs []uint) ([]model.File, error) {
