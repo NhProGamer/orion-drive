@@ -991,6 +991,13 @@ html[data-halo='off'] body::before {
   top: calc(-1 * var(--s-1));
   margin-left: var(--s-1);
 }
+/* Open the flyout to the left when it would overflow the right viewport edge. */
+.menu .submenu.submenu-left {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: var(--s-1);
+}
 /* Touch accordion child (submenu expanded inline in the bottom sheet). */
 .sub-child {
   padding-left: calc(var(--s-3) + 22px);

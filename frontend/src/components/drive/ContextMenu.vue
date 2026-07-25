@@ -18,6 +18,15 @@ defineEmits<{ action: [id: string]; close: [] }>()
 
 // Index of the item whose submenu is open (hover on pointer, tap-toggle on touch).
 const openSub = ref<number | null>(null)
+// Flip the flyout to the left when opening right would overflow the viewport.
+const subLeft = ref(false)
+
+function openSubmenu(i: number, e: MouseEvent) {
+  openSub.value = i
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const submenuWidth = 224 // ~min-width of the submenu popup
+  subLeft.value = r.right + submenuWidth > window.innerWidth
+}
 </script>
 
 <template>
@@ -61,12 +70,12 @@ const openSub = ref<number | null>(null)
       <div
         v-else-if="it.children"
         class="menu-item has-sub"
-        @mouseenter="openSub = i"
+        @mouseenter="openSubmenu(i, $event)"
         @mouseleave="openSub = null"
       >
         <component :is="it.icon" :size="15" />{{ it.label }}
         <ChevronRight :size="14" class="sub-caret" />
-        <div v-if="openSub === i" class="menu submenu">
+        <div v-if="openSub === i" class="menu submenu" :class="{ 'submenu-left': subLeft }">
           <button
             v-for="(ch, ci) in it.children"
             :key="ci"
