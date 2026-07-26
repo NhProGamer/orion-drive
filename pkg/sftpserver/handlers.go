@@ -221,6 +221,37 @@ func (h *handlers) Filecmd(r *sftp.Request) error {
 	return sftp.ErrSSHFxOpUnsupported
 }
 
+// StatVFS answers a statvfs@openssh.com request so clients can show free space
+// (df / storage indicators), reporting the user's quota. An unlimited quota is
+// advertised with generous headroom.
+func (h *handlers) StatVFS(_ *sftp.Request) (*sftp.StatVFS, error) {
+	used, total, err := h.mgr.Capacity(context.Background(), h.user)
+	if err != nil {
+		return nil, sftpErr(err)
+	}
+	const bsize = 4096
+	if total <= 0 {
+		total = used + (1 << 50) // unlimited → plenty of headroom
+	}
+	free := total - used
+	if free < 0 {
+		free = 0
+	}
+	blocks := uint64(total) / bsize
+	bfree := uint64(free) / bsize
+	return &sftp.StatVFS{
+		Bsize:   bsize,
+		Frsize:  bsize,
+		Blocks:  blocks,
+		Bfree:   bfree,
+		Bavail:  bfree,
+		Files:   1 << 40,
+		Ffree:   1 << 40,
+		Favail:  1 << 40,
+		Namemax: 255,
+	}, nil
+}
+
 func samePtr(a, b *uint) bool {
 	if a == nil || b == nil {
 		return a == b
