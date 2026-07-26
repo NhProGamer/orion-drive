@@ -157,7 +157,21 @@ func (h *handlers) Filewrite(r *sftp.Request) (io.WriterAt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &writerAt{ctx: ctx, mgr: h.mgr, user: h.user, parentID: parentID, name: leaf, tmp: tmp}, nil
+	// Resume: when a client re-opens an existing file without truncating it (an
+	// upload interrupted mid-transfer, continuing at the offset it left off — the
+	// classic ".part" resume of rclone/FileZilla), seed the staging file with the
+	// current content so offset writes overlay real bytes instead of a zero-filled
+	// hole. A fresh upload sets O_TRUNC and skips this.
+	var initSize int64
+	if !r.Pflags().Trunc {
+		if existing, rerr := h.resolve(ctx, r.Filepath); rerr == nil && existing != nil && !existing.IsFolder() {
+			if rc, cerr := h.mgr.OpenContent(ctx, existing); cerr == nil {
+				initSize, _ = io.Copy(tmp, rc)
+				_ = rc.Close()
+			}
+		}
+	}
+	return &writerAt{ctx: ctx, mgr: h.mgr, user: h.user, parentID: parentID, name: leaf, tmp: tmp, size: initSize}, nil
 }
 
 // Filecmd handles Mkdir, Remove/Rmdir, Rename, Setstat (mtime) and Symlink.
@@ -183,7 +197,7 @@ func (h *handlers) Filecmd(r *sftp.Request) error {
 			return sftp.ErrSSHFxPermissionDenied // refuse to delete the drive root
 		}
 		return sftpErr(h.mgr.Trash(ctx, h.user, []uint{target.ID}))
-	case "Rename":
+	case "Rename", "PosixRename":
 		src, err := h.resolve(ctx, r.Filepath)
 		if err != nil {
 			return sftpErr(err)
@@ -194,6 +208,17 @@ func (h *handlers) Filecmd(r *sftp.Request) error {
 		dstParent, leaf, err := h.resolveParent(ctx, r.Target)
 		if err != nil {
 			return sftpErr(err)
+		}
+		// posix-rename@openssh.com atomically replaces an existing destination —
+		// how rclone/sshfs finalise a ".part" upload onto its final name. Trash any
+		// file already at the target first so the move/rename doesn't conflict.
+		// Plain Rename keeps the traditional "fail if dest exists" behaviour.
+		if r.Method == "PosixRename" {
+			if dst, derr := h.resolve(ctx, r.Target); derr == nil && dst != nil && dst.ID != src.ID && !dst.IsFolder() {
+				if terr := h.mgr.Trash(ctx, h.user, []uint{dst.ID}); terr != nil {
+					return sftpErr(terr)
+				}
+			}
 		}
 		if !samePtr(src.ParentID, dstParent) {
 			if err := h.mgr.Move(ctx, h.user, []uint{src.ID}, dstParent); err != nil {
