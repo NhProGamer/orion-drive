@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/hex"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +50,24 @@ func (ctl *Controller) WebdavList(c *gin.Context) {
 	for i := range accs {
 		out = append(out, toWebdavDTO(&accs[i]))
 	}
-	respond(c, serializer.OK(gin.H{"accounts": out, "url": ctl.davURL()}))
+	respond(c, serializer.OK(gin.H{"accounts": out, "url": ctl.davURL(), "sftp": ctl.sftpInfo(c)}))
+}
+
+// sftpInfo reports whether SFTP is enabled and where to reach it (same host as
+// the web request, port from config), so the UI can show a connection string.
+func (ctl *Controller) sftpInfo(c *gin.Context) gin.H {
+	s := ctl.dep.Config.SFTP
+	host := c.Request.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	port := 22
+	if _, p, err := net.SplitHostPort(s.Listen); err == nil {
+		if n, err := strconv.Atoi(p); err == nil {
+			port = n
+		}
+	}
+	return gin.H{"enabled": s.Enable, "host": host, "port": port}
 }
 
 // WebdavCreate provisions a new WebDAV credential and returns the generated

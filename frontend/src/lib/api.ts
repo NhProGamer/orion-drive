@@ -119,6 +119,7 @@ export interface WebdavAccount {
 export interface WebdavAccountList {
   accounts: WebdavAccount[]
   url: string
+  sftp: { enabled: boolean; host: string; port: number }
 }
 
 export interface ApiTokenInfo {

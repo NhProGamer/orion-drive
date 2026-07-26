@@ -11,6 +11,7 @@ const { t } = useI18n()
 
 const accounts = ref<WebdavAccount[]>([])
 const url = ref('')
+const sftp = ref<{ enabled: boolean; host: string; port: number } | null>(null)
 const loading = ref(true)
 
 // Creation form.
@@ -28,6 +29,7 @@ async function load() {
     const res = await api.webdavAccounts()
     accounts.value = res.accounts
     url.value = res.url
+    sftp.value = res.sftp
   } catch (e: any) {
     ui.toast(t('webdav.loadError') + (e?.message ? ` : ${e.message}` : ''), 'x')
   } finally {
@@ -85,13 +87,33 @@ onMounted(load)
         {{ t('webdav.intro') }}
       </p>
 
-      <!-- Connection URL -->
+      <!-- WebDAV connection URL -->
       <label style="display: flex; flex-direction: column; gap: 4px">
         <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('webdav.serverAddress') }}</span>
         <div style="display: flex; gap: 8px; align-items: center">
           <input class="input mono" :value="url" readonly @focus="($event.target as HTMLInputElement).select()" />
           <button class="icon-btn" :title="copied === 'url' ? t('common.copied') : t('common.copy')" @click="copy(url, 'url')">
             <component :is="copied === 'url' ? Check : Copy" :size="16" />
+          </button>
+        </div>
+      </label>
+
+      <!-- SFTP connection (same credentials) -->
+      <label v-if="sftp?.enabled" style="display: flex; flex-direction: column; gap: 4px">
+        <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('webdav.sftpAddress') }}</span>
+        <div style="display: flex; gap: 8px; align-items: center">
+          <input
+            class="input mono"
+            :value="`sftp://${sftp.host}:${sftp.port}`"
+            readonly
+            @focus="($event.target as HTMLInputElement).select()"
+          />
+          <button
+            class="icon-btn"
+            :title="copied === 'sftp' ? t('common.copied') : t('common.copy')"
+            @click="copy(`sftp://${sftp.host}:${sftp.port}`, 'sftp')"
+          >
+            <component :is="copied === 'sftp' ? Check : Copy" :size="16" />
           </button>
         </div>
       </label>
