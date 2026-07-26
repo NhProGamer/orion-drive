@@ -130,7 +130,13 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		LockSystem: newLocks(h.repo, user.ID),
 	}
 	ctx := withUser(r.Context(), user)
-	ctx = withContentLength(ctx, r.ContentLength)
+	// Only a real PUT carries the file body (so its Content-Length gates the
+	// streamed commit). A COPY also opens the destination for writing, but its
+	// request Content-Length is unrelated to the copied size — that write must
+	// take the buffered path, so don't stash a length for non-PUT methods.
+	if r.Method == http.MethodPut {
+		ctx = withContentLength(ctx, r.ContentLength)
+	}
 	// Honour a client-supplied modification time (rclone / ownCloud X-OC-Mtime).
 	if v := r.Header.Get("X-OC-Mtime"); v != "" {
 		if secs, perr := strconv.ParseInt(v, 10, 64); perr == nil && secs > 0 {
