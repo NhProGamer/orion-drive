@@ -153,7 +153,7 @@ func (h *handlers) Filewrite(r *sftp.Request) (io.WriterAt, error) {
 	if err != nil {
 		return nil, sftpErr(err)
 	}
-	tmp, err := os.CreateTemp("", "orion-sftp-*")
+	tmp, err := h.mgr.TempFile("orion-sftp-*")
 	if err != nil {
 		return nil, err
 	}

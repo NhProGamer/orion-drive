@@ -535,7 +535,7 @@ func newWriteFile(ctx context.Context, mgr *filemanager.Manager, user *model.Use
 		}()
 		return w, nil
 	}
-	tmp, err := os.CreateTemp("", "orion-dav-*")
+	tmp, err := mgr.TempFile("orion-dav-*")
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -119,6 +120,17 @@ func (m *Manager) driverForPolicy(p *model.StoragePolicy) (driver.Handler, error
 // List returns the children of parentID (nil = drive root) for the user.
 func (m *Manager) List(ctx context.Context, user *model.User, parentID *uint) ([]model.File, error) {
 	return m.repo.File.ListChildren(ctx, user.ID, parentID)
+}
+
+// TempFile creates a temporary file in OrionDrive's on-disk staging directory
+// (not the system /tmp, which is often RAM-backed and would blow up buffering a
+// large upload). Orphans here are swept by CleanupUploadTemp. The caller closes
+// and removes the file.
+func (m *Manager) TempFile(pattern string) (*os.File, error) {
+	if err := os.MkdirAll(m.tmpDir, 0o755); err != nil {
+		return nil, err
+	}
+	return os.CreateTemp(m.tmpDir, pattern)
 }
 
 // SetModified overrides a file's modification time (owner-scoped). Used to honour
