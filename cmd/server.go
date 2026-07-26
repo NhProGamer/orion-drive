@@ -12,6 +12,7 @@ import (
 
 	"github.com/NhProGamer/orion-drive/application/bootstrap"
 	"github.com/NhProGamer/orion-drive/pkg/crontab"
+	"github.com/NhProGamer/orion-drive/pkg/sftpserver"
 	"github.com/NhProGamer/orion-drive/routers"
 	"github.com/spf13/cobra"
 )
@@ -57,12 +58,32 @@ var serverCmd = &cobra.Command{
 			}
 		}()
 
+		// Optional SFTP front-end (same dedicated credentials as WebDAV).
+		var sftpSrv *sftpserver.Server
+		if cfg.SFTP.Enable {
+			ss, err := sftpserver.New(dep.Files, dep.Repo, dep.Logger, cfg.SFTP.Listen, cfg.SFTP.HostKeyPath)
+			if err != nil {
+				dep.Logger.Error("sftp init failed", "error", err)
+			} else {
+				sftpSrv = ss
+				go func() {
+					dep.Logger.Info("SFTP listening", "addr", cfg.SFTP.Listen)
+					if err := ss.ListenAndServe(); err != nil {
+						dep.Logger.Error("sftp server error", "error", err)
+					}
+				}()
+			}
+		}
+
 		// Graceful shutdown on SIGINT/SIGTERM.
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 		<-stop
 
 		schedCancel()
+		if sftpSrv != nil {
+			_ = sftpSrv.Close()
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		dep.Logger.Info("shutting down")

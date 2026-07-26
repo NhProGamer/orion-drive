@@ -110,6 +110,17 @@ DiscoveryURL =
 EditURLTemplate =
 VerifyProof = false
 
+[SFTP]
+; Expose the drive over SFTP, authenticated with the SAME dedicated credentials
+; as WebDAV (create them in the app → "WebDAV / SFTP access"). Disabled by
+; default; it opens a separate SSH port.
+Enable = false
+; Address the SFTP (SSH) server listens on.
+Listen = :2222
+; Where the SSH host key is stored (generated on first run if missing). Keep it
+; stable so clients don't warn about a changed host key.
+HostKeyPath = data/ssh_host_ed25519_key
+
 [Archive]
 ; Safety limits when extracting archives, guarding against decompression bombs
 ; and quota abuse. Any value left at 0 uses the built-in default.

@@ -21,6 +21,7 @@ type Config struct {
 	Slave    Slave
 	WOPI     WOPI
 	WebDAV   WebDAV
+	SFTP     SFTP
 	Redis    Redis
 	Archive   Archive
 	Security  Security
@@ -204,6 +205,15 @@ type WebDAV struct {
 	Enable bool `ini:"Enable"`
 }
 
+// SFTP exposes the drive over SFTP, authenticated with the same dedicated
+// credentials as WebDAV. HostKeyPath is where the server's SSH host key is
+// persisted (generated on first run if missing).
+type SFTP struct {
+	Enable      bool   `ini:"Enable"`
+	Listen      string `ini:"Listen"`
+	HostKeyPath string `ini:"HostKeyPath"`
+}
+
 // Redis optionally replaces the in-memory cache.
 type Redis struct {
 	Server   string `ini:"Server"`
@@ -232,6 +242,7 @@ func Default() *Config {
 			TrashRetentionDays: 30,
 		},
 		WebDAV:   WebDAV{Enable: true},
+		SFTP:     SFTP{Enable: false, Listen: ":2222", HostKeyPath: "data/ssh_host_ed25519_key"},
 		Database: Database{Type: "sqlite", DBFile: "data/orion.db", Name: "orion"},
 		OIDC:     OIDC{Scopes: "openid profile email"},
 		Storage:  Storage{LocalBasePath: "data/storage"},

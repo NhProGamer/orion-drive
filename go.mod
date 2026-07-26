@@ -11,6 +11,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
+	github.com/pkg/sftp v1.13.11
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/spf13/cobra v1.10.2
@@ -68,6 +69,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect

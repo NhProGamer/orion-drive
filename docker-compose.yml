@@ -11,6 +11,7 @@ services:
       - onlyoffice
     ports:
       - "5212:5212"
+      # - "2222:2222" # SFTP (uncomment when OD_CONF_SFTP_Enable is true)
     volumes:
       - orion-data:/app/data
     # Every setting maps to OD_CONF_<Section>_<Key>. Values below are the full set
@@ -85,6 +86,13 @@ services:
       # generated password) from the "Accès WebDAV" panel in the app; those are
       # independent of the SSO login. Set to "false" to disable the endpoint.
       OD_CONF_WebDAV_Enable: "true"
+
+      # ---- [SFTP] file access over SFTP (same credentials as WebDAV) ----
+      # Disabled by default; opens a separate SSH port. Enable and publish the
+      # port below to let clients mount the drive over sftp://.
+      # OD_CONF_SFTP_Enable: "true"
+      # OD_CONF_SFTP_Listen: ":2222"
+      # OD_CONF_SFTP_HostKeyPath: "/app/data/ssh_host_ed25519_key"
 
       # ---- [Redis] (shared cache; needed when running several nodes) ----
       # Start with `--profile redis` to bring up the `redis` service below, then:
