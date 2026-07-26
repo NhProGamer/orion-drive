@@ -679,6 +679,14 @@ func (m *Manager) commitContent(ctx context.Context, user *model.User, parentID 
 		}
 	}
 
+	return m.finalize(ctx, user, parentID, name, targetFileID, policy, source, size, hashHex, entityProps)
+}
+
+// finalize creates the Entity (and File or new version) rows for a blob that has
+// already been written to storage at source, updates the owner's used storage and
+// journals the change. Shared by the streaming (commitContent) and file-adopt
+// (WriteFileFrom) commit paths.
+func (m *Manager) finalize(ctx context.Context, user *model.User, parentID *uint, name string, targetFileID *uint, policy *model.StoragePolicy, source string, size int64, hashHex string, entityProps model.JSON) (*model.File, error) {
 	entity := &model.Entity{
 		Type:            model.EntityTypeVersion,
 		Source:          source,
@@ -781,6 +789,104 @@ func (m *Manager) WriteFile(ctx context.Context, user *model.User, parentID *uin
 		return nil, err
 	}
 	return m.commitContent(ctx, user, parentID, name, targetFileID, policy, h, reader, size)
+}
+
+// WriteFileFrom stores the already-staged file at tempPath as name under parentID
+// for the user. When the backend can adopt a local file and the policy is not
+// encrypted, the staged file is moved into storage (a metadata-only rename on the
+// same filesystem) and hashed by reading it back from the page cache — one disk
+// write instead of two (used by SFTP and WebDAV, which stage offset writes to a
+// temp file). Otherwise it streams the temp file through the normal commit path.
+// The staged file is consumed on the fast path; on the fallback path (and on a
+// dedup hit) the caller remains responsible for removing it.
+func (m *Manager) WriteFileFrom(ctx context.Context, user *model.User, parentID *uint, name, tempPath string, size int64) (*model.File, error) {
+	name = strings.TrimSpace(name)
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	if size < 0 {
+		return nil, errors.New("invalid size")
+	}
+	if err := m.ensureParent(ctx, user, parentID); err != nil {
+		return nil, err
+	}
+
+	var targetFileID *uint
+	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err == nil {
+		if existing.IsFolder() {
+			return nil, ErrConflict
+		}
+		if existing.IsLocked() {
+			return nil, ErrLocked
+		}
+		id := existing.ID
+		targetFileID = &id
+	}
+
+	used, total, err := m.Capacity(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if total > 0 && used+size > total {
+		return nil, ErrQuota
+	}
+
+	policy, err := m.policyForUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	h, err := m.driverForPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+
+	adopter, canAdopt := h.(driver.Adopter)
+	if !canAdopt || m.policyEncrypts(policy) {
+		// Fallback: stream the staged file through the copy-based commit path.
+		f, oerr := os.Open(tempPath)
+		if oerr != nil {
+			return nil, oerr
+		}
+		defer f.Close()
+		return m.commitContent(ctx, user, parentID, name, targetFileID, policy, h, io.LimitReader(f, size), size)
+	}
+
+	// Fast path: hash the staged bytes (page-cache read, no second write) then
+	// move the file into storage.
+	hashHex, err := hashFile(tempPath)
+	if err != nil {
+		return nil, err
+	}
+	source := newSourcePath(user.ID, name)
+	if m.dedup != DedupOff {
+		var scope *uint
+		if m.dedup == DedupUser {
+			scope = &user.ID
+		}
+		if existing, derr := m.repo.Entity.FindDedupSource(ctx, hashHex, policy.ID, scope); derr == nil && existing != "" && existing != source {
+			// Identical content already stored: reuse it, leave the staged file for
+			// the caller to discard, and skip the move entirely.
+			return m.finalize(ctx, user, parentID, name, targetFileID, policy, existing, size, hashHex, nil)
+		}
+	}
+	if err := adopter.Adopt(ctx, source, tempPath); err != nil {
+		return nil, err
+	}
+	return m.finalize(ctx, user, parentID, name, targetFileID, policy, source, size, hashHex, nil)
+}
+
+// hashFile returns the hex SHA-256 of the file at path.
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // OpenContent returns a seekable reader over a file's current content, always

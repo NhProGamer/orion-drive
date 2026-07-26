@@ -578,14 +578,10 @@ func (w *writeFile) Close() error {
 		return nil
 	}
 
-	defer func() {
-		_ = w.tmp.Close()
-		_ = os.Remove(w.tmp.Name())
-	}()
-	if _, err := w.tmp.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	f, err := w.mgr.WriteFile(w.ctx, w.user, w.parentID, w.name, io.LimitReader(w.tmp, w.size), w.size)
+	name := w.tmp.Name()
+	_ = w.tmp.Close()     // flush and release the fd before the file is adopted/hashed
+	defer os.Remove(name) // no-op once the staged file has been moved into storage
+	f, err := w.mgr.WriteFileFrom(w.ctx, w.user, w.parentID, w.name, name, w.size)
 	if err != nil {
 		return mapErr(err)
 	}

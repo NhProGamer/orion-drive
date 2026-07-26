@@ -53,6 +53,17 @@ type Handler interface {
 	Capabilities() *Capabilities
 }
 
+// Adopter is an optional Handler capability: a backend that can take ownership of
+// an already-staged local file by moving it into place (os.Rename on the same
+// filesystem — metadata only), rather than re-reading and re-writing its bytes.
+// Callers that staged an upload to a temp file use this to avoid a second disk
+// pass. Backends that cannot (object stores) simply don't implement it.
+type Adopter interface {
+	// Adopt places localPath's contents at backend path src, consuming localPath
+	// (it is moved when possible, otherwise copied then removed).
+	Adopt(ctx context.Context, src, localPath string) error
+}
+
 // Factory builds a Handler from a storage policy.
 type Factory func(policy *model.StoragePolicy) (Handler, error)
 

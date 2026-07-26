@@ -3,11 +3,13 @@ package local
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
@@ -67,6 +69,47 @@ func (d *Driver) Put(ctx context.Context, src string, r io.Reader, size int64) e
 		_ = os.Remove(abs)
 		return err
 	}
+	return nil
+}
+
+// Adopt moves an already-staged local file into the object path src, avoiding a
+// re-copy of its bytes. When the staging file lives on the same filesystem as the
+// storage base (the common case) this is a metadata-only os.Rename; across
+// filesystems it falls back to a copy + remove.
+func (d *Driver) Adopt(ctx context.Context, src, localPath string) error {
+	abs, err := d.resolve(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(localPath, abs); err == nil {
+		_ = os.Chmod(abs, 0o644)
+		return nil
+	} else if !errors.Is(err, syscall.EXDEV) {
+		return err
+	}
+	// Cross-device: copy then drop the source.
+	in, err := os.Open(localPath)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(abs)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(abs)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		_ = os.Remove(abs)
+		return err
+	}
+	_ = os.Remove(localPath)
 	return nil
 }
 
