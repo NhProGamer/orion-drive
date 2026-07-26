@@ -540,14 +540,28 @@ export const useFilesStore = defineStore('files', {
       try {
         const init = await api.initUpload(parent, file.name, file.size)
         const { session_id, chunk_size, num_chunks } = init
-        let uploaded = 0
-        for (let i = 0; i < num_chunks; i++) {
-          const start = i * chunk_size
-          const end = Math.min(file.size, start + chunk_size)
-          await api.putChunk(session_id, i, file.slice(start, end), (sent) => onProgress(uploaded + sent))
-          uploaded = end
-          onProgress(uploaded)
+        // Upload chunks with bounded concurrency: several are in flight at once so
+        // throughput isn't capped by the round-trip latency of one chunk at a time
+        // (a big win on WAN links). Chunks are written server-side at their offset,
+        // so out-of-order completion is safe. Total progress is the sum of the
+        // bytes sent across all chunks.
+        const CONCURRENCY = 4
+        const sentPer = new Array<number>(num_chunks).fill(0)
+        const reportProgress = () => onProgress(sentPer.reduce((a, b) => a + b, 0))
+        let next = 0
+        const worker = async () => {
+          for (let i = next++; i < num_chunks; i = next++) {
+            const start = i * chunk_size
+            const end = Math.min(file.size, start + chunk_size)
+            await api.putChunk(session_id, i, file.slice(start, end), (sent) => {
+              sentPer[i] = sent
+              reportProgress()
+            })
+            sentPer[i] = end - start
+            reportProgress()
+          }
         }
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, num_chunks) }, worker))
         await api.completeUpload(session_id)
         up.progress = 100
         up.loaded = file.size

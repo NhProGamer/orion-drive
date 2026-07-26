@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +62,21 @@ func (s *UploadSession) Complete() bool {
 }
 
 func uploadKey(id string) string { return "upload:" + id }
+
+// chunkKey marks one received chunk. Each chunk sets its own key (an atomic
+// single-key write) so concurrent PutChunk calls don't lose each other's
+// progress — the read-modify-write of a shared Received slice would race.
+func chunkKey(id string, index int) string { return "upload:" + id + ":c:" + strconv.Itoa(index) }
+
+// receivedAll reports whether every chunk of an upload has been recorded.
+func (m *Manager) receivedAll(id string, num int) bool {
+	for i := 0; i < num; i++ {
+		if _, ok := m.cache.Get(chunkKey(id, i)); !ok {
+			return false
+		}
+	}
+	return true
+}
 
 // InitUpload validates the request, reserves a session and returns it.
 func (m *Manager) InitUpload(ctx context.Context, user *model.User, parentID *uint, name string, size int64) (*UploadSession, error) {
@@ -184,7 +200,7 @@ func (m *Manager) PutChunk(ctx context.Context, user *model.User, id string, ind
 	if err != nil {
 		return nil, err
 	}
-	if index < 0 || index >= len(s.Received) {
+	if index < 0 || index >= s.NumChunks() {
 		return nil, fmt.Errorf("chunk index %d out of range", index)
 	}
 
@@ -211,8 +227,8 @@ func (m *Manager) PutChunk(ctx context.Context, user *model.User, id string, ind
 		}
 	}
 
-	s.Received[index] = true
-	if err := m.saveSession(s); err != nil {
+	// Record this chunk with its own cache key (concurrency-safe; see chunkKey).
+	if err := m.cache.Set(chunkKey(id, index), []byte{1}, uploadSessionTTL); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -225,7 +241,7 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 	if err != nil {
 		return nil, err
 	}
-	if !s.Complete() {
+	if !m.receivedAll(s.ID, s.NumChunks()) {
 		return nil, errors.New("upload incomplete")
 	}
 
@@ -271,6 +287,9 @@ func (m *Manager) CancelUpload(user *model.User, id string) error {
 func (m *Manager) discardSession(s *UploadSession) {
 	_ = os.Remove(s.TempPath)
 	_ = m.cache.Delete(uploadKey(s.ID))
+	for i, n := 0, s.NumChunks(); i < n; i++ {
+		_ = m.cache.Delete(chunkKey(s.ID, i))
+	}
 }
 
 // sectionWriter writes sequentially starting at a fixed offset using WriteAt.
