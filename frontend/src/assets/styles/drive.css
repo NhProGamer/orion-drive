@@ -797,6 +797,12 @@ html[data-halo='off'] body::before {
 .tint-neutral {
   color: var(--fg-2);
 }
+.tint-success {
+  color: var(--success);
+}
+.tint-danger {
+  color: var(--danger);
+}
 
 /* List */
 .listing {

@@ -228,55 +228,55 @@ async function download() {
 
 <template>
   <div class="login-screen">
-    <button class="icon-btn" style="position: fixed; top: 16px; right: 16px" @click="ui.toggleTheme">
+    <button class="icon-btn sv-theme" @click="ui.toggleTheme">
       <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
     </button>
 
     <input ref="fileInput" type="file" multiple hidden @change="onFilePicked" />
 
-    <div class="login-card" :style="{ gap: '20px', maxWidth: opened || isDeposit ? '620px' : undefined, width: opened || isDeposit ? '92vw' : undefined }">
-      <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
+    <div class="sv-card" :class="{ wide: opened || isDeposit }">
+      <img class="brand-banner sv-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
 
       <template v-if="notFound">
-        <TriangleAlert :size="40" style="color: var(--danger)" />
-        <h1>{{ t('shareView.linkNotFound') }}</h1>
-        <p>{{ t('shareView.linkNotFoundDesc') }}</p>
+        <div class="sv-state">
+          <TriangleAlert :size="40" class="tint-danger" />
+          <h1 class="sv-title">{{ t('shareView.linkNotFound') }}</h1>
+          <p class="sv-meta">{{ t('shareView.linkNotFoundDesc') }}</p>
+        </div>
       </template>
 
       <template v-else-if="data">
         <!-- Deposit (blind drop box): upload only, no listing. -->
         <template v-if="isDeposit && !unavailable">
-          <div style="text-align: center">
-            <h1 style="font-size: 20px">{{ data.name }}</h1>
-            <p class="mono">{{ t('shareView.depositInto', { owner: data.owner }) }}</p>
+          <div class="sv-head">
+            <h1 class="sv-title">{{ data.name }}</h1>
+            <p class="sv-meta">{{ t('shareView.depositInto', { owner: data.owner }) }}</p>
           </div>
-          <label v-if="data.has_password" style="width: 100%; display: flex; flex-direction: column; gap: 6px">
-            <span class="tweak-label" style="letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px">
-              <Lock :size="12" />{{ t('shareView.password') }}
-            </span>
+          <label v-if="data.has_password" class="sv-field">
+            <span class="sv-field-lbl"><Lock :size="12" />{{ t('shareView.password') }}</span>
             <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')" />
           </label>
-          <label style="width: 100%; display: flex; flex-direction: column; gap: 6px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareView.yourName') }}</span>
+          <label class="sv-field">
+            <span class="sv-field-lbl">{{ t('shareView.yourName') }}</span>
             <input v-model="contributor" class="input" type="text" :placeholder="t('shareView.yourNamePlaceholder')" />
           </label>
           <div
-            class="drop-zone"
+            class="sv-drop"
             :class="{ over: dragover }"
             @click="pickFiles"
             @dragover.prevent="dragover = true"
             @dragleave="dragover = false"
             @drop.prevent="onDrop"
           >
-            <UploadCloud :size="32" class="tint-neutral" />
-            <p>{{ t('shareView.dropHere') }}</p>
+            <UploadCloud :size="30" class="tint-neutral" />
+            <b>{{ t('shareView.dropHere') }}</b>
           </div>
-          <div v-if="uploads.length" class="upload-list">
-            <div v-for="(u, i) in uploads" :key="i" class="upload-item">
+          <div v-if="uploads.length" class="sv-up">
+            <div v-for="(u, i) in uploads" :key="i" class="sv-upi">
               <component :is="u.error ? TriangleAlert : u.done ? Check : Upload" :size="14"
-                :style="{ color: u.error ? 'var(--danger)' : u.done ? 'var(--success)' : 'var(--fg-2)' }" />
-              <span class="upload-name">{{ u.name }}</span>
-              <span class="mono" style="font-size: 12px">{{ u.error ? '!' : u.pct + '%' }}</span>
+                :class="u.error ? 'tint-danger' : u.done ? 'tint-success' : 'tint-neutral'" />
+              <span class="nm">{{ u.name }}</span>
+              <span class="pc mono">{{ u.error ? '!' : u.pct + '%' }}</span>
             </div>
           </div>
         </template>
@@ -284,72 +284,65 @@ async function download() {
         <!-- Folder browser (read / write) -->
         <template v-else-if="data.is_dir && opened">
           <div
-            class="share-browser"
+            class="sv-folder"
             @dragover.prevent="canWrite && (dragover = true)"
             @dragleave="dragover = false"
             @drop.prevent="canWrite && onDrop($event)"
           >
-            <div class="share-crumbs">
+            <div class="sv-crumbs">
               <template v-for="(c, i) in crumbs" :key="c.path">
                 <ChevronRight v-if="i > 0" :size="13" class="tint-neutral" />
-                <button class="crumb-btn" @click="openList(c.path)">{{ i === 0 ? data.name : c.name }}</button>
+                <button class="sv-crumb" :class="{ here: i === crumbs.length - 1 }" @click="openList(c.path)">
+                  {{ i === 0 ? data.name : c.name }}
+                </button>
               </template>
             </div>
 
-            <div v-if="canWrite" class="share-toolbar">
+            <div v-if="canWrite" class="sv-toolbar">
               <button class="btn btn-secondary btn-sm" @click="newFolder"><FolderPlus :size="14" />{{ t('shareView.newFolder') }}</button>
               <button class="btn btn-secondary btn-sm" @click="pickFiles"><Upload :size="14" />{{ t('shareView.importFiles') }}</button>
             </div>
 
-            <div class="share-list" :class="{ 'drop-over': dragover && canWrite }">
-              <div v-if="!entries.length" class="share-empty">{{ t('shareView.emptyFolder') }}</div>
-              <div v-for="e in entries" :key="e.path" class="share-row">
-                <button class="share-row-main" @click="onEntry(e)">
+            <div class="sv-list" :class="{ over: dragover && canWrite }">
+              <div v-if="!entries.length" class="sv-empty">{{ t('shareView.emptyFolder') }}</div>
+              <div v-for="e in entries" :key="e.path" class="sv-row">
+                <button class="sv-row-main" @click="onEntry(e)">
                   <img
                     v-if="!e.is_dir && canThumbnail(e.name) && !entryIconFailed(e)"
-                    class="share-row-thumb"
+                    class="sv-thumb"
                     :src="api.shareThumbUrl(token, e.path)"
                     alt=""
                     loading="lazy"
                     @error="markThumbFailed(e.path)"
                   />
-                  <component
-                    v-else
-                    :is="e.is_dir ? Folder : metaFor(kindFromName(e.name)).icon"
-                    :size="16"
-                    :class="e.is_dir ? 'tint-folder' : 'tint-' + metaFor(kindFromName(e.name)).tint"
-                  />
-                  <span class="share-name">{{ e.name }}</span>
-                  <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
+                  <span v-else class="sv-ic" :class="{ folder: e.is_dir }">
+                    <component :is="e.is_dir ? Folder : metaFor(kindFromName(e.name)).icon" :size="16" />
+                  </span>
+                  <span class="sv-rn">{{ e.name }}</span>
+                  <span class="sv-rs mono">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
                 </button>
-                <button
-                  v-if="!e.is_dir && ui.canViewOffice(e.name)"
-                  class="share-row-act"
-                  :title="officeLabel(e.name)"
-                  @click.stop="openOffice(e.path)"
-                >
+                <button v-if="!e.is_dir && ui.canViewOffice(e.name)" class="sv-act" :title="officeLabel(e.name)" @click.stop="openOffice(e.path)">
                   <FileText :size="14" />
                 </button>
                 <template v-if="canWrite">
-                  <button class="share-row-act" :title="t('common.rename')" @click.stop="renameEntry(e)"><Pencil :size="14" /></button>
-                  <button class="share-row-act danger" :title="t('common.delete')" @click.stop="deleteEntry(e)"><Trash2 :size="14" /></button>
+                  <button class="sv-act" :title="t('common.rename')" @click.stop="renameEntry(e)"><Pencil :size="14" /></button>
+                  <button class="sv-act danger" :title="t('common.delete')" @click.stop="deleteEntry(e)"><Trash2 :size="14" /></button>
                 </template>
-                <component :is="e.is_dir ? ChevronRight : Download" :size="15" class="tint-neutral share-row-tail"
-                  @click="e.is_dir ? openList(e.path) : downloadFile(e)" />
+                <component :is="e.is_dir ? ChevronRight : Download" :size="15" class="sv-tail" @click="e.is_dir ? openList(e.path) : downloadFile(e)" />
               </div>
             </div>
 
-            <div v-if="uploads.length" class="upload-list">
-              <div v-for="(u, i) in uploads" :key="i" class="upload-item">
+            <div v-if="uploads.length" class="sv-up">
+              <div v-for="(u, i) in uploads" :key="i" class="sv-upi">
                 <component :is="u.error ? TriangleAlert : u.done ? Check : Upload" :size="14"
-                  :style="{ color: u.error ? 'var(--danger)' : u.done ? 'var(--success)' : 'var(--fg-2)' }" />
-                <span class="upload-name">{{ u.name }}</span>
-                <span class="mono" style="font-size: 12px">{{ u.error ? '!' : u.pct + '%' }}</span>
+                  :class="u.error ? 'tint-danger' : u.done ? 'tint-success' : 'tint-neutral'" />
+                <span class="nm">{{ u.name }}</span>
+                <span class="pc mono">{{ u.error ? '!' : u.pct + '%' }}</span>
               </div>
             </div>
 
-            <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
-            <button class="btn btn-secondary" style="width: 100%" @click="downloadFolderArchive">
+            <p v-if="error" class="sv-error">{{ error }}</p>
+            <button class="btn btn-secondary sv-btn" @click="downloadFolderArchive">
               <FolderArchive :size="15" />{{ t('shareView.downloadFolderZip') }}
             </button>
           </div>
@@ -357,59 +350,47 @@ async function download() {
 
         <!-- Landing (file share, or locked folder awaiting password) -->
         <template v-else>
-          <div class="preview-visual" style="width: 100%; margin: 0; height: 120px">
-            <img v-if="showThumb" :src="api.shareThumbUrl(token)" :alt="data.name"
-              style="max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 8px"
-              @error="thumbFailed = true" />
-            <component v-else :is="data.is_dir ? Folder : meta.icon" :size="44" :class="data.is_dir ? 'tint-folder' : 'tint-' + meta.tint" />
-          </div>
-          <div style="text-align: center">
-            <h1 style="font-size: 20px">{{ data.name }}</h1>
-            <p class="mono">
-              {{ data.is_dir ? t('shareView.sharedFolder') : fmtSize(data.size) }} · {{ t('shareView.sharedBy', { owner: data.owner }) }}
+          <div class="sv-file">
+            <div class="sv-preview">
+              <img v-if="showThumb" :src="api.shareThumbUrl(token)" :alt="data.name" class="sv-poster" @error="thumbFailed = true" />
+              <component v-else :is="data.is_dir ? Folder : meta.icon" :size="46" :class="data.is_dir ? 'tint-folder' : 'tint-' + meta.tint" />
+            </div>
+            <h1 class="sv-title">{{ data.name }}</h1>
+            <p class="sv-meta">
+              <span>{{ data.is_dir ? t('shareView.sharedFolder') : fmtSize(data.size) }}</span>
+              <span class="sv-dot">·</span>
+              <span>{{ t('shareView.sharedBy', { owner: data.owner }) }}</span>
             </p>
-          </div>
 
-          <template v-if="unavailable">
-            <p style="color: var(--danger)">
+            <p v-if="unavailable" class="sv-error">
               {{ data.expired ? t('shareView.linkExpired') : t('shareView.downloadLimitReached') }}
             </p>
-          </template>
-          <template v-else>
-            <label v-if="data.has_password" style="width: 100%; display: flex; flex-direction: column; gap: 6px">
-              <span class="tweak-label" style="letter-spacing: 0.06em; display: flex; align-items: center; gap: 6px">
-                <Lock :size="12" />{{ t('shareView.password') }}
-              </span>
-              <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')"
-                @keyup.enter="data.is_dir ? openList('') : download()" />
-            </label>
-            <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
-            <button
-              v-if="!data.is_dir && canPreview(data.name)"
-              class="btn btn-secondary"
-              style="width: 100%; height: 42px"
-              @click="openPreview('', data.name)"
-            >
-              <Eye :size="16" />{{ t('shareView.preview') }}
-            </button>
-            <button
-              v-if="!data.is_dir && ui.canViewOffice(data.name)"
-              class="btn btn-secondary"
-              style="width: 100%; height: 42px"
-              @click="openOffice()"
-            >
-              <FileText :size="16" />{{ officeLabel(data.name) }}
-            </button>
-            <button class="btn btn-primary" style="width: 100%; height: 42px" @click="data.is_dir ? openList('') : download()">
-              <component :is="data.is_dir ? FolderOpen : Download" :size="16" />
-              {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}
-            </button>
-          </template>
+            <template v-else>
+              <label v-if="data.has_password" class="sv-field">
+                <span class="sv-field-lbl"><Lock :size="12" />{{ t('shareView.password') }}</span>
+                <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')"
+                  @keyup.enter="data.is_dir ? openList('') : download()" />
+              </label>
+              <p v-if="error" class="sv-error">{{ error }}</p>
+              <div class="sv-actions">
+                <button class="btn btn-primary sv-btn" @click="data.is_dir ? openList('') : download()">
+                  <component :is="data.is_dir ? FolderOpen : Download" :size="16" />
+                  {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}
+                </button>
+                <button v-if="!data.is_dir && canPreview(data.name)" class="btn btn-secondary sv-btn" @click="openPreview('', data.name)">
+                  <Eye :size="16" />{{ t('shareView.preview') }}
+                </button>
+                <button v-if="!data.is_dir && ui.canViewOffice(data.name)" class="btn btn-secondary sv-btn" @click="openOffice()">
+                  <FileText :size="16" />{{ officeLabel(data.name) }}
+                </button>
+              </div>
+            </template>
+          </div>
         </template>
       </template>
 
       <template v-else>
-        <p>{{ t('common.loading') }}</p>
+        <p class="sv-loading">{{ t('common.loading') }}</p>
       </template>
     </div>
 
@@ -433,12 +414,323 @@ async function download() {
 </template>
 
 <style scoped>
-.share-row-thumb {
-  width: 24px;
-  height: 24px;
+/* ── Share page card ─────────────────────────────────────────────── */
+.sv-theme {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+}
+.sv-card {
+  width: 92vw;
+  max-width: 420px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: 0 30px 70px -24px oklch(0.05 0.02 285 / 0.75);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: max-width var(--t-med);
+}
+.sv-card.wide {
+  max-width: 620px;
+}
+.sv-banner {
+  align-self: center;
+  height: 30px;
+  width: auto;
+}
+.sv-state,
+.sv-head {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.sv-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg-0);
+  margin: 0;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.sv-meta {
+  font-size: 13px;
+  color: var(--fg-2);
+  margin: 0;
+  display: flex;
+  gap: 7px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.sv-meta .sv-dot {
+  color: var(--fg-3);
+}
+.sv-error {
+  color: var(--danger);
+  font-size: 12.5px;
+  margin: 0;
+  text-align: center;
+}
+.sv-loading {
+  color: var(--fg-2);
+  text-align: center;
+}
+.sv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.sv-field-lbl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: 600;
+}
+
+/* ── Landing (single file) ───────────────────────────────────────── */
+.sv-file {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+.sv-preview {
+  height: 172px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.sv-preview .sv-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.sv-file .sv-title {
+  font-size: 17px;
+}
+.sv-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sv-btn {
+  width: 100%;
+  height: 42px;
+  justify-content: center;
+}
+
+/* ── Folder browser ──────────────────────────────────────────────── */
+.sv-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sv-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.sv-crumb {
+  background: none;
+  border: 0;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--r-sm);
+  transition: var(--t-fast);
+}
+.sv-crumb:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+.sv-crumb.here {
+  color: var(--fg-0);
+  font-weight: 600;
+}
+.sv-toolbar {
+  display: flex;
+  gap: 8px;
+}
+.sv-list {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: border-color var(--t-fast);
+}
+.sv-list.over {
+  border-color: var(--accent);
+}
+.sv-empty {
+  text-align: center;
+  color: var(--fg-3);
+  font-size: 13px;
+  padding: 22px 0;
+}
+.sv-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  transition: background var(--t-fast);
+}
+.sv-row + .sv-row {
+  border-top: 1px solid var(--border-subtle);
+}
+.sv-row:hover {
+  background: var(--bg-2);
+}
+.sv-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.sv-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
   object-fit: cover;
-  border-radius: 4px;
-  flex: 0 0 auto;
+  flex: none;
+  border: 1px solid var(--border-subtle);
+}
+.sv-ic {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--bg-2);
+  color: var(--fg-2);
+}
+.sv-ic.folder {
+  color: var(--fg-1);
+}
+.sv-rn {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--fg-0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sv-rs {
+  font-size: 12px;
+  color: var(--fg-3);
+  flex: none;
+}
+.sv-act {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: var(--t-fast);
+}
+.sv-act:hover {
+  background: var(--bg-3);
+  color: var(--fg-0);
+}
+.sv-act.danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.sv-tail {
+  flex: none;
+  color: var(--fg-3);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: var(--t-fast);
+}
+.sv-row:hover .sv-tail {
+  opacity: 1;
+  color: var(--fg-1);
+}
+
+/* ── Deposit ─────────────────────────────────────────────────────── */
+.sv-drop {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--bg-inset);
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: var(--t-fast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.sv-drop b {
+  color: var(--fg-0);
+  font-weight: 600;
+  font-size: 14px;
+}
+.sv-drop:hover,
+.sv-drop.over {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--fg-1);
+}
+
+/* ── Upload progress list (deposit + folder) ─────────────────────── */
+.sv-up {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sv-upi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+}
+.sv-upi .nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-1);
+}
+.sv-upi .pc {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  flex: none;
 }
 
 .share-viewer {
