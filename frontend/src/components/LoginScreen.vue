@@ -42,7 +42,7 @@ function loginDev() {
       <p>{{ t('login.redirecting') }}</p>
     </div>
     <template v-else>
-    <div style="position: fixed; top: 16px; right: 16px; display: flex; gap: 8px">
+    <div class="login-tools">
       <LanguageMenu />
       <button class="icon-btn" @click="ui.toggleTheme">
         <component :is="ui.theme === 'dark' ? Sun : Moon" :size="16" />
@@ -52,13 +52,13 @@ function loginDev() {
       <img class="brand-banner" :src="bannerFor(ui.theme)" alt="OrionDrive" />
       <h1>{{ t('login.welcome') }}</h1>
       <p>{{ t('login.subtitle') }}</p>
-      <button v-if="config.oidc" class="btn btn-primary" style="width: 100%; height: 42px" @click="loginOidc">
+      <button v-if="config.oidc" class="btn btn-primary login-btn" @click="loginOidc">
         {{ t('login.sso') }}
       </button>
-      <button v-if="config.dev" class="btn btn-secondary" style="width: 100%" @click="loginDev">
+      <button v-if="config.dev" class="btn btn-secondary login-btn" @click="loginDev">
         {{ t('login.dev') }}
       </button>
-      <p v-if="!config.oidc && !config.dev" style="color: var(--danger)">
+      <p v-if="!config.oidc && !config.dev" class="login-error">
         {{ t('login.noAuth') }}
       </p>
     </div>
