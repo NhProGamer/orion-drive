@@ -84,6 +84,7 @@ var serverCmd = &cobra.Command{
 		if sftpSrv != nil {
 			_ = sftpSrv.Close()
 		}
+		dep.Tasks.Close() // cancel in-flight background jobs and stop the workers
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		dep.Logger.Info("shutting down")

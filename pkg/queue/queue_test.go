@@ -61,3 +61,34 @@ func TestOwnershipIsolation(t *testing.T) {
 		t.Fatal("job leaked to another user")
 	}
 }
+
+func TestQueuePrunesFinishedJobs(t *testing.T) {
+	q := New(1)
+	defer q.Close()
+	job := q.Enqueue(1, "test", func(ctx context.Context, report Report) (map[string]any, error) {
+		return nil, nil
+	})
+	waitFor(t, q, 1, job.ID)
+
+	// Age the finished job past the retention window and sweep it.
+	q.mu.Lock()
+	q.jobs[job.ID].UpdatedAt = time.Now().Add(-2 * time.Hour)
+	q.mu.Unlock()
+	q.prune()
+
+	if _, ok := q.Get(1, job.ID); ok {
+		t.Fatal("finished job past retention should be pruned")
+	}
+}
+
+func TestQueueCloseRejectsEnqueue(t *testing.T) {
+	q := New(1)
+	q.Close()
+	q.Close() // idempotent
+	job := q.Enqueue(1, "test", func(ctx context.Context, report Report) (map[string]any, error) {
+		return nil, nil
+	})
+	if job.Status != StatusFailed {
+		t.Fatalf("enqueue after close should fail, got %q", job.Status)
+	}
+}
