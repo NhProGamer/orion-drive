@@ -1688,24 +1688,35 @@ html[data-halo='off'] body::before {
 .admin-tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: 3px;
   margin-bottom: var(--s-5);
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
 }
 .admin-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: 7px;
+  padding: 7px 13px;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: var(--r-sm);
   color: var(--fg-2);
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.admin-tab:hover {
+  color: var(--fg-0);
 }
 .admin-tab.active {
+  background: var(--bg-3);
   color: var(--fg-0);
-  border-bottom-color: var(--accent);
 }
 .admin-cards {
   display: grid;
@@ -1717,7 +1728,7 @@ html[data-halo='off'] body::before {
   flex-direction: column;
   gap: 4px;
   padding: 18px;
-  background: var(--bg-1);
+  background: var(--bg-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
@@ -1729,6 +1740,7 @@ html[data-halo='off'] body::before {
 .stat-num {
   font-size: 24px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .stat-label {
   font-size: 12px;
@@ -1736,6 +1748,13 @@ html[data-halo='off'] body::before {
 }
 .admin-actions {
   margin-bottom: var(--s-3);
+}
+.admin-maint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: var(--s-5);
+  flex-wrap: wrap;
 }
 .admin-table {
   overflow-x: auto;
@@ -1782,23 +1801,6 @@ html[data-halo='off'] body::before {
   display: flex;
   gap: 2px;
   justify-content: flex-end;
-}
-.form-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.form-grid label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12.5px;
-  color: var(--fg-2);
-}
-.form-grid label.chk {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
 }
 
 /* My shares view */

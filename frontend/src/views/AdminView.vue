@@ -13,6 +13,8 @@ import {
 import { fmtSize } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import AccessDialog from '@/components/drive/AccessDialog.vue'
+import AccessSwitch from '@/components/drive/AccessSwitch.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -169,11 +171,11 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
       <div class="stat-card"><span class="stat-num">{{ stats.groups }}</span><span class="stat-label">{{ t('admin.tabGroups') }}</span></div>
       <div class="stat-card"><span class="stat-num">{{ stats.policies }}</span><span class="stat-label">{{ t('admin.statPolicies') }}</span></div>
     </section>
-    <div class="admin-actions" style="margin-top: 20px">
+    <div class="admin-maint">
       <button class="btn btn-secondary" :disabled="maintBusy" @click="runMaintenance">
         <Wrench :size="15" />{{ maintBusy ? t('admin.maintenanceRunning') : t('admin.runMaintenance') }}
       </button>
-      <span class="stat-label" style="margin-left: 10px">{{ t('admin.maintenanceHint') }}</span>
+      <span class="stat-label">{{ t('admin.maintenanceHint') }}</span>
     </div>
     </template>
 
@@ -247,67 +249,69 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   </div>
 
   <!-- Group editor -->
-  <div v-if="gForm" class="overlay" @click.self="gForm = null">
-    <div class="dialog">
-      <h2>{{ gForm.id ? t('admin.editGroup') : t('admin.newGroup') }}</h2>
-      <div class="form-grid">
-        <label>{{ t('common.name') }}<input v-model="gForm.name" class="input" /></label>
-        <label>{{ t('admin.storagePolicy') }}
-          <select v-model="gForm.storage_policy_id" class="input">
-            <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-        </label>
-        <label>{{ t('admin.quotaBytes') }}<input v-model="gForm.max_storage" class="input" type="number" min="0" /></label>
-        <label>{{ t('admin.maxDownloadSpeed') }}<input v-model="gForm.speed_limit" class="input" type="number" min="0" /></label>
-        <label>{{ t('admin.ssoGroupsField') }}
-          <input v-model="gForm.sso_groups" class="input" placeholder="engineering, ops" />
-        </label>
-        <label class="chk"><input v-model="gForm.can_share" type="checkbox" />{{ t('admin.allowSharing') }}</label>
-        <label class="chk"><input v-model="gForm.can_admin" type="checkbox" />{{ t('admin.adminAccess') }}</label>
+  <AccessDialog v-if="gForm" :title="gForm.id ? t('admin.editGroup') : t('admin.newGroup')" @close="gForm = null">
+    <template #icon><Shield :size="19" /></template>
+    <div class="acc-form">
+      <div class="acc-field"><label>{{ t('common.name') }}</label><input v-model="gForm.name" class="input" /></div>
+      <div class="acc-field">
+        <label>{{ t('admin.storagePolicy') }}</label>
+        <select v-model="gForm.storage_policy_id" class="input">
+          <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
+        </select>
       </div>
-      <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="gForm = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" @click="saveGroup">{{ t('common.save') }}</button>
+      <div class="acc-row">
+        <div class="acc-field"><label>{{ t('admin.quotaBytes') }}</label><input v-model="gForm.max_storage" class="input" type="number" min="0" /></div>
+        <div class="acc-field"><label>{{ t('admin.maxDownloadSpeed') }}</label><input v-model="gForm.speed_limit" class="input" type="number" min="0" /></div>
       </div>
+      <div class="acc-field"><label>{{ t('admin.ssoGroupsField') }}</label><input v-model="gForm.sso_groups" class="input" placeholder="engineering, ops" /></div>
+      <AccessSwitch :model-value="!!gForm.can_share" :label="t('admin.allowSharing')" @update:model-value="gForm.can_share = $event" />
+      <AccessSwitch :model-value="!!gForm.can_admin" :label="t('admin.adminAccess')" @update:model-value="gForm.can_admin = $event" />
     </div>
-  </div>
+    <template #footer>
+      <button class="btn btn-ghost" @click="gForm = null">{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" @click="saveGroup">{{ t('common.save') }}</button>
+    </template>
+  </AccessDialog>
 
   <!-- Policy creator -->
-  <div v-if="pForm" class="overlay" @click.self="pForm = null">
-    <div class="dialog">
-      <h2>{{ t('admin.newPolicyTitle') }}</h2>
-      <div class="form-grid">
-        <label>{{ t('common.name') }}<input v-model="pForm.name" class="input" /></label>
-        <label>{{ t('admin.colType') }}
+  <AccessDialog v-if="pForm" :title="t('admin.newPolicyTitle')" @close="pForm = null">
+    <template #icon><HardDrive :size="19" /></template>
+    <div class="acc-form">
+      <div class="acc-row">
+        <div class="acc-field"><label>{{ t('common.name') }}</label><input v-model="pForm.name" class="input" /></div>
+        <div class="acc-field">
+          <label>{{ t('admin.colType') }}</label>
           <select v-model="pForm.type" class="input">
             <option value="local">{{ t('admin.typeLocal') }}</option>
             <option value="s3">{{ t('admin.typeS3') }}</option>
             <option value="remote">{{ t('admin.typeRemote') }}</option>
           </select>
-        </label>
-        <template v-if="pForm.type === 'local'">
-          <label>{{ t('admin.directoryBasePath') }}<input v-model="pForm.base_path" class="input" placeholder="data/storage" /></label>
-          <label class="chk"><input v-model="pForm.encrypt" type="checkbox" />{{ t('admin.encryptAtRest') }}</label>
-        </template>
-        <template v-else-if="pForm.type === 's3'">
-          <label>{{ t('admin.endpoint') }}<input v-model="pForm.server" class="input" placeholder="https://s3.amazonaws.com" /></label>
-          <label>{{ t('admin.bucket') }}<input v-model="pForm.bucket_name" class="input" /></label>
-          <label>{{ t('admin.region') }}<input v-model="pForm.region" class="input" /></label>
-          <label>{{ t('admin.accessKey') }}<input v-model="pForm.access_key" class="input" /></label>
-          <label>{{ t('admin.secretKey') }}<input v-model="pForm.secret_key" class="input" type="password" /></label>
-          <label>{{ t('admin.basePathPrefix') }}<input v-model="pForm.base_path" class="input" /></label>
-          <label class="chk"><input v-model="pForm.path_style" type="checkbox" />{{ t('admin.pathStyle') }}</label>
-        </template>
-        <template v-else>
-          <label>{{ t('admin.nodeUrl') }}<input v-model="pForm.server" class="input" placeholder="http://slave:5212" /></label>
-          <label>{{ t('admin.sharedSecret') }}<input v-model="pForm.secret_key" class="input" type="password" /></label>
-          <label>{{ t('admin.colBasePath') }}<input v-model="pForm.base_path" class="input" /></label>
-        </template>
+        </div>
       </div>
-      <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="pForm = null">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" @click="savePolicy">{{ t('common.create') }}</button>
-      </div>
+      <template v-if="pForm.type === 'local'">
+        <div class="acc-field"><label>{{ t('admin.directoryBasePath') }}</label><input v-model="pForm.base_path" class="input" placeholder="data/storage" /></div>
+        <AccessSwitch :model-value="!!pForm.encrypt" :label="t('admin.encryptAtRest')" @update:model-value="pForm.encrypt = $event" />
+      </template>
+      <template v-else-if="pForm.type === 's3'">
+        <div class="acc-field"><label>{{ t('admin.endpoint') }}</label><input v-model="pForm.server" class="input" placeholder="https://s3.amazonaws.com" /></div>
+        <div class="acc-row">
+          <div class="acc-field"><label>{{ t('admin.bucket') }}</label><input v-model="pForm.bucket_name" class="input" /></div>
+          <div class="acc-field"><label>{{ t('admin.region') }}</label><input v-model="pForm.region" class="input" /></div>
+        </div>
+        <div class="acc-field"><label>{{ t('admin.accessKey') }}</label><input v-model="pForm.access_key" class="input" /></div>
+        <div class="acc-field"><label>{{ t('admin.secretKey') }}</label><input v-model="pForm.secret_key" class="input" type="password" /></div>
+        <div class="acc-field"><label>{{ t('admin.basePathPrefix') }}</label><input v-model="pForm.base_path" class="input" /></div>
+        <AccessSwitch :model-value="!!pForm.path_style" :label="t('admin.pathStyle')" @update:model-value="pForm.path_style = $event" />
+      </template>
+      <template v-else>
+        <div class="acc-field"><label>{{ t('admin.nodeUrl') }}</label><input v-model="pForm.server" class="input" placeholder="http://slave:5212" /></div>
+        <div class="acc-field"><label>{{ t('admin.sharedSecret') }}</label><input v-model="pForm.secret_key" class="input" type="password" /></div>
+        <div class="acc-field"><label>{{ t('admin.colBasePath') }}</label><input v-model="pForm.base_path" class="input" /></div>
+      </template>
     </div>
-  </div>
+    <template #footer>
+      <button class="btn btn-ghost" @click="pForm = null">{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" @click="savePolicy">{{ t('common.create') }}</button>
+    </template>
+  </AccessDialog>
 </template>
