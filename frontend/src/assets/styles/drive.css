@@ -1596,6 +1596,22 @@ html[data-halo='off'] body::before {
   background: var(--bg-1);
 }
 
+/* single-form body (share create/edit): stacked fields with breathing room */
+.acc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 0 4px;
+}
+.acc-row {
+  display: flex;
+  gap: 12px;
+}
+.acc-row > .acc-field {
+  flex: 1;
+  min-width: 0;
+}
+
 .pv-scroll {
   max-height: 240px;
   overflow-y: auto;

@@ -5,6 +5,7 @@ import { Link2, Copy, Check, ExternalLink } from 'lucide-vue-next'
 import type { FileNode, SharePermission } from '@/lib/api'
 import { api } from '@/lib/api'
 import { useUiStore } from '@/stores/ui'
+import AccessDialog from './AccessDialog.vue'
 
 const { t } = useI18n()
 
@@ -56,69 +57,78 @@ async function copy() {
     setTimeout(() => (copied.value = false), 1500)
   } catch {}
 }
+
+function selectAll(e: FocusEvent) {
+  ;(e.target as HTMLInputElement).select()
+}
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="dialog">
-      <h2><Link2 :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('shareDialog.title', { name: node.name }) }}</h2>
+  <AccessDialog :title="t('shareDialog.title', { name: node.name })" @close="emit('close')">
+    <template #icon><Link2 :size="19" /></template>
 
-      <template v-if="!result">
-        <div style="display: flex; flex-direction: column; gap: 12px">
-          <div style="display: flex; flex-direction: column; gap: 6px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
-            <div class="seg">
-              <button
-                v-for="o in permOptions"
-                :key="o.value"
-                type="button"
-                class="seg-btn"
-                :class="{ active: permission === o.value }"
-                @click="permission = o.value"
-              >
-                {{ o.label }}
-              </button>
-            </div>
-            <span style="font-size: 12px; color: var(--fg-2)">{{ permOptions.find((o) => o.value === permission)?.hint }}</span>
-          </div>
-          <label style="display: flex; flex-direction: column; gap: 4px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.passwordLabel') }}</span>
-            <input v-model="password" class="input" type="text" :placeholder="t('shareDialog.passwordPlaceholder')" />
-          </label>
-          <div style="display: flex; gap: 12px">
-            <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-              <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.expiresLabel') }}</span>
-              <input v-model="expiresDays" class="input" type="number" min="1" :placeholder="t('shareDialog.expiresPlaceholder')" />
-            </label>
-            <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-              <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.maxDownloadsLabel') }}</span>
-              <input v-model="maxDownloads" class="input" type="number" min="1" :placeholder="t('shareDialog.maxDownloadsPlaceholder')" />
-            </label>
-          </div>
-        </div>
-        <div class="dialog-actions">
-          <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="loading" @click="create">
-            {{ loading ? t('shareDialog.creating') : t('shareDialog.createLink') }}
+    <!-- Configure -->
+    <div v-if="!result" class="acc-form">
+      <div class="acc-field">
+        <label>{{ t('shareDialog.permLabel') }}</label>
+        <div class="seg">
+          <button
+            v-for="o in permOptions"
+            :key="o.value"
+            type="button"
+            class="seg-btn"
+            :class="{ active: permission === o.value }"
+            @click="permission = o.value"
+          >
+            {{ o.label }}
           </button>
         </div>
-      </template>
+        <p class="acc-hint">{{ permOptions.find((o) => o.value === permission)?.hint }}</p>
+      </div>
 
-      <template v-else>
-        <p>{{ t('shareDialog.created') }}</p>
-        <div style="display: flex; gap: 8px; align-items: center">
-          <input class="input" :value="result.url" readonly @focus="($event.target as HTMLInputElement).select()" />
-          <button class="icon-btn" :title="copied ? t('common.copied') : t('common.copy')" @click="copy">
-            <component :is="copied ? Check : Copy" :size="16" />
-          </button>
+      <div class="acc-field">
+        <label>{{ t('shareDialog.passwordLabel') }}</label>
+        <input v-model="password" class="input" type="text" :placeholder="t('shareDialog.passwordPlaceholder')" />
+      </div>
+
+      <div class="acc-row">
+        <div class="acc-field">
+          <label>{{ t('shareDialog.expiresLabel') }}</label>
+          <input v-model="expiresDays" class="input" type="number" min="1" :placeholder="t('shareDialog.expiresPlaceholder')" />
         </div>
-        <div class="dialog-actions">
-          <a class="btn btn-secondary" :href="result.url" target="_blank" rel="noopener">
-            <ExternalLink :size="15" />{{ t('common.open') }}
-          </a>
-          <button class="btn btn-primary" @click="emit('close')">{{ t('shareDialog.done') }}</button>
+        <div class="acc-field">
+          <label>{{ t('shareDialog.maxDownloadsLabel') }}</label>
+          <input v-model="maxDownloads" class="input" type="number" min="1" :placeholder="t('shareDialog.maxDownloadsPlaceholder')" />
         </div>
-      </template>
+      </div>
     </div>
-  </div>
+
+    <!-- Created -->
+    <div v-else class="acc-form">
+      <div class="acc-field">
+        <label>{{ t('shareDialog.created') }}</label>
+        <div class="acc-secret">
+          <input class="input mono" :value="result.url" readonly @focus="selectAll" />
+          <button class="icon-btn" :title="copied ? t('common.copied') : t('common.copy')" @click="copy">
+            <component :is="copied ? Check : Copy" :size="15" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <template v-if="!result">
+        <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" :disabled="loading" @click="create">
+          {{ loading ? t('shareDialog.creating') : t('shareDialog.createLink') }}
+        </button>
+      </template>
+      <template v-else>
+        <a class="btn btn-secondary" :href="result.url" target="_blank" rel="noopener">
+          <ExternalLink :size="15" />{{ t('common.open') }}
+        </a>
+        <button class="btn btn-primary" @click="emit('close')">{{ t('shareDialog.done') }}</button>
+      </template>
+    </template>
+  </AccessDialog>
 </template>

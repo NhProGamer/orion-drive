@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { Pencil } from 'lucide-vue-next'
 import { api, type ShareInfo, type SharePermission } from '@/lib/api'
 import { useUiStore } from '@/stores/ui'
+import AccessDialog from './AccessDialog.vue'
+import AccessSwitch from './AccessSwitch.vue'
 
 const { t } = useI18n()
 
@@ -68,30 +70,28 @@ async function save() {
 </script>
 
 <template>
-  <div class="overlay" @click.self="emit('close')">
-    <div class="dialog">
-      <h2><Pencil :size="18" style="vertical-align: -3px; margin-right: 6px" />{{ t('shareEdit.title', { name: share.name }) }}</h2>
+  <AccessDialog :title="t('shareEdit.title', { name: share.name })" @close="emit('close')">
+    <template #icon><Pencil :size="19" /></template>
 
-      <div style="display: flex; flex-direction: column; gap: 12px">
-        <div style="display: flex; flex-direction: column; gap: 6px">
-          <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareDialog.permLabel') }}</span>
-          <div class="seg">
-            <button
-              v-for="o in permOptions"
-              :key="o.value"
-              type="button"
-              class="seg-btn"
-              :class="{ active: permission === o.value }"
-              @click="permission = o.value"
-            >
-              {{ o.label }}
-            </button>
-          </div>
+    <div class="acc-form">
+      <div class="acc-field">
+        <label>{{ t('shareDialog.permLabel') }}</label>
+        <div class="seg">
+          <button
+            v-for="o in permOptions"
+            :key="o.value"
+            type="button"
+            class="seg-btn"
+            :class="{ active: permission === o.value }"
+            @click="permission = o.value"
+          >
+            {{ o.label }}
+          </button>
         </div>
-        <label style="display: flex; align-items: center; gap: 8px">
-          <input v-model="hasPassword" type="checkbox" />
-          <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.passwordProtect') }}</span>
-        </label>
+      </div>
+
+      <div class="acc-field">
+        <AccessSwitch v-model="hasPassword" :label="t('shareEdit.passwordProtect')" />
         <input
           v-if="hasPassword"
           v-model="password"
@@ -99,25 +99,25 @@ async function save() {
           type="text"
           :placeholder="share.has_password ? t('shareEdit.passwordKeepHint') : t('shareEdit.passwordNew')"
         />
+      </div>
 
-        <div style="display: flex; gap: 12px">
-          <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.expiresDays') }}</span>
-            <input v-model="expiresDays" class="input" type="number" min="1" :placeholder="t('shareEdit.never')" />
-          </label>
-          <label style="flex: 1; display: flex; flex-direction: column; gap: 4px">
-            <span class="tweak-label" style="letter-spacing: 0.06em">{{ t('shareEdit.maxDownloads') }}</span>
-            <input v-model="maxDownloads" class="input" type="number" min="1" :placeholder="t('shareEdit.unlimited')" />
-          </label>
+      <div class="acc-row">
+        <div class="acc-field">
+          <label>{{ t('shareEdit.expiresDays') }}</label>
+          <input v-model="expiresDays" class="input" type="number" min="1" :placeholder="t('shareEdit.never')" />
+        </div>
+        <div class="acc-field">
+          <label>{{ t('shareEdit.maxDownloads') }}</label>
+          <input v-model="maxDownloads" class="input" type="number" min="1" :placeholder="t('shareEdit.unlimited')" />
         </div>
       </div>
-
-      <div class="dialog-actions">
-        <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="loading" @click="save">
-          {{ loading ? t('shareEdit.saving') : t('common.save') }}
-        </button>
-      </div>
     </div>
-  </div>
+
+    <template #footer>
+      <button class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" :disabled="loading" @click="save">
+        {{ loading ? t('shareEdit.saving') : t('common.save') }}
+      </button>
+    </template>
+  </AccessDialog>
 </template>

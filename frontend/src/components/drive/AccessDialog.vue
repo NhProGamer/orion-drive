@@ -22,7 +22,9 @@ const { t } = useI18n()
       <div class="acc-body"><slot /></div>
 
       <div class="acc-foot">
-        <button class="btn btn-secondary" @click="emit('close')">{{ t('common.close') }}</button>
+        <slot name="footer">
+          <button class="btn btn-secondary" @click="emit('close')">{{ t('common.close') }}</button>
+        </slot>
       </div>
     </div>
   </div>
