@@ -260,8 +260,6 @@ export const api = {
 
   // Direct links
   createDirectLink: (id: number) => post<DirectLink>('/file/direct-link', { id }),
-  listDirectLinks: (id: number) => get<DirectLink[]>(`/file/direct-links/${id}`),
-  deleteDirectLink: (token: string) => http.delete(`/file/direct-link/${token}`),
 
   initUpload: (parent: string, name: string, size: number) =>
     post<UploadInit>('/upload', { parent, name, size }),
@@ -315,7 +313,6 @@ export const api = {
       onUploadProgress: onProgress ? (e) => onProgress(e.loaded ?? 0) : undefined,
     }),
   shareComplete: (token: string, sid: string) => post(`/share/${token}/upload/${sid}/complete`),
-  shareCancelUpload: (token: string, sid: string) => http.delete(`/share/${token}/upload/${sid}`),
   shareRename: (token: string, path: string, name: string, password?: string) =>
     post(`/share/${token}/rename`, { path, name, password }),
   shareMove: (token: string, path: string, dest: string, password?: string) =>

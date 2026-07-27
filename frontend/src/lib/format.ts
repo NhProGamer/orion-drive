@@ -48,11 +48,6 @@ export function isMarkdown(name: string): boolean {
   return /\.(md|markdown)$/i.test(String(name))
 }
 
-/** Whether the file is an Office document editable via WOPI. */
-export function isOffice(name: string): boolean {
-  return /\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(String(name))
-}
-
 // Extensions the backend can generate a thumbnail for (image built-in / vips /
 // libraw / ffmpeg / poppler / libreoffice). A 404 falls back to the type icon.
 const THUMB_EXT =
@@ -83,21 +78,6 @@ export function fmtSize(bytes: number): string {
   const digits = v >= 100 || i === 0 ? 0 : 1
   const s = new Intl.NumberFormat(loc, { maximumFractionDigits: digits }).format(v)
   return s + ' ' + units[i]
-}
-
-/** Compact duration, e.g. "45 s", "2 min 5 s", "1 h 3 min". */
-export function fmtDuration(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return ''
-  const s = Math.round(seconds)
-  if (s < 60) return `${s} s`
-  const m = Math.floor(s / 60)
-  if (m < 60) {
-    const r = s % 60
-    return r ? `${m} min ${r} s` : `${m} min`
-  }
-  const h = Math.floor(m / 60)
-  const rm = m % 60
-  return rm ? `${h} h ${rm} min` : `${h} h`
 }
 
 /** Coarse ETA for a live estimate: whole seconds under a minute, whole minutes
