@@ -48,6 +48,11 @@ function openOffice(path?: string) {
 
 const meta = computed(() => (data.value ? metaFor(kindFromName(data.value.name)) : metaFor('file')))
 const unavailable = computed(() => data.value && (data.value.expired || data.value.exhausted))
+
+// Show the file's own thumbnail on the landing card when the type can be
+// previewed; fall back to the type icon if the image fails to load.
+const thumbFailed = ref(false)
+const showThumb = computed(() => !!data.value && !data.value.is_dir && data.value.previewable && !thumbFailed.value)
 const crumbs = computed(() => {
   const parts = curPath.value ? curPath.value.split('/') : []
   const acc: { name: string; path: string }[] = [{ name: data.value?.name || '', path: '' }]
@@ -308,7 +313,10 @@ async function download() {
         <!-- Landing (file share, or locked folder awaiting password) -->
         <template v-else>
           <div class="preview-visual" style="width: 100%; margin: 0; height: 120px">
-            <component :is="data.is_dir ? Folder : meta.icon" :size="44" :class="data.is_dir ? 'tint-folder' : 'tint-' + meta.tint" />
+            <img v-if="showThumb" :src="api.shareThumbUrl(token)" :alt="data.name"
+              style="max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 8px"
+              @error="thumbFailed = true" />
+            <component v-else :is="data.is_dir ? Folder : meta.icon" :size="44" :class="data.is_dir ? 'tint-folder' : 'tint-' + meta.tint" />
           </div>
           <div style="text-align: center">
             <h1 style="font-size: 20px">{{ data.name }}</h1>

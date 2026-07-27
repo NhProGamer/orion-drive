@@ -328,6 +328,12 @@ export const api = {
     const s = q.toString()
     return `/api/v1/share/${token}/office` + (s ? `?${s}` : '')
   },
+  shareThumbUrl: (token: string, path?: string) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    const s = q.toString()
+    return `/api/v1/share/${token}/thumb` + (s ? `?${s}` : '')
+  },
 
   // WebDAV credentials
   webdavAccounts: () => get<WebdavAccountList>('/webdav/accounts'),
@@ -388,6 +394,7 @@ export interface ShareView {
   size: number
   permission: SharePermission
   wopi: boolean
+  previewable: boolean
   has_password: boolean
   expired: boolean
   exhausted: boolean
