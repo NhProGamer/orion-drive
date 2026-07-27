@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 
 /** A file or folder as returned by the backend. */
 export interface FileNode {
@@ -99,7 +99,7 @@ export interface AdminPolicy {
   server: string
   bucket_name: string
   base_path: string
-  settings: any
+  settings: Record<string, unknown>
 }
 
 export interface Capacity {
@@ -179,10 +179,25 @@ export class ApiError extends Error {
   }
 }
 
-type P = <T = any>(...a: any[]) => Promise<T>
-const get = http.get.bind(http) as P
-const post = http.post.bind(http) as P
-const put = http.put.bind(http) as P
+// The response interceptor unwraps the {code,data,msg} envelope, so at runtime
+// these resolve to the payload (T), not an AxiosResponse — hence the cast. The
+// signatures still type the URL, body and config so call sites are checked; the
+// default T is `unknown` (never `any`) so an untyped result must be narrowed.
+const get = <T = unknown>(url: string, config?: AxiosRequestConfig) =>
+  http.get(url, config) as unknown as Promise<T>
+const post = <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+  http.post(url, data, config) as unknown as Promise<T>
+const put = <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+  http.put(url, data, config) as unknown as Promise<T>
+
+// shareUrl builds a public share URL for an action, appending only the query
+// params that are set (empty/undefined dropped).
+function shareUrl(token: string, action: string, params: Record<string, string | undefined>) {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v) q.set(k, v)
+  const s = q.toString()
+  return `/api/v1/share/${token}/${action}` + (s ? `?${s}` : '')
+}
 
 export const api = {
   me: () => get<Me>('/user/me'),
@@ -307,40 +322,15 @@ export const api = {
     post(`/share/${token}/move`, { path, dest, password }),
   shareDeleteItem: (token: string, path: string, password?: string) =>
     post(`/share/${token}/delete`, { path, password }),
-  shareContentUrl: (token: string, path?: string, password?: string) => {
-    const q = new URLSearchParams()
-    if (path) q.set('path', path)
-    if (password) q.set('password', password)
-    const s = q.toString()
-    return `/api/v1/share/${token}/content` + (s ? `?${s}` : '')
-  },
-  shareArchiveUrl: (token: string, path?: string, password?: string) => {
-    const q = new URLSearchParams()
-    if (path) q.set('path', path)
-    if (password) q.set('password', password)
-    const s = q.toString()
-    return `/api/v1/share/${token}/archive` + (s ? `?${s}` : '')
-  },
-  shareOfficeUrl: (token: string, path?: string, password?: string) => {
-    const q = new URLSearchParams()
-    if (path) q.set('path', path)
-    if (password) q.set('password', password)
-    const s = q.toString()
-    return `/api/v1/share/${token}/office` + (s ? `?${s}` : '')
-  },
-  shareThumbUrl: (token: string, path?: string) => {
-    const q = new URLSearchParams()
-    if (path) q.set('path', path)
-    const s = q.toString()
-    return `/api/v1/share/${token}/thumb` + (s ? `?${s}` : '')
-  },
-  shareInlineUrl: (token: string, path?: string, password?: string) => {
-    const q = new URLSearchParams()
-    if (path) q.set('path', path)
-    if (password) q.set('password', password)
-    q.set('inline', '1')
-    return `/api/v1/share/${token}/content?${q.toString()}`
-  },
+  shareContentUrl: (token: string, path?: string, password?: string) =>
+    shareUrl(token, 'content', { path, password }),
+  shareArchiveUrl: (token: string, path?: string, password?: string) =>
+    shareUrl(token, 'archive', { path, password }),
+  shareOfficeUrl: (token: string, path?: string, password?: string) =>
+    shareUrl(token, 'office', { path, password }),
+  shareThumbUrl: (token: string, path?: string) => shareUrl(token, 'thumb', { path }),
+  shareInlineUrl: (token: string, path?: string, password?: string) =>
+    shareUrl(token, 'content', { path, password, inline: '1' }),
 
   // WebDAV credentials
   webdavAccounts: () => get<WebdavAccountList>('/webdav/accounts'),
@@ -371,7 +361,7 @@ export const api = {
   adminUpdateGroup: (id: number, g: Partial<AdminGroup>) => http.patch(`/admin/groups/${id}`, g),
   adminDeleteGroup: (id: number) => http.delete(`/admin/groups/${id}`),
   adminPolicies: () => get<AdminPolicy[]>('/admin/policies'),
-  adminCreatePolicy: (p: any) => post<{ id: number }>('/admin/policies', p),
+  adminCreatePolicy: (p: Omit<AdminPolicy, 'id'>) => post<{ id: number }>('/admin/policies', p),
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
 }
 
