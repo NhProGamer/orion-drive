@@ -79,26 +79,6 @@ html[data-halo='off'] body::before {
 .logo:hover .glyph {
   transform: rotate(45deg);
 }
-.logo-mark {
-  width: 26px;
-  height: 26px;
-  display: block;
-  flex: none;
-}
-.logo-word {
-  font-size: 19px;
-  letter-spacing: -0.01em;
-  color: var(--fg-0);
-}
-.logo-word em {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
-  font-size: 21px;
-}
-.logo-word strong {
-  font-weight: 600;
-}
 
 .new-wrap {
   position: relative;
@@ -727,23 +707,6 @@ html[data-halo='off'] body::before {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-.thumb-img {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: repeating-linear-gradient(45deg, transparent 0 10px, color-mix(in oklab, var(--fg-3) 12%, transparent) 10px 11px);
-}
-.thumb-img span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--fg-3);
-  background: var(--bg-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-xs);
-  padding: 2px 6px;
 }
 .card-body {
   display: flex;
@@ -1882,19 +1845,6 @@ html[data-halo='off'] body::before {
 }
 
 /* Public share folder browser */
-.share-browser {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  width: 100%;
-}
-.share-crumbs {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-  font-size: 12.5px;
-}
 .crumb-btn {
   background: none;
   border: none;
@@ -1907,108 +1857,10 @@ html[data-halo='off'] body::before {
   color: var(--fg-0);
   background: var(--bg-2);
 }
-.share-list {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  overflow: hidden;
-  max-height: 46vh;
-  overflow-y: auto;
-}
-.share-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.share-row:last-child {
-  border-bottom: none;
-}
-.share-row:hover {
-  background: var(--bg-2);
-}
-.share-row-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: 10px 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--fg-0);
-}
-.share-row-act {
-  background: none;
-  border: none;
-  color: var(--fg-2);
-  cursor: pointer;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-.share-row-act:hover {
-  color: var(--fg-0);
-  background: var(--bg-3);
-}
-.share-row-act.danger:hover {
-  color: var(--danger);
-}
-.share-row-tail {
-  margin-right: 10px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.share-toolbar {
-  display: flex;
-  gap: 8px;
-}
 .btn-sm {
   height: 30px;
   padding: 0 10px;
   font-size: 12.5px;
-}
-.share-list.drop-over {
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
-}
-.drop-zone {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 28px;
-  border: 2px dashed var(--border-subtle);
-  border-radius: var(--radius);
-  color: var(--fg-2);
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-.drop-zone:hover,
-.drop-zone.over {
-  border-color: var(--accent);
-  background: var(--bg-2);
-}
-.upload-list {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-.upload-list .upload-item {
-  border-bottom: 1px solid var(--border-subtle);
-}
-.upload-list .upload-item:last-child {
-  border-bottom: none;
-}
-.upload-list .upload-name {
-  flex: 1;
 }
 .share-name {
   flex: 1;
@@ -2016,16 +1868,6 @@ html[data-halo='off'] body::before {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
-}
-.share-size {
-  font-size: 11px;
-  color: var(--fg-2);
-}
-.share-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--fg-2);
-  font-size: 12.5px;
 }
 
 /* Full-screen content preview overlay */
@@ -2500,82 +2342,6 @@ html[data-halo='off'] body::before {
   color: var(--accent);
 }
 
-/* Tweaks */
-.tweaks {
-  position: fixed;
-  left: var(--s-5);
-  bottom: var(--s-5);
-  z-index: 85;
-  width: 252px;
-  background: var(--bg-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lg);
-  padding: var(--s-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  animation: fade-in var(--t-med) both;
-}
-.tweaks-head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.tweaks-head .title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg-0);
-  flex: 1;
-}
-.tweak {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
-.tweak-label {
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--fg-2);
-}
-.tweak-seg {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--bg-inset);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md);
-}
-.tweak-seg button {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--fg-2);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  padding: 6px 0;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background var(--t-fast), color var(--t-fast);
-}
-.tweak-seg button.active {
-  background: var(--bg-3);
-  color: var(--fg-0);
-}
-.tweak-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-}
-.tweak-row .tweak-label {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 12.5px;
-  color: var(--fg-1);
-}
 .switch {
   width: 36px;
   height: 20px;
@@ -2872,7 +2638,7 @@ html[data-halo='off'] body::before {
 }
 
 @media (max-width: 520px) {
-  /* Reclaim room for search: the grid/list toggle is non-essential (grid is
+/* Reclaim room for search: the grid/list toggle is non-essential (grid is
      the default) and the admin shortcut lives in the sidebar route too. */
   .segmented {
     display: none;
@@ -2985,7 +2751,7 @@ html[data-halo='off'] body::before {
   flex: none;
 }
 @keyframes sheet-up {
-  from {
+from {
     transform: translateY(100%);
   }
   to {
