@@ -427,11 +427,12 @@ func (ctl *Controller) InitUpload(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	mask, _ := ctl.dep.Files.UploadProgress(s.ID, s.NumChunks())
 	respond(c, serializer.OK(gin.H{
 		"session_id": s.ID,
 		"chunk_size": s.ChunkSize,
 		"num_chunks": s.NumChunks(),
-		"received":   s.Received,
+		"received":   mask,
 	}))
 }
 
@@ -449,7 +450,8 @@ func (ctl *Controller) PutChunk(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	respond(c, serializer.OK(gin.H{"received": s.Received, "complete": s.Complete()}))
+	mask, complete := ctl.dep.Files.UploadProgress(s.ID, s.NumChunks())
+	respond(c, serializer.OK(gin.H{"received": mask, "complete": complete}))
 }
 
 // CompleteUpload finalizes an upload and returns the new file.

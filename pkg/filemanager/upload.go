@@ -33,7 +33,6 @@ type UploadSession struct {
 	ChunkSize int64  `json:"chunk_size"`
 	PolicyID  uint   `json:"policy_id"`
 	TempPath  string `json:"temp_path"`
-	Received  []bool `json:"received"`
 	// FileID is set when the upload replaces an existing file, adding a new
 	// version to it instead of creating a new file.
 	FileID *uint `json:"file_id,omitempty"`
@@ -52,15 +51,6 @@ func (s *UploadSession) NumChunks() int {
 }
 
 // Complete reports whether every chunk has been received.
-func (s *UploadSession) Complete() bool {
-	for _, r := range s.Received {
-		if !r {
-			return false
-		}
-	}
-	return true
-}
-
 func uploadKey(id string) string { return "upload:" + id }
 
 // chunkKey marks one received chunk. Each chunk sets its own key (an atomic
@@ -76,6 +66,23 @@ func (m *Manager) receivedAll(id string, num int) bool {
 		}
 	}
 	return true
+}
+
+// UploadProgress reports, for an in-flight upload of num chunks, which chunk
+// indices have been received (read from the per-chunk cache markers) and whether
+// the upload is complete. Backs the upload status responses; the real completion
+// gate at finalisation is receivedAll (which short-circuits).
+func (m *Manager) UploadProgress(id string, num int) (received []bool, complete bool) {
+	received = make([]bool, num)
+	complete = true
+	for i := 0; i < num; i++ {
+		if _, ok := m.cache.Get(chunkKey(id, i)); ok {
+			received[i] = true
+		} else {
+			complete = false
+		}
+	}
+	return received, complete
 }
 
 // InitUpload validates the request, reserves a session and returns it.
@@ -137,7 +144,6 @@ func (m *Manager) InitUpload(ctx context.Context, user *model.User, parentID *ui
 		TempPath:  filepath.Join(m.tmpDir, id+".part"),
 		FileID:    targetFileID,
 	}
-	sess.Received = make([]bool, sess.NumChunks())
 	if err := m.saveSession(sess); err != nil {
 		return nil, err
 	}
