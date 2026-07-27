@@ -433,8 +433,24 @@ func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, nam
 	}
 	ttlMs := time.Now().Add(wopiTokenTTL).UnixMilli()
 
+	// Self-contained CSP for the launcher: it runs an inline submit script and
+	// frames/posts to the document server, so it overrides any strict global
+	// System.CSP that would otherwise block Office editing.
+	if origin := originOf(action); origin != "" {
+		c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action "+origin+"; frame-src "+origin)
+	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(http.StatusOK, officeLauncherHTML(name, action, token, ttlMs))
+}
+
+// originOf returns the scheme://host origin of a URL, or "" if it cannot be
+// parsed to an absolute URL.
+func originOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // officeLauncherHTML builds the auto-submitting WOPI launch page.

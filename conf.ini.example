@@ -27,6 +27,12 @@ TrashRetentionDays = 30
 ; client-IP resolution (per-IP rate limiting). Empty trusts none (client IP =
 ; direct peer). Set to your proxy, e.g. 127.0.0.1,::1 or 10.0.0.0/8
 TrustedProxies =
+; Content-Security-Policy header, sent on every response when non-empty (empty
+; disables it) — defence-in-depth against XSS. The Office launcher sets its own
+; CSP, so this can stay strict even with WOPI. Adapt to your deployment; a good
+; starting point:
+; CSP = default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'
+CSP =
 
 [Database]
 ; sqlite | postgres | mysql
@@ -105,9 +111,12 @@ StoragePath = data/slave-storage
 ;
 ; VerifyProof enforces WOPI proof-key signature checks on editor callbacks. Off
 ; by default (OnlyOffice does not sign); enable with Collabora/Office Online.
+; Secret signs WOPI access tokens. Empty falls back to System.SessionSecret; set
+; a dedicated value to rotate the WOPI and session keys independently.
 ServerURL =
 DiscoveryURL =
 EditURLTemplate =
+Secret =
 VerifyProof = false
 
 [SFTP]

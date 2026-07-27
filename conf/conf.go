@@ -14,15 +14,15 @@ import (
 
 // Config is the fully-parsed application configuration.
 type Config struct {
-	System   System
-	Database Database
-	OIDC     OIDC
-	Storage  Storage
-	Slave    Slave
-	WOPI     WOPI
-	WebDAV   WebDAV
-	SFTP     SFTP
-	Redis    Redis
+	System    System
+	Database  Database
+	OIDC      OIDC
+	Storage   Storage
+	Slave     Slave
+	WOPI      WOPI
+	WebDAV    WebDAV
+	SFTP      SFTP
+	Redis     Redis
 	Archive   Archive
 	Security  Security
 	Thumbnail Thumbnail
@@ -32,15 +32,15 @@ type Config struct {
 // their tool is present; the Disable* flags force one off, and the *Path fields
 // override the binary location. Zero MaxDim/Quality keep the built-in defaults.
 type Thumbnail struct {
-	Disable         bool `ini:"Disable"`
-	MaxDim          int  `ini:"MaxDim"`
-	Quality         int  `ini:"Quality"`
-	DisableVideo    bool `ini:"DisableVideo"`
-	DisableAudio    bool `ini:"DisableAudio"`
-	DisableVips     bool `ini:"DisableVips"`
-	DisableRaw      bool `ini:"DisableRaw"`
-	DisablePDF      bool `ini:"DisablePDF"`
-	DisableDocument bool `ini:"DisableDocument"`
+	Disable         bool   `ini:"Disable"`
+	MaxDim          int    `ini:"MaxDim"`
+	Quality         int    `ini:"Quality"`
+	DisableVideo    bool   `ini:"DisableVideo"`
+	DisableAudio    bool   `ini:"DisableAudio"`
+	DisableVips     bool   `ini:"DisableVips"`
+	DisableRaw      bool   `ini:"DisableRaw"`
+	DisablePDF      bool   `ini:"DisablePDF"`
+	DisableDocument bool   `ini:"DisableDocument"`
 	FFmpegPath      string `ini:"FFmpegPath"`
 	VipsPath        string `ini:"VipsPath"`
 	PopplerPath     string `ini:"PopplerPath"`
@@ -96,6 +96,12 @@ type System struct {
 	// to evade per-IP rate limits. Set it to your reverse proxy for correct
 	// per-client limiting.
 	TrustedProxies string `ini:"TrustedProxies"`
+	// CSP, when non-empty, is sent as the Content-Security-Policy header on every
+	// response. Empty by default: a correct policy must allow the configured
+	// document server (the Office editor iframe) and the WOPI launcher uses an
+	// inline script, so a blanket default would break Office editing. See
+	// conf.ini.example for a recommended value to adapt to your deployment.
+	CSP string `ini:"CSP"`
 }
 
 // AdminEmailSet returns the lower-cased admin emails as a lookup set.
@@ -177,10 +183,23 @@ type WOPI struct {
 	ServerURL       string `ini:"ServerURL"`
 	DiscoveryURL    string `ini:"DiscoveryURL"`
 	EditURLTemplate string `ini:"EditURLTemplate"`
+	// Secret signs WOPI access tokens. Empty (default) falls back to
+	// System.SessionSecret; set a dedicated value to decouple WOPI token signing
+	// from the session-cookie key so either can be rotated independently.
+	Secret string `ini:"Secret"`
 	// VerifyProof enforces WOPI proof-key signature checks on editor callbacks
 	// (X-WOPI-Proof). Off by default since some servers (e.g. OnlyOffice) do not
 	// sign requests; enable it with Collabora/Office Online for defence in depth.
 	VerifyProof bool `ini:"VerifyProof"`
+}
+
+// TokenSecret returns the secret used to sign WOPI access tokens, falling back
+// to the session secret when no dedicated WOPI secret is configured.
+func (w WOPI) TokenSecret(sessionSecret string) string {
+	if w.Secret != "" {
+		return w.Secret
+	}
+	return sessionSecret
 }
 
 // Enabled reports whether online Office editing is configured.

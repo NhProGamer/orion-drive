@@ -62,6 +62,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	}
 
 	r.Use(middleware.CORS(dep.Config.System.SiteURL))
+	r.Use(middleware.SecurityHeaders(dep.Config.System.CSP))
 	r.Use(middleware.CurrentUser(dep.Signer, dep.Repo))
 	// A read-only personal access token may only issue safe (GET/HEAD) requests.
 	r.Use(middleware.EnforceReadOnlyToken())
