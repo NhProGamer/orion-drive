@@ -8,6 +8,7 @@ import {
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
 import { kindFromName, fmtSize, previewKind, canThumbnail } from '@/lib/format'
+import { uploadInChunks } from '@/lib/upload'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
@@ -132,22 +133,24 @@ async function uploadFiles(files: FileList | File[], path: string) {
     const item = reactive<UploadItem>({ name: file.name, pct: 0, done: false, error: false })
     uploads.value.push(item)
     try {
-      const init = await api.shareInitUpload(token, {
-        path,
-        name: file.name,
-        size: file.size,
-        contributor: contributor.value || undefined,
-        password: password.value || undefined,
-      })
-      let sent = 0
-      for (let i = 0; i < init.num_chunks; i++) {
-        const start = i * init.chunk_size
-        const blob = file.slice(start, Math.min(start + init.chunk_size, file.size))
-        await api.shareChunk(token, init.session_id, i, blob)
-        sent += blob.size
-        item.pct = file.size ? Math.round((sent / file.size) * 100) : 100
-      }
-      await api.shareComplete(token, init.session_id)
+      await uploadInChunks(
+        file,
+        {
+          init: () =>
+            api.shareInitUpload(token, {
+              path,
+              name: file.name,
+              size: file.size,
+              contributor: contributor.value || undefined,
+              password: password.value || undefined,
+            }),
+          putChunk: (sid, i, blob) => api.shareChunk(token, sid, i, blob),
+          complete: (sid) => api.shareComplete(token, sid),
+        },
+        (loaded) => {
+          item.pct = file.size ? Math.round((loaded / file.size) * 100) : 100
+        },
+      )
       item.pct = 100
       item.done = true
     } catch {
