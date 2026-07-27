@@ -34,11 +34,27 @@ func Logging(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
-		logger.Info("request",
+		status := c.Writer.Status()
+		attrs := []any{
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
-			"status", c.Writer.Status(),
+			"status", status,
+			"ip", c.ClientIP(),
 			"dur", time.Since(start).String(),
-		)
+		}
+		// CurrentUser runs later in the chain, so the user is populated by the time
+		// c.Next() returns; include it for request attribution.
+		if u := UserFrom(c); u != nil {
+			attrs = append(attrs, "user_id", u.ID)
+		}
+		// Elevate the level by outcome so 4xx/5xx stand out in logs.
+		switch {
+		case status >= 500:
+			logger.Error("request", attrs...)
+		case status >= 400:
+			logger.Warn("request", attrs...)
+		default:
+			logger.Info("request", attrs...)
+		}
 	}
 }
