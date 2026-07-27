@@ -303,6 +303,9 @@ func (c *Config) Validate() error {
 	if c.System.Mode != "debug" && c.SessionSecretWeak() {
 		return fmt.Errorf("System.SessionSecret is empty, the shipped default, or shorter than %d bytes: set a long random value (it keys session and WOPI tokens; a known value allows full authentication bypass)", minSessionSecretLen)
 	}
+	if c.System.SiteURL == "" {
+		return fmt.Errorf("System.SiteURL is empty: it is required to build OIDC callback, share/direct-link and WebDAV URLs and to scope CORS")
+	}
 	return nil
 }
 

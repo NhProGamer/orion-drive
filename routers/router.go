@@ -94,6 +94,20 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 		}
 	}
 
+	// Liveness/readiness probe: process up and the database reachable. Unauthed
+	// so orchestrators (docker-compose healthcheck, k8s) can poll it.
+	r.GET("/healthz", func(c *gin.Context) {
+		sqlDB, err := dep.DB.DB()
+		if err == nil {
+			err = sqlDB.PingContext(c.Request.Context())
+		}
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unhealthy"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	// Server-rendered share preview: serves the SPA shell with OpenGraph tags
 	// injected so a pasted /s/:token link unfurls with the file's name and
 	// thumbnail. Registered as a real route so it takes precedence over the SPA
