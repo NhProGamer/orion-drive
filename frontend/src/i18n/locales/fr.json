@@ -126,6 +126,23 @@
     "creating": "Création…",
     "done": "Terminé"
   },
+  "kinds": {
+    "folder": "Dossier",
+    "doc": "Document",
+    "text": "Texte",
+    "pdf": "PDF",
+    "sheet": "Feuille de calcul",
+    "slides": "Présentation",
+    "image": "Image",
+    "video": "Vidéo",
+    "audio": "Audio",
+    "archive": "Archive",
+    "code": "Code",
+    "config": "Configuration",
+    "disc": "Image disque",
+    "design": "Fichier design",
+    "file": "Fichier"
+  },
   "preview": {
     "versionRestored": "Version restaurée",
     "locked": "Verrouillé",

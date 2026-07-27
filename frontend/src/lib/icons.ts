@@ -21,23 +21,24 @@ export interface KindMeta {
   tint: string
 }
 
-/** Per-kind icon, label and tint class, ported from the prototype. */
+/** Per-kind icon, i18n label key and tint class. `label` is an i18n key
+ *  (kinds.*) resolved with t() at render time, so labels are localised. */
 export const kindMeta: Record<string, KindMeta> = {
-  folder: { icon: Folder, label: 'Dossier', tint: 'folder' },
-  doc: { icon: FileText, label: 'Document', tint: 'doc' },
-  text: { icon: FileText, label: 'Texte', tint: 'doc' },
-  pdf: { icon: FileText, label: 'PDF', tint: 'pdf' },
-  sheet: { icon: Table, label: 'Feuille de calcul', tint: 'sheet' },
-  slides: { icon: Presentation, label: 'Présentation', tint: 'media' },
-  image: { icon: Image, label: 'Image', tint: 'sheet' },
-  video: { icon: Video, label: 'Vidéo', tint: 'media' },
-  audio: { icon: Music, label: 'Audio', tint: 'media' },
-  archive: { icon: Archive, label: 'Archive', tint: 'neutral' },
-  code: { icon: Code, label: 'Code', tint: 'doc' },
-  config: { icon: SlidersHorizontal, label: 'Configuration', tint: 'neutral' },
-  disc: { icon: Disc, label: 'Image disque', tint: 'neutral' },
-  design: { icon: Pencil, label: 'Fichier design', tint: 'neutral' },
-  file: { icon: File, label: 'Fichier', tint: 'neutral' },
+  folder: { icon: Folder, label: 'kinds.folder', tint: 'folder' },
+  doc: { icon: FileText, label: 'kinds.doc', tint: 'doc' },
+  text: { icon: FileText, label: 'kinds.text', tint: 'doc' },
+  pdf: { icon: FileText, label: 'kinds.pdf', tint: 'pdf' },
+  sheet: { icon: Table, label: 'kinds.sheet', tint: 'sheet' },
+  slides: { icon: Presentation, label: 'kinds.slides', tint: 'media' },
+  image: { icon: Image, label: 'kinds.image', tint: 'sheet' },
+  video: { icon: Video, label: 'kinds.video', tint: 'media' },
+  audio: { icon: Music, label: 'kinds.audio', tint: 'media' },
+  archive: { icon: Archive, label: 'kinds.archive', tint: 'neutral' },
+  code: { icon: Code, label: 'kinds.code', tint: 'doc' },
+  config: { icon: SlidersHorizontal, label: 'kinds.config', tint: 'neutral' },
+  disc: { icon: Disc, label: 'kinds.disc', tint: 'neutral' },
+  design: { icon: Pencil, label: 'kinds.design', tint: 'neutral' },
+  file: { icon: File, label: 'kinds.file', tint: 'neutral' },
 }
 
 export function metaFor(kind: string): KindMeta {

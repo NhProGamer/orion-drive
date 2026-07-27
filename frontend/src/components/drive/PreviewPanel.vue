@@ -95,7 +95,7 @@ async function toggleLock() {
       <component :is="meta.icon" v-else :size="44" />
     </div>
     <dl class="preview-details">
-      <div class="detail-row"><dt>{{ t('preview.type') }}</dt><dd>{{ meta.label }}</dd></div>
+      <div class="detail-row"><dt>{{ t('preview.type') }}</dt><dd>{{ t(meta.label) }}</dd></div>
       <div class="detail-row"><dt>{{ t('preview.size') }}</dt><dd class="mono">{{ sizeLabel }}</dd></div>
       <div class="detail-row"><dt>{{ t('preview.owner') }}</dt><dd>{{ node.owner }}</dd></div>
       <div class="detail-row"><dt>{{ t('preview.modified') }}</dt><dd class="mono">{{ dateLabel }}</dd></div>
