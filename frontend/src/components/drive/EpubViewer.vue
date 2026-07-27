@@ -8,23 +8,21 @@ const props = defineProps<{ url: string }>()
 
 const host = ref<HTMLElement | null>(null)
 const error = ref(false)
-// epub.js is loaded lazily so it is not in the main bundle.
-let book: any = null
-let rendition: any = null
+// foliate-js is loaded lazily so it stays out of the main bundle. Its
+// <foliate-view> element auto-detects the format and paginates by default.
+let view: any = null
 
 onMounted(async () => {
   try {
-    const mod: any = await import('epubjs')
-    const ePub = mod.default || mod
-    const buf = await (await fetch(props.url, { credentials: 'include' })).arrayBuffer()
-    book = ePub(buf)
-    rendition = book.renderTo(host.value, {
-      width: '100%',
-      height: '100%',
-      flow: 'paginated',
-      spread: 'none',
-    })
-    await rendition.display()
+    await import('foliate-js/view.js') // registers the <foliate-view> custom element
+    const res = await fetch(props.url, { credentials: 'include' })
+    if (!res.ok) throw new Error('fetch failed')
+    const blob = await res.blob()
+    const file = new File([blob], 'book.epub', { type: 'application/epub+zip' })
+    view = document.createElement('foliate-view') as any
+    view.style.cssText = 'display:block;width:100%;height:100%'
+    host.value?.append(view)
+    await view.open(file)
   } catch {
     error.value = true
   }
@@ -32,18 +30,19 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   try {
-    rendition?.destroy()
-    book?.destroy()
+    view?.close?.()
+    view?.remove?.()
   } catch {
     /* ignore */
   }
 })
 
+// goLeft/goRight respect the book's reading direction (LTR: left = previous).
 function prev() {
-  rendition?.prev()
+  view?.goLeft?.()
 }
 function next() {
-  rendition?.next()
+  view?.goRight?.()
 }
 </script>
 
