@@ -1,0 +1,125 @@
+package repository_test
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"testing"
+
+	"github.com/NhProGamer/orion-drive/application/bootstrap"
+	"github.com/NhProGamer/orion-drive/conf"
+	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/repository"
+)
+
+func testRepo(t *testing.T) *repository.Repository {
+	t.Helper()
+	dir := t.TempDir()
+	cfg := &conf.Config{}
+	cfg.Database.Type = "sqlite"
+	cfg.Database.DBFile = filepath.Join(dir, "t.db")
+	db, err := bootstrap.OpenDatabase(cfg)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := bootstrap.Migrate(db, cfg); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	return repository.New(db)
+}
+
+// TestFileOwnerScoping is the core security invariant: a file is only reachable
+// by its owner. GetByID and FindChildByName must not leak across owners.
+func TestFileOwnerScoping(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	f := &model.File{Name: "a.txt", Type: model.FileTypeFile, OwnerID: 1}
+	if err := repo.File.Create(ctx, f); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if got, err := repo.File.GetByID(ctx, 1, f.ID); err != nil || got.Name != "a.txt" {
+		t.Fatalf("owner should read own file: %v", err)
+	}
+	if _, err := repo.File.GetByID(ctx, 2, f.ID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("another owner must get ErrNotFound, got %v", err)
+	}
+	if _, err := repo.File.FindChildByName(ctx, 1, nil, "a.txt"); err != nil {
+		t.Fatalf("owner FindChildByName: %v", err)
+	}
+	if _, err := repo.File.FindChildByName(ctx, 2, nil, "a.txt"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("another owner FindChildByName must not find it, got %v", err)
+	}
+}
+
+// TestShareReserveDownload proves the atomic download-counter reservation caps a
+// limited share and increments the counter, and refund restores a slot.
+func TestShareReserveDownload(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+
+	one := 1
+	limited := &model.Share{Token: "tok-limited", FileID: 1, UserID: 1, RemainDownloads: &one}
+	if err := repo.Share.Create(ctx, limited); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if ok, _ := repo.Share.ReserveDownload(ctx, limited); !ok {
+		t.Fatalf("first reserve should succeed")
+	}
+	if ok, _ := repo.Share.ReserveDownload(ctx, limited); ok {
+		t.Fatalf("second reserve on a 1-download share must fail")
+	}
+	if err := repo.Share.RefundDownload(ctx, limited); err != nil {
+		t.Fatalf("refund: %v", err)
+	}
+	if ok, _ := repo.Share.ReserveDownload(ctx, limited); !ok {
+		t.Fatalf("reserve after refund should succeed")
+	}
+
+	unlimited := &model.Share{Token: "tok-unlimited", FileID: 1, UserID: 1}
+	if err := repo.Share.Create(ctx, unlimited); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if ok, _ := repo.Share.ReserveDownload(ctx, unlimited); !ok {
+			t.Fatalf("unlimited share reserve should always succeed")
+		}
+	}
+	got, err := repo.Share.GetByToken(ctx, "tok-unlimited")
+	if err != nil || got.Downloads != 3 {
+		t.Fatalf("downloads = %d (err %v), want 3", got.Downloads, err)
+	}
+}
+
+// TestAPITokenGetByHash proves the Bearer auth lookup finds a token by hash and
+// returns ErrNotFound for an unknown hash (so auth fails cleanly).
+func TestAPITokenGetByHash(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	if err := repo.APIToken.Create(ctx, &model.APIToken{UserID: 5, TokenHash: "deadbeef", Label: "cli"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	got, err := repo.APIToken.GetByHash(ctx, "deadbeef")
+	if err != nil || got.UserID != 5 {
+		t.Fatalf("get by hash: %v (uid %d)", err, got.UserID)
+	}
+	if _, err := repo.APIToken.GetByHash(ctx, "unknown"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("unknown hash must be ErrNotFound, got %v", err)
+	}
+}
+
+// TestUserLookup covers the email/id lookups used at login and in auth.
+func TestUserLookup(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	u := &model.User{Email: "x@y.z", Subject: "sub1", GroupID: 1}
+	if err := repo.User.Create(ctx, u); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got, err := repo.User.GetByEmail(ctx, "x@y.z"); err != nil || got.ID != u.ID {
+		t.Fatalf("get by email: %v", err)
+	}
+	if _, err := repo.User.GetByEmail(ctx, "nobody@nowhere.z"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("unknown email must be ErrNotFound, got %v", err)
+	}
+}
