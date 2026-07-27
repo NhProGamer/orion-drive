@@ -14,6 +14,7 @@ import (
 
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
+	"github.com/NhProGamer/orion-drive/pkg/thumb"
 	"github.com/NhProGamer/orion-drive/repository"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -198,7 +199,8 @@ type PublicView struct {
 	IsDir       bool   `json:"is_dir"`
 	Size        int64  `json:"size"`
 	Permission  string `json:"permission"`
-	Wopi        bool   `json:"wopi"` // set by the controller: online Office editing available
+	Wopi        bool   `json:"wopi"`        // set by the controller: online Office editing available
+	Previewable bool   `json:"previewable"` // a visual thumbnail can be rendered for this file
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
 	Exhausted   bool   `json:"exhausted"`
@@ -206,18 +208,18 @@ type PublicView struct {
 	Owner       string `json:"owner"`
 }
 
-// View returns public metadata for a share and records a view.
-func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
+// meta builds the public metadata for a share without recording a view. It
+// returns the share alongside the view so callers can act on it (record a view,
+// build a preview URL).
+func (s *Service) meta(ctx context.Context, token string) (*model.Share, *PublicView, error) {
 	share, err := s.repo.Share.GetByToken(ctx, token)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	f, err := s.repo.File.GetByIDUnscoped(ctx, share.UserID, share.FileID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	_ = s.repo.Share.IncrementViews(ctx, share.ID)
-
 	view := &PublicView{
 		Token:       share.Token,
 		Permission:  share.Perm(),
@@ -239,8 +241,62 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 		view.Size = f.Size
 		view.Downloads = share.Downloads
 		view.Owner = owner
+		// A visual preview is possible only for a downloadable (read/write, not
+		// blind-deposit) single file whose type can be thumbnailed.
+		if !f.IsFolder() && share.CanDownload() {
+			if kind := thumb.Kind(path.Ext(f.Name)); kind != "" && thumb.Available(kind) {
+				view.Previewable = true
+			}
+		}
 	}
+	return share, view, nil
+}
+
+// View returns public metadata for a share and records a view.
+func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
+	share, view, err := s.meta(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.repo.Share.IncrementViews(ctx, share.ID)
 	return view, nil
+}
+
+// Meta returns the same public metadata as View but does NOT record a view. Used
+// by the server-rendered share preview (OpenGraph tags), which must not inflate
+// the view counter on every social-media crawl or page load.
+func (s *Service) Meta(ctx context.Context, token string) (*PublicView, error) {
+	_, view, err := s.meta(ctx, token)
+	return view, err
+}
+
+// Thumbnail returns a JPEG preview of a shared file for use as an OpenGraph
+// image. It is refused for password-protected, expired or blind (deposit)
+// shares — a crawler carries no password, and a protected share must not leak a
+// visual — and is not counted as a download.
+func (s *Service) Thumbnail(ctx context.Context, token, subPath string) ([]byte, error) {
+	share, err := s.repo.Share.GetByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if share.Expired() {
+		return nil, ErrExpired
+	}
+	if share.HasPassword() || !share.CanDownload() {
+		return nil, ErrForbidden
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, err
+	}
+	if target.IsFolder() {
+		return nil, ErrNotAFile
+	}
+	owner, err := s.repo.User.GetByID(ctx, share.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return s.files.Thumbnail(ctx, owner, target.ID)
 }
 
 // Entry is one item inside a shared folder listing.

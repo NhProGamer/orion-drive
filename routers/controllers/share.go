@@ -1,13 +1,18 @@
 package controllers
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/NhProGamer/orion-drive/application/constants"
+	"github.com/NhProGamer/orion-drive/application/statics"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"github.com/gin-gonic/gin"
@@ -325,13 +330,116 @@ func (ctl *Controller) ShareDelete(c *gin.Context) {
 	respond(c, serializer.OK(nil))
 }
 
-// shareURL builds the public share page URL from the configured site URL.
-func (ctl *Controller) shareURL(c *gin.Context, token string) string {
+// siteBase returns the public origin (scheme+host, no trailing slash) used to
+// build absolute share/preview URLs, from the configured SiteURL or the request
+// host as a fallback.
+func (ctl *Controller) siteBase(c *gin.Context) string {
 	base := ctl.dep.Config.System.SiteURL
 	if base == "" {
 		base = "http://" + c.Request.Host
 	}
-	return base + "/s/" + token
+	return strings.TrimRight(base, "/")
+}
+
+// shareURL builds the public share page URL from the configured site URL.
+func (ctl *Controller) shareURL(c *gin.Context, token string) string {
+	return ctl.siteBase(c) + "/s/" + token
+}
+
+// ShareThumbnail serves a JPEG preview of a shared file (no auth), used as the
+// OpenGraph image when a share link is unfurled. Refused for protected/expired/
+// blind shares and non-thumbnailable files (404). Not counted as a download.
+func (ctl *Controller) ShareThumbnail(c *gin.Context) {
+	data, err := ctl.dep.Shares.Thumbnail(c.Request.Context(), c.Param("token"), c.Query("path"))
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=3600")
+	c.Data(http.StatusOK, "image/jpeg", data)
+}
+
+// SharePreview serves the SPA shell for /s/:token with OpenGraph/Twitter-card
+// meta tags injected, so pasting a share link into a chat or social app unfurls
+// with the file's name, owner and (when previewable) a thumbnail. The browser
+// still boots the SPA normally; crawlers (which don't run JS) read the tags.
+func (ctl *Controller) SharePreview(c *gin.Context) {
+	page := statics.Index()
+	if tags := ctl.shareOGTags(c, c.Param("token")); tags != "" {
+		page = injectHead(page, tags)
+	}
+	c.Data(http.StatusOK, "text/html; charset=utf-8", page)
+}
+
+// shareOGTags builds the OpenGraph/Twitter meta tags for a share, or "" when the
+// share is unknown, password-protected or expired (leaving the generic app card,
+// so no metadata leaks). Uses Meta (not View) so a crawl does not count a view.
+func (ctl *Controller) shareOGTags(c *gin.Context, token string) string {
+	view, err := ctl.dep.Shares.Meta(c.Request.Context(), token)
+	if err != nil || view.Name == "" {
+		return ""
+	}
+	base := ctl.siteBase(c)
+	title := view.Name
+	desc := humanBytes(view.Size)
+	if view.IsDir {
+		desc = "Dossier partagé"
+	}
+	if view.Owner != "" {
+		desc += " · " + view.Owner
+	}
+
+	var b strings.Builder
+	prop := func(property, content string) {
+		fmt.Fprintf(&b, `<meta property="%s" content="%s">`, property, html.EscapeString(content))
+	}
+	named := func(name, content string) {
+		fmt.Fprintf(&b, `<meta name="%s" content="%s">`, name, html.EscapeString(content))
+	}
+	prop("og:type", "website")
+	prop("og:site_name", "OrionDrive")
+	prop("og:title", title)
+	prop("og:description", desc)
+	prop("og:url", base+"/s/"+token)
+	card := "summary"
+	if view.Previewable {
+		img := base + constants.APIPrefix + "/share/" + url.PathEscape(token) + "/thumb"
+		prop("og:image", img)
+		named("twitter:image", img)
+		card = "summary_large_image"
+	}
+	named("twitter:card", card)
+	named("twitter:title", title)
+	named("twitter:description", desc)
+	return b.String()
+}
+
+// injectHead inserts snippet immediately before the first </head> in page. If no
+// head close tag is present the page is returned unchanged.
+func injectHead(page []byte, snippet string) []byte {
+	i := bytes.Index(page, []byte("</head>"))
+	if i < 0 {
+		return page
+	}
+	out := make([]byte, 0, len(page)+len(snippet))
+	out = append(out, page[:i]...)
+	out = append(out, snippet...)
+	out = append(out, page[i:]...)
+	return out
+}
+
+// humanBytes formats a byte count with a binary (1024) unit in French octets.
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d o", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %co", float64(n)/float64(div), "kMGTPE"[exp])
 }
 
 // failShare maps share-domain errors to response codes.

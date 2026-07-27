@@ -20,6 +20,15 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
+// indexHTML is the SPA shell served for any non-asset route, cached at mount.
+// Exposed via Index() so routes that need to inject per-request metadata (e.g.
+// OpenGraph tags on a share preview) can start from it.
+var indexHTML []byte
+
+// Index returns the SPA index.html bytes loaded at mount time. Nil before
+// Register runs.
+func Index() []byte { return indexHTML }
+
 func init() {
 	// Go's default MIME table has no entry for the PWA manifest extension, so it
 	// would be served as text/plain; register the correct type.
@@ -44,6 +53,7 @@ func Register(r *gin.Engine) error {
 		// No build yet: serve a helpful placeholder instead of failing to boot.
 		index = []byte(placeholder)
 	}
+	indexHTML = index
 
 	fileServer := http.FileServer(serveFS)
 	r.NoRoute(func(c *gin.Context) {

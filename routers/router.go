@@ -89,6 +89,16 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 		}
 	}
 
+	// Server-rendered share preview: serves the SPA shell with OpenGraph tags
+	// injected so a pasted /s/:token link unfurls with the file's name and
+	// thumbnail. Registered as a real route so it takes precedence over the SPA
+	// fallback (NoRoute) for this path. Rate-limited on the same per-IP "share"
+	// bucket as the public API endpoints: it is unauthenticated and resolves the
+	// token (DB lookups + a thumbnailable-type probe), so it must not be an
+	// unbounded amplification surface.
+	previewRL := middleware.RateLimit(dep.Cache, dep.Config.Security.SharePublicRate(), "share")
+	r.GET("/s/:token", previewRL, ctl.SharePreview)
+
 	if err := statics.Register(r); err != nil {
 		return nil, err
 	}
@@ -233,6 +243,7 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	api.GET("/share/:token/list", rl, ctl.ShareList)
 	api.GET("/share/:token/content", rl, ctl.ShareDownload)
 	api.GET("/share/:token/archive", rl, ctl.ShareArchive)
+	api.GET("/share/:token/thumb", rl, ctl.ShareThumbnail)
 
 	// Public: write into a write/deposit share. Each handler also enforces the
 	// share's permission, password/expiry and subtree confinement.
