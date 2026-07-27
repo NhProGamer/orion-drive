@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	// Register the image decoders used by the built-in generator. WebP, BMP and
 	// TIFF are pure-Go, so those formats no longer need the vips binary.
@@ -123,13 +124,34 @@ func Configure(o Options) {
 	binLibRaw = o.LibRawPath
 }
 
-// has reports whether an external binary is on PATH (or is an explicit path).
+// hasCache memoises binary-presence probes. exec.LookPath scans every $PATH
+// entry, and Available() (hence has()) is hit on hot, unauthenticated paths (the
+// share preview / thumbnail endpoints). Installed binaries don't come and go
+// during a process's lifetime, so the result is cached per binary name; the
+// trade-off is that a newly-installed tool is only picked up after a restart.
+var (
+	hasCacheMu sync.RWMutex
+	hasCache   = map[string]bool{}
+)
+
+// has reports whether an external binary is on PATH (or is an explicit path),
+// caching the lookup.
 func has(bin string) bool {
 	if bin == "" {
 		return false
 	}
+	hasCacheMu.RLock()
+	v, ok := hasCache[bin]
+	hasCacheMu.RUnlock()
+	if ok {
+		return v
+	}
 	_, err := exec.LookPath(bin)
-	return err == nil
+	v = err == nil
+	hasCacheMu.Lock()
+	hasCache[bin] = v
+	hasCacheMu.Unlock()
+	return v
 }
 
 // libreBin resolves the LibreOffice binary, honouring the override.
