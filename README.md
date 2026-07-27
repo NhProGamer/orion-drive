@@ -1,110 +1,122 @@
+<div align="center">
+
 # OrionDrive
 
+**Self-hosted file management, in a single binary.**
+
+A Go backend serving an embedded Vue 3 SPA — files, sharing, WebDAV/SFTP, previews,
+Office editing and multi-backend storage, with SSO-only authentication.
+
 [![CI](https://git.nhsoul.fr/nhpro/orion-drive/actions/workflows/ci.yaml/badge.svg)](https://git.nhsoul.fr/nhpro/orion-drive/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8.svg)](https://go.dev)
+[![Vue](https://img.shields.io/badge/Vue-3-42b883.svg)](https://vuejs.org)
 
-Self-hosted file management platform. Go backend, Vue 3 frontend.
+</div>
 
-OrionDrive is a clean-room project inspired by the feature set of self-hosted drives
-(multi-backend storage, sharing, WebDAV, previews, search, admin). Authentication is
-**OIDC / SSO only** — no local password accounts.
+---
 
-> Not affiliated with, and containing no code from, any GPL-licensed project. Licensed under MIT.
+OrionDrive is a clean-room, self-hosted drive: one static binary that embeds the web app,
+talks to SQLite / PostgreSQL / MySQL, and stores objects on local disk, S3-compatible
+storage or a remote node. Authentication is **OIDC / SSO only** — there are no local
+password accounts.
 
-## Status
+> Not affiliated with, and containing no code from, any GPL-licensed project. Licensed under **MIT**.
 
-Single binary serving an embedded Vue SPA with the "Nebula" design system. Implemented:
+## Features
 
-- **Files**: local storage explorer — list, folders, resumable chunked upload, rename/move,
-  trash & restore, download, per-group quota.
-- **Search**: recursive search across all folders with filters (type, category, starred, modified
-  date); results show each hit's location.
-- **Storage backends**: local, S3-compatible, and remote (slave node) drivers; direct/presigned
-  downloads with per-group speed limiting.
-- **Advanced files**: versioning, locking, AES-256-CTR at-rest encryption, direct links.
-- **Archives**: online compress/extract (zip/tar/7z) as background tasks, grouped ZIP download.
-- **Sharing**: file & folder links with password, expiry and download limits.
-- **Preview & editing**: image/video/audio/PDF/text/Markdown/ePub; image editor; Office via WOPI
-  (OnlyOffice / Collabora).
-- **WebDAV**: mount your drive over `/dav` with dedicated per-user credentials (read-only option),
-  independent of the SSO login.
-- **Admin & organisation**: admin panel, groups with granular permissions and per-group storage
-  policies, SSO group → group/admin mapping, scheduled maintenance (trash auto-purge, upload
-  cleanup).
-- **Databases & cache**: SQLite (default), PostgreSQL or MySQL; optional Redis-backed shared cache
-  for multi-node deployments. Docker Compose ships all three behind opt-in profiles.
-- **Interface**: installable PWA (offline app shell, web manifest, service worker), dark/light Nebula
-  themes, and full i18n (French & English, with a language switcher).
+- **Files** — explorer with folders, resumable chunked upload, rename/move, trash & restore,
+  versioning, file locking, and per-group quotas.
+- **Search** — recursive, filterable (type, category, starred, modified date), with each hit's location.
+- **Storage backends** — local, S3-compatible and remote (slave-node) drivers, with direct/presigned
+  downloads and per-group speed limits. Optional AES-256-CTR encryption at rest.
+- **Sharing** — file & folder links with permission levels (view / edit / blind deposit), passwords,
+  expiry and download limits; rich OpenGraph unfurls on paste.
+- **Access protocols** — WebDAV over `/dav` and SFTP (resumable), both with dedicated per-user
+  credentials independent of SSO; personal access tokens for API clients.
+- **Preview & editing** — image, video, audio, PDF, text, Markdown and ePub previews; an image
+  editor; and collaborative Office editing via WOPI (OnlyOffice / Collabora) with document locking.
+- **Archives** — background compress/extract (zip / tar / 7z) and grouped ZIP downloads.
+- **Administration** — admin panel; groups with granular permissions and per-group storage policies;
+  SSO-group → group/admin mapping; scheduled maintenance (trash purge, upload cleanup).
+- **Platform** — SQLite / PostgreSQL / MySQL, optional Redis-backed shared cache for multi-node
+  deployments, an installable PWA, dark/light themes and full i18n (English & French).
 
-Not yet done: EXIF/tag metadata & full-text content search, master↔slave cluster orchestration,
-SMTP/email notifications.
+## Quick start (Docker)
 
-## Stack
+```bash
+docker run -p 5212:5212 -v orion-data:/app/data \
+  -e OD_CONF_System_SessionSecret="$(openssl rand -hex 32)" \
+  -e OD_CONF_System_SiteURL="https://drive.example.com" \
+  -e OD_CONF_OIDC_Issuer="https://id.example.com" \
+  -e OD_CONF_OIDC_ClientID="orion" \
+  -e OD_CONF_OIDC_ClientSecret="…" \
+  git.nhsoul.fr/nhpro/orion-drive:latest
+```
 
-- **Backend**: Go 1.26, Gin, GORM (SQLite / PostgreSQL / MySQL, all pure-Go / `CGO_ENABLED=0`),
-  goose migrations, cobra, coreos/go-oidc, `golang.org/x/net/webdav`, optional Redis cache
-- **Frontend**: Vue 3 + Vite + TypeScript + Pinia + vue-router + vue-i18n + vite-plugin-pwa, a custom "Nebula" CSS design system
-  (oklch tokens, dark/light), lucide icons
+Or with Compose (bundles PostgreSQL, Redis and OnlyOffice behind opt-in profiles):
+
+```bash
+docker compose up -d          # http://localhost:5212
+```
+
+## Configuration
+
+Every setting is an INI key (`conf.ini`) overridable by an `OD_CONF_<Section>_<Key>` environment
+variable — see [`conf.ini.example`](conf.ini.example) for the full, documented set. At minimum set
+`System.SessionSecret`, `System.SiteURL` and the `OIDC.*` values. The published image runs in
+`release` mode, so the debug dev-login is compiled out.
 
 ## Development
 
 ```bash
-# 1. Configure (copy and edit OIDC credentials)
-cp conf.ini.example conf.ini
+cp conf.ini.example conf.ini      # configure OIDC (or use dev-login in debug mode)
 
-# 2. Backend
-go run . migrate        # apply DB migrations (goose); `server` also runs these on startup
-go run . server         # start API + embedded SPA on :5212
+# Backend — API + embedded SPA on :5212 (runs pending migrations on startup)
+go run . server
 
-# 3. Frontend (dev, with hot reload proxying the API)
-cd frontend
-npm install
-npm run dev
+# Frontend — Vite dev server with API proxy + hot reload
+cd frontend && npm install && npm run dev
 ```
+
+Useful CLI: `go run . migrate up`, `go run . group …`, `go run . policy add-s3|add-local`.
 
 ## Production build
 
 ```bash
-cd frontend && npm run build     # outputs to application/statics/dist, embedded by the backend
+cd frontend && npm run build      # emits application/statics/dist (embedded by the binary)
 cd .. && go build -o orion-drive .
 ./orion-drive server
 ```
 
-## Docker
+The multi-stage `Dockerfile` does both steps and ships a minimal Alpine runtime (with `ffmpeg` for
+thumbnails); the binary is static (`CGO_ENABLED=0`).
 
-The multi-stage `Dockerfile` builds the frontend, compiles a static Go binary with
-the SPA embedded, and ships a minimal Alpine runtime (with `ffmpeg` for thumbnails).
+## Tech stack
 
-```bash
-# Run the published image with compose (pulls it; data persists in the volume):
-docker compose up -d             # http://localhost:5212
+| | |
+|---|---|
+| **Backend** | Go 1.26 · Gin · GORM (SQLite / PostgreSQL / MySQL, pure-Go) · goose migrations · cobra · coreos/go-oidc · `x/net/webdav` · `pkg/sftp` · aws-sdk-go-v2 · optional Redis |
+| **Frontend** | Vue 3 · Vite · TypeScript · Pinia · vue-router · vue-i18n · vite-plugin-pwa · lucide · a custom **"Nebula"** CSS design system (oklch tokens, dark/light) |
+| **Release** | GoReleaser · Forgejo Actions · Docker |
 
-# Or plain docker with the published image:
-docker pull git.nhsoul.fr/nhpro/orion-drive:latest
-docker run -p 5212:5212 -v orion-data:/app/data \
-  -e OD_CONF_System_SessionSecret="$(openssl rand -hex 32)" \
-  git.nhsoul.fr/nhpro/orion-drive:latest
-
-# Build locally from source instead:
-docker build -t orion-drive .
-```
-
-Configure via `OD_CONF_<Section>_<Key>` environment variables (see `conf.ini.example`).
-Set at least `OD_CONF_System_SessionSecret` and the `OD_CONF_OIDC_*` values for real logins;
-the image runs in `release` mode, so the debug dev-login is disabled.
-
-## Layout
+## Project layout
 
 ```
 cmd/            CLI commands (server, migrate, version, group, policy)
 conf/           configuration (INI + env overrides)
-application/    bootstrap (DI) and embedded statics
-migrations/     goose SQL migrations (embedded)
+application/    bootstrap (DI container) and embedded SPA
+migrations/     goose SQL migrations, per dialect (embedded)
 model/          GORM models
 repository/     data-access layer
-pkg/            auth, cache, serializer, queue, crontab, filemanager (driver/encrypt),
-                archive, thumb, wopi, webdav
+service/        business logic
+pkg/            filemanager (drivers/encrypt), auth, cache, queue, crontab,
+                archive, thumb, wopi, webdav, sftpserver, serializer
 middleware/     Gin middleware
 routers/        HTTP routes and controllers
-service/        business logic
 frontend/       Vue 3 SPA
 ```
+
+## License
+
+[MIT](LICENSE).
