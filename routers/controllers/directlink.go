@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -93,6 +92,7 @@ func (ctl *Controller) DirectLinkContent(c *gin.Context) {
 		return
 	}
 	defer target.Stream.Close()
-	c.Header("Content-Disposition", fmt.Sprintf("inline; filename*=UTF-8''%s", url.PathEscape(target.File.Name)))
-	http.ServeContent(c.Writer, c.Request, target.File.Name, target.File.UpdatedAt, target.Stream)
+	// Direct links are for embedding/hotlinking, so serve inline — but serveContent
+	// only honours inline for viewer-safe types and forces a download otherwise.
+	serveContent(c, target.File.Name, target.File.UpdatedAt, target.Stream, true)
 }

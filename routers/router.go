@@ -73,8 +73,11 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	registerShareRoutes(api, ctl, dep)
 	registerAdminRoutes(api, ctl, dep)
 
-	// Public direct-link content (no authentication).
-	api.GET("/link/:token", ctl.DirectLinkContent)
+	// Public direct-link content (no authentication). Rate-limited per client IP
+	// like the other public content endpoints — it resolves a token and streams a
+	// file with no auth, so it must not be an unbounded amplification surface.
+	linkRL := middleware.RateLimit(dep.Cache, dep.Config.Security.SharePublicRate(), "link")
+	api.GET("/link/:token", linkRL, ctl.DirectLinkContent)
 
 	// WOPI host endpoints (called by the Office editor; authorised by token).
 	wopi := r.Group("/wopi/files")

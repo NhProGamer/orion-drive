@@ -2,12 +2,8 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"mime"
 	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -314,46 +310,16 @@ func (ctl *Controller) Download(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-
 	if target.URL != "" {
 		c.Redirect(http.StatusFound, target.URL)
 		return
 	}
-
 	defer target.Stream.Close()
-	name := target.File.Name
-	if c.Query("inline") != "" {
-		// Serve for in-browser preview (image/video/audio/pdf/text).
-		c.Header("Content-Disposition", fmt.Sprintf("inline; filename*=UTF-8''%s", url.PathEscape(name)))
-		c.Header("Content-Type", inlineContentType(name))
-	} else {
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(name)))
-		c.Header("Content-Type", "application/octet-stream")
-	}
-	http.ServeContent(c.Writer, c.Request, name, target.File.UpdatedAt, target.Stream)
+	serveContent(c, target.File.Name, target.File.UpdatedAt, target.Stream, c.Query("inline") != "")
 }
 
 // extraContentTypes covers extensions the stdlib mime package may not map.
-var extraContentTypes = map[string]string{
-	".md":  "text/markdown; charset=utf-8",
-	".txt": "text/plain; charset=utf-8",
-	".log": "text/plain; charset=utf-8",
-	".go":  "text/plain; charset=utf-8",
-	".csv": "text/csv; charset=utf-8",
-}
-
 // inlineContentType guesses a Content-Type for inline previews.
-func inlineContentType(name string) string {
-	ext := strings.ToLower(path.Ext(name))
-	if ct, ok := extraContentTypes[ext]; ok {
-		return ct
-	}
-	if ct := mime.TypeByExtension(ext); ct != "" {
-		return ct
-	}
-	return "application/octet-stream"
-}
-
 // maxBlobSize caps an in-place binary save (e.g. an edited image).
 const maxBlobSize = 100 << 20
 
