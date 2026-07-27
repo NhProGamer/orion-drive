@@ -79,6 +79,7 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	// WOPI host endpoints (called by the Office editor; authorised by token).
 	wopi := r.Group("/wopi/files")
 	wopi.GET("/:id", ctl.WopiCheckFileInfo)
+	wopi.POST("/:id", ctl.WopiLock) // Lock/Unlock/RefreshLock/GetLock (X-WOPI-Override)
 	wopi.GET("/:id/contents", ctl.WopiGetFile)
 	wopi.POST("/:id/contents", ctl.WopiPutFile)
 

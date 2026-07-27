@@ -117,8 +117,101 @@ func (ctl *Controller) WopiCheckFileInfo(c *gin.Context) {
 		"Version":          version,
 		"UserCanWrite":     canWrite,
 		"SupportsUpdate":   canWrite,
-		"SupportsLocks":    false,
+		"SupportsLocks":    true,
+		"SupportsGetLock":  true,
 	})
+}
+
+// wopiLockTTL is how long a WOPI lock survives without a refresh (the value the
+// spec mandates editors refresh within).
+const wopiLockTTL = 30 * time.Minute
+
+func wopiLockKey(id uint) string { return "wopi:lock:" + strconv.FormatUint(uint64(id), 10) }
+
+// wopiGetLock returns the current lock string for a file ("" if unlocked).
+func (ctl *Controller) wopiGetLock(id uint) string {
+	if b, ok := ctl.dep.Cache.Get(wopiLockKey(id)); ok {
+		return string(b)
+	}
+	return ""
+}
+
+func (ctl *Controller) wopiSetLock(id uint, lock string) {
+	_ = ctl.dep.Cache.Set(wopiLockKey(id), []byte(lock), wopiLockTTL)
+}
+
+func (ctl *Controller) wopiClearLock(id uint) {
+	_ = ctl.dep.Cache.Delete(wopiLockKey(id))
+}
+
+// wopiLockConflict answers a lock-mismatch with 409 and the current lock, as the
+// WOPI protocol requires so the editor can reconcile.
+func wopiLockConflict(c *gin.Context, current string) {
+	c.Header("X-WOPI-Lock", current)
+	c.Status(http.StatusConflict)
+}
+
+// WopiLock handles the WOPI lock operations dispatched by the X-WOPI-Override
+// header (LOCK, UNLOCK, REFRESH_LOCK, GET_LOCK) so concurrent editors don't
+// silently clobber each other. Locks are held in the shared cache and expire
+// after wopiLockTTL if the editor stops refreshing.
+func (ctl *Controller) WopiLock(c *gin.Context) {
+	_, id, canWrite, ok := ctl.wopiFile(c)
+	if !ok {
+		return
+	}
+	op := c.GetHeader("X-WOPI-Override")
+	current := ctl.wopiGetLock(id)
+
+	// GET_LOCK is read-only and always allowed.
+	if op == "GET_LOCK" {
+		c.Header("X-WOPI-Lock", current)
+		c.Status(http.StatusOK)
+		return
+	}
+	if !canWrite {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+
+	lock := c.GetHeader("X-WOPI-Lock")
+	switch op {
+	case "LOCK":
+		// Unlock-and-relock variant: the caller supplies the lock it expects to
+		// replace; only proceed when it matches the one we hold.
+		if old := c.GetHeader("X-WOPI-OldLock"); old != "" {
+			if current != old {
+				wopiLockConflict(c, current)
+				return
+			}
+			ctl.wopiSetLock(id, lock)
+			c.Status(http.StatusOK)
+			return
+		}
+		if current == "" || current == lock {
+			ctl.wopiSetLock(id, lock) // take the lock, or refresh our own
+			c.Status(http.StatusOK)
+			return
+		}
+		wopiLockConflict(c, current)
+	case "REFRESH_LOCK":
+		if current != "" && current == lock {
+			ctl.wopiSetLock(id, lock)
+			c.Status(http.StatusOK)
+			return
+		}
+		wopiLockConflict(c, current)
+	case "UNLOCK":
+		if current != "" && current == lock {
+			ctl.wopiClearLock(id)
+			c.Status(http.StatusOK)
+			return
+		}
+		wopiLockConflict(c, current)
+	default:
+		// PutRelativeFile, RenameFile, and other overrides are not supported.
+		c.AbortWithStatus(http.StatusNotImplemented)
+	}
 }
 
 // WopiGetFile streams the file's content to the editor (WOPI GET contents).
@@ -151,6 +244,14 @@ func (ctl *Controller) WopiPutFile(c *gin.Context) {
 	}
 	if !canWrite {
 		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	// Enforce the lock: reject a save that carries a different lock than the one
+	// currently held, so a second editor cannot overwrite the first's session.
+	// An unlocked file is still writable (first save, or an editor that does not
+	// lock) — this only blocks a genuine lock clash.
+	if current := ctl.wopiGetLock(id); current != "" && current != c.GetHeader("X-WOPI-Lock") {
+		wopiLockConflict(c, current)
 		return
 	}
 	u, err := ctl.dep.Repo.User.GetByID(c.Request.Context(), uid)
