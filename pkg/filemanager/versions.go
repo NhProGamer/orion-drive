@@ -79,7 +79,7 @@ func (m *Manager) DeleteVersion(ctx context.Context, user *model.User, fileID, e
 	if user.StorageUsed < 0 {
 		user.StorageUsed = 0
 	}
-	_ = m.repo.User.Update(ctx, user)
+	m.persistStorage(ctx, user)
 	return nil
 }
 

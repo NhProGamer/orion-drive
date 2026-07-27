@@ -52,7 +52,7 @@ func (m *Manager) PurgeExpiredTrash(ctx context.Context, retention time.Duration
 			if u.StorageUsed < 0 {
 				u.StorageUsed = 0
 			}
-			_ = m.repo.User.Update(ctx, u)
+			m.persistStorage(ctx, u)
 		}
 		if err := m.repo.File.Purge(ctx, owner, ids); err == nil {
 			total += len(ids)

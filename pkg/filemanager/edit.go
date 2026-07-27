@@ -101,6 +101,6 @@ func (m *Manager) storeVersion(ctx context.Context, user *model.User, file *mode
 	}
 
 	user.StorageUsed += size
-	_ = m.repo.User.Update(ctx, user)
+	m.persistStorage(ctx, user)
 	return nil
 }

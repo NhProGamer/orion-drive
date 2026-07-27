@@ -30,7 +30,7 @@ type ArchiveLimits struct {
 	// MaxRatio rejects an archive whose uncompressed size exceeds this many times
 	// its compressed size — an egregious decompression bomb — but only above
 	// RatioFloor, so ordinary highly-compressible files are not flagged.
-	MaxRatio int64
+	MaxRatio   int64
 	RatioFloor int64
 	// Timeout caps how long an extraction may run, bounding CPU on a bomb that is
 	// cheap to read but expensive to decompress (e.g. a gzip bomb).
@@ -424,7 +424,7 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 	}
 
 	user.StorageUsed += size
-	_ = m.repo.User.Update(ctx, user)
+	m.persistStorage(ctx, user)
 	return file, size, nil
 }
 

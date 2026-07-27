@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -457,7 +458,7 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 	if user.StorageUsed < 0 {
 		user.StorageUsed = 0
 	}
-	_ = m.repo.User.Update(ctx, user)
+	m.persistStorage(ctx, user)
 	if err := m.repo.File.Purge(ctx, user.ID, all); err != nil {
 		return err
 	}
@@ -552,6 +553,15 @@ func (m *Manager) Capacity(ctx context.Context, user *model.User) (used, total i
 		total = user.Group.MaxStorage
 	}
 	return used, total, nil
+}
+
+// persistStorage saves the user's hand-maintained StorageUsed counter. A failed
+// write only causes quota drift (not a failed operation), so it is logged rather
+// than propagated — but it must never vanish silently.
+func (m *Manager) persistStorage(ctx context.Context, user *model.User) {
+	if err := m.repo.User.Update(ctx, user); err != nil {
+		slog.Error("storage counter update failed; quota may drift", "user_id", user.ID, "error", err)
+	}
 }
 
 // DownloadTarget is how a file's content should be delivered: either a direct
@@ -739,7 +749,7 @@ func (m *Manager) finalize(ctx context.Context, user *model.User, parentID *uint
 	}
 
 	user.StorageUsed += size
-	_ = m.repo.User.Update(ctx, user)
+	m.persistStorage(ctx, user)
 	m.journalFile(ctx, user.ID, file, false) // new file or new version → upsert
 	return file, nil
 }
