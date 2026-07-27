@@ -1,9 +1,41 @@
 @import './tokens.css';
 @import './drive.css';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Minimal element reset (replaces the former Tailwind preflight; box-sizing and
+   the html/body reset live below). Component classes override these. */
+h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd {
+  margin: 0;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+ul, ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+img, svg, video, canvas {
+  display: block;
+  max-width: 100%;
+}
+table {
+  border-collapse: collapse;
+}
 
 *,
 *::before,
