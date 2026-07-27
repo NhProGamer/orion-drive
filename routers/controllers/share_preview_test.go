@@ -16,6 +16,7 @@ import (
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
+	"github.com/NhProGamer/orion-drive/pkg/wopi"
 	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"github.com/gin-gonic/gin"
@@ -45,7 +46,14 @@ func ogEnv(t *testing.T) (*Controller, *filemanager.Manager, *model.User) {
 	}
 	user, _ = repo.User.GetByID(context.Background(), user.ID)
 	mgr := filemanager.NewManager(repo, cache.NewMemory(), dir, nil, nil)
-	dep := &bootstrap.Dependency{Config: cfg, Repo: repo, Files: mgr, Shares: share.New(repo, mgr)}
+	dep := &bootstrap.Dependency{
+		Config: cfg,
+		Repo:   repo,
+		Files:  mgr,
+		Shares: share.New(repo, mgr),
+		Cache:  cache.NewMemory(),
+		WOPI:   wopi.NewToken("test-secret-please-ignore-12345678901234567890"),
+	}
 	return New(dep), mgr, user
 }
 
@@ -134,6 +142,30 @@ func TestInjectHead(t *testing.T) {
 	noHead := []byte(`<html><body>x</body></html>`)
 	if got := injectHead(noHead, "<meta>"); string(got) != string(noHead) {
 		t.Fatalf("expected unchanged when no </head>, got %s", got)
+	}
+}
+
+func TestSafeInlineType(t *testing.T) {
+	// Viewer-safe types get an inline content type.
+	for name, want := range map[string]string{
+		"a.png": "image/png",
+		"a.JPG": "image/jpeg",
+		"a.mp4": "video/mp4",
+		"a.mp3": "audio/mpeg",
+		"a.pdf": "application/pdf",
+		"a.txt": "text/plain; charset=utf-8",
+		"a.md":  "text/plain; charset=utf-8",
+	} {
+		ct, ok := safeInlineType(name)
+		if !ok || ct != want {
+			t.Errorf("safeInlineType(%q) = (%q,%v), want (%q,true)", name, ct, ok, want)
+		}
+	}
+	// Script-capable / unknown types are refused inline (→ forced download).
+	for _, name := range []string{"a.html", "a.htm", "a.svg", "a.js", "a.xml", "a.zip", "a.exe", "noext"} {
+		if _, ok := safeInlineType(name); ok {
+			t.Errorf("safeInlineType(%q) must be refused inline", name)
+		}
 	}
 }
 

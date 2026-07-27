@@ -408,6 +408,37 @@ func (s *Service) Download(ctx context.Context, token, subPath, password string)
 	return dt, nil
 }
 
+// Inline authorizes a share and returns a download target for in-browser preview
+// of a file at subPath, WITHOUT reserving/counting a download. Previewing is not
+// metered (a media player issues many range requests for one view, which would
+// otherwise multiply the counter), but it is still gated by the share's
+// permission, password/expiry and exhaustion, so an exhausted or protected share
+// reveals nothing.
+func (s *Service) Inline(ctx context.Context, token, subPath, password string) (*filemanager.DownloadTarget, error) {
+	share, err := s.authorize(ctx, token, password)
+	if err != nil {
+		return nil, err
+	}
+	if !share.CanDownload() {
+		return nil, ErrForbidden
+	}
+	if share.Exhausted() {
+		return nil, ErrExhausted
+	}
+	target, err := s.resolve(ctx, share, subPath)
+	if err != nil {
+		return nil, err
+	}
+	if target.IsFolder() {
+		return nil, ErrNotAFile
+	}
+	owner, err := s.repo.User.GetByID(ctx, share.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return s.files.Download(ctx, owner, target.ID)
+}
+
 // ArchiveTarget authorizes a share, resolves the folder to archive at subPath,
 // records the download and returns the owner and target so the caller can stream
 // the ZIP itself (headers must be sent before the stream starts).

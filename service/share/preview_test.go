@@ -146,6 +146,56 @@ func TestMetaSuppressedWhenProtected(t *testing.T) {
 	}
 }
 
+// TestInlineDoesNotCount proves inline preview streams the file without
+// consuming a download slot, while an explicit Download does.
+func TestInlineDoesNotCount(t *testing.T) {
+	svc, mgr, repo, user := previewEnv(t)
+	f := writeFile(t, mgr, user, "photo.png", pngBytes(t))
+	sh, err := svc.Create(context.Background(), user, share.CreateOptions{FileID: f.ID, MaxDownloads: 5})
+	if err != nil {
+		t.Fatalf("create share: %v", err)
+	}
+
+	// Two previews: the counter must not move.
+	for i := 0; i < 2; i++ {
+		tgt, err := svc.Inline(context.Background(), sh.Token, "", "")
+		if err != nil {
+			t.Fatalf("inline: %v", err)
+		}
+		if tgt.Stream != nil {
+			tgt.Stream.Close()
+		}
+	}
+	after, _ := repo.Share.GetByToken(context.Background(), sh.Token)
+	if after.Downloads != 0 {
+		t.Fatalf("inline must not count, downloads=%d", after.Downloads)
+	}
+
+	// An explicit download meters one.
+	tgt, err := svc.Download(context.Background(), sh.Token, "", "")
+	if err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if tgt.Stream != nil {
+		tgt.Stream.Close()
+	}
+	after, _ = repo.Share.GetByToken(context.Background(), sh.Token)
+	if after.Downloads != 1 {
+		t.Fatalf("download should count 1, got %d", after.Downloads)
+	}
+}
+
+// TestInlineRefusedWhenProtected proves inline is gated like a download: a
+// password-protected share yields nothing without the password.
+func TestInlineRefusedWhenProtected(t *testing.T) {
+	svc, mgr, _, user := previewEnv(t)
+	f := writeFile(t, mgr, user, "secret.png", pngBytes(t))
+	sh, _ := svc.Create(context.Background(), user, share.CreateOptions{FileID: f.ID, Password: "p"})
+	if _, err := svc.Inline(context.Background(), sh.Token, "", ""); err == nil {
+		t.Fatalf("inline without password must be refused")
+	}
+}
+
 // TestShareThumbnail proves the public thumbnail returns image bytes for an open
 // image share and is refused for a password-protected one.
 func TestShareThumbnail(t *testing.T) {

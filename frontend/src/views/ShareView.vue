@@ -4,10 +4,10 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Download, Lock, TriangleAlert, Sun, Moon, Folder, FileText, ChevronRight,
-  FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check,
+  FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check, Eye, X,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
-import { kindFromName, fmtSize } from '@/lib/format'
+import { kindFromName, fmtSize, previewKind, canThumbnail } from '@/lib/format'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
@@ -53,6 +53,28 @@ const unavailable = computed(() => data.value && (data.value.expired || data.val
 // previewed; fall back to the type icon if the image fails to load.
 const thumbFailed = ref(false)
 const showThumb = computed(() => !!data.value && !data.value.is_dir && data.value.previewable && !thumbFailed.value)
+
+// In-page inline viewer (image / video / audio / pdf / text). Uncounted preview;
+// the explicit download button still meters. `viewer` holds the open file.
+const viewer = ref<{ path: string; name: string } | null>(null)
+const viewerKind = computed(() => (viewer.value ? previewKind(viewer.value.name) : 'none'))
+const viewerSrc = computed(() =>
+  viewer.value ? api.shareInlineUrl(token, viewer.value.path || undefined, password.value || undefined) : ''
+)
+function canPreview(name: string): boolean {
+  return ['image', 'video', 'audio', 'pdf', 'text'].includes(previewKind(name))
+}
+function openPreview(path: string, name: string) {
+  viewer.value = { path, name }
+}
+// Row icon: the file's thumbnail when the type supports one, else its kind icon.
+function entryIconFailed(e: ShareEntry): boolean {
+  return thumbFailedPaths.value.has(e.path)
+}
+const thumbFailedPaths = ref<Set<string>>(new Set())
+function markThumbFailed(path: string) {
+  thumbFailedPaths.value = new Set(thumbFailedPaths.value).add(path)
+}
 const crumbs = computed(() => {
   const parts = curPath.value ? curPath.value.split('/') : []
   const acc: { name: string; path: string }[] = [{ name: data.value?.name || '', path: '' }]
@@ -91,6 +113,13 @@ async function openList(p: string) {
 
 function downloadFile(entry: ShareEntry) {
   window.location.href = api.shareContentUrl(token, entry.path, password.value || undefined)
+}
+// Clicking a folder opens it; a viewable file previews in-page; anything else
+// downloads.
+function onEntry(entry: ShareEntry) {
+  if (entry.is_dir) openList(entry.path)
+  else if (canPreview(entry.name)) openPreview(entry.path, entry.name)
+  else downloadFile(entry)
 }
 function downloadFolderArchive() {
   window.location.href = api.shareArchiveUrl(token, curPath.value, password.value || undefined)
@@ -272,8 +301,21 @@ async function download() {
             <div class="share-list" :class="{ 'drop-over': dragover && canWrite }">
               <div v-if="!entries.length" class="share-empty">{{ t('shareView.emptyFolder') }}</div>
               <div v-for="e in entries" :key="e.path" class="share-row">
-                <button class="share-row-main" @click="e.is_dir ? openList(e.path) : downloadFile(e)">
-                  <component :is="e.is_dir ? Folder : FileText" :size="16" :class="e.is_dir ? 'tint-folder' : 'tint-neutral'" />
+                <button class="share-row-main" @click="onEntry(e)">
+                  <img
+                    v-if="!e.is_dir && canThumbnail(e.name) && !entryIconFailed(e)"
+                    class="share-row-thumb"
+                    :src="api.shareThumbUrl(token, e.path)"
+                    alt=""
+                    loading="lazy"
+                    @error="markThumbFailed(e.path)"
+                  />
+                  <component
+                    v-else
+                    :is="e.is_dir ? Folder : metaFor(kindFromName(e.name)).icon"
+                    :size="16"
+                    :class="e.is_dir ? 'tint-folder' : 'tint-' + metaFor(kindFromName(e.name)).tint"
+                  />
                   <span class="share-name">{{ e.name }}</span>
                   <span class="mono share-size">{{ e.is_dir ? '' : fmtSize(e.size) }}</span>
                 </button>
@@ -340,6 +382,14 @@ async function download() {
             </label>
             <p v-if="error" style="color: var(--danger); font-size: 12.5px; margin: 0">{{ error }}</p>
             <button
+              v-if="!data.is_dir && canPreview(data.name)"
+              class="btn btn-secondary"
+              style="width: 100%; height: 42px"
+              @click="openPreview('', data.name)"
+            >
+              <Eye :size="16" />{{ t('shareView.preview') }}
+            </button>
+            <button
               v-if="!data.is_dir && ui.canViewOffice(data.name)"
               class="btn btn-secondary"
               style="width: 100%; height: 42px"
@@ -359,5 +409,69 @@ async function download() {
         <p>{{ t('common.loading') }}</p>
       </template>
     </div>
+
+    <!-- In-page inline viewer overlay -->
+    <div v-if="viewer" class="share-viewer" @click.self="viewer = null">
+      <button class="icon-btn share-viewer-close" :title="t('common.close')" @click="viewer = null">
+        <X :size="18" />
+      </button>
+      <img v-if="viewerKind === 'image'" :src="viewerSrc" :alt="viewer.name" class="share-viewer-media" />
+      <video v-else-if="viewerKind === 'video'" :src="viewerSrc" controls autoplay class="share-viewer-media" />
+      <audio v-else-if="viewerKind === 'audio'" :src="viewerSrc" controls autoplay />
+      <iframe v-else-if="viewerKind === 'pdf' || viewerKind === 'text'" :src="viewerSrc" class="share-viewer-frame" />
+      <a
+        class="btn btn-secondary share-viewer-dl"
+        :href="api.shareContentUrl(token, viewer.path || undefined, password || undefined)"
+      >
+        <Download :size="15" />{{ t('common.download') }}
+      </a>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.share-row-thumb {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.share-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 3.5rem 1.5rem 1.5rem;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(4px);
+}
+.share-viewer-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  color: #fff;
+}
+.share-viewer-media {
+  max-width: 92vw;
+  max-height: 78vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.share-viewer-frame {
+  width: min(92vw, 900px);
+  height: 78vh;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+}
+.share-viewer-dl {
+  text-decoration: none;
+}
+</style>

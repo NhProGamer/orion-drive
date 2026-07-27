@@ -334,6 +334,13 @@ export const api = {
     const s = q.toString()
     return `/api/v1/share/${token}/thumb` + (s ? `?${s}` : '')
   },
+  shareInlineUrl: (token: string, path?: string, password?: string) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    if (password) q.set('password', password)
+    q.set('inline', '1')
+    return `/api/v1/share/${token}/content?${q.toString()}`
+  },
 
   // WebDAV credentials
   webdavAccounts: () => get<WebdavAccountList>('/webdav/accounts'),

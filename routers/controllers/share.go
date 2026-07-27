@@ -7,12 +7,14 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/application/statics"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/NhProGamer/orion-drive/service/share"
 	"github.com/gin-gonic/gin"
@@ -161,7 +163,18 @@ func (ctl *Controller) ShareDownload(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 		return
 	}
-	target, err := ctl.dep.Shares.Download(c.Request.Context(), c.Param("token"), c.Query("path"), password)
+	// Inline preview (in-browser viewing) does not count as a download; the
+	// explicit download button hits this endpoint without ?inline and is metered.
+	inline := c.Query("inline") != ""
+	var (
+		target *filemanager.DownloadTarget
+		err    error
+	)
+	if inline {
+		target, err = ctl.dep.Shares.Inline(c.Request.Context(), c.Param("token"), c.Query("path"), password)
+	} else {
+		target, err = ctl.dep.Shares.Download(c.Request.Context(), c.Param("token"), c.Query("path"), password)
+	}
 	if err != nil {
 		failShare(c, err)
 		return
@@ -171,9 +184,43 @@ func (ctl *Controller) ShareDownload(c *gin.Context) {
 		return
 	}
 	defer target.Stream.Close()
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(target.File.Name)))
-	c.Header("Content-Type", "application/octet-stream")
-	http.ServeContent(c.Writer, c.Request, target.File.Name, target.File.UpdatedAt, target.Stream)
+	name := target.File.Name
+	if ct, ok := safeInlineType(name); inline && ok {
+		// Serve viewer-safe types inline; nosniff stops the browser re-interpreting
+		// the bytes (e.g. text/plain as HTML) on our own origin.
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename*=UTF-8''%s", url.PathEscape(name)))
+		c.Header("Content-Type", ct)
+		c.Header("X-Content-Type-Options", "nosniff")
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(name)))
+		c.Header("Content-Type", "application/octet-stream")
+	}
+	http.ServeContent(c.Writer, c.Request, name, target.File.UpdatedAt, target.Stream)
+}
+
+// safeInlineTypes maps file extensions to a Content-Type safe to serve inline to
+// an UNAUTHENTICATED share visitor. It deliberately excludes anything
+// script-capable on our own origin — no text/html, no image/svg+xml — and forces
+// text to text/plain so a browser never renders it as markup.
+var safeInlineTypes = map[string]string{
+	".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+	".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+	".ico": "image/x-icon", ".avif": "image/avif",
+	".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
+	".ogv": "video/ogg", ".mov": "video/quicktime", ".mkv": "video/x-matroska",
+	".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
+	".oga": "audio/ogg", ".opus": "audio/ogg", ".flac": "audio/flac",
+	".m4a": "audio/mp4", ".aac": "audio/aac",
+	".pdf": "application/pdf",
+	".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8",
+	".log": "text/plain; charset=utf-8", ".csv": "text/plain; charset=utf-8",
+}
+
+// safeInlineType returns a viewer-safe Content-Type for name and whether inline
+// serving is permitted for that type (false → force an attachment download).
+func safeInlineType(name string) (string, bool) {
+	ct, ok := safeInlineTypes[strings.ToLower(path.Ext(name))]
+	return ct, ok
 }
 
 // ShareArchive streams a ZIP of a shared folder (or subfolder), no auth.

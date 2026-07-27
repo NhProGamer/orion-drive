@@ -214,6 +214,7 @@
     "deleteConfirm": "Delete \"{name}\"?",
     "editOffice": "Edit in Office",
     "viewOffice": "Open in Office",
+    "preview": "Preview",
     "tooManyRequests": "Too many requests, try again shortly"
   },
   "shares": {
