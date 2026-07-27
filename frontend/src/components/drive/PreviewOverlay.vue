@@ -90,7 +90,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <video v-else-if="kind === 'video'" :src="src" controls class="ov-media"></video>
         <audio v-else-if="kind === 'audio'" :src="src" controls class="ov-audio"></audio>
         <iframe v-else-if="kind === 'pdf'" :src="src" class="ov-frame" title="PDF"></iframe>
-        <EpubViewer v-else-if="kind === 'epub'" :url="src" :key="node.id" />
+        <EpubViewer v-else-if="kind === 'epub'" :url="src" :name="node.name" :key="node.id" />
 
         <template v-else-if="kind === 'text'">
           <div v-if="loading" class="ov-empty">{{ t('common.loading') }}</div>

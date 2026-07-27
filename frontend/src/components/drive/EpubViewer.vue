@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const props = defineProps<{ url: string }>()
+// `name` carries the real filename so foliate can detect name-based formats
+// (CBZ / FB2); content-sniffed formats (EPUB / MOBI / AZW3) work regardless.
+const props = defineProps<{ url: string; name?: string }>()
 
 const host = ref<HTMLElement | null>(null)
 const error = ref(false)
@@ -18,7 +20,7 @@ onMounted(async () => {
     const res = await fetch(props.url, { credentials: 'include' })
     if (!res.ok) throw new Error('fetch failed')
     const blob = await res.blob()
-    const file = new File([blob], 'book.epub', { type: 'application/epub+zip' })
+    const file = new File([blob], props.name || 'book.epub')
     view = document.createElement('foliate-view') as any
     view.style.cssText = 'display:block;width:100%;height:100%'
     host.value?.append(view)
