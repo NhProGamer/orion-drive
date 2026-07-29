@@ -29,6 +29,12 @@ jobs:
           tags: |
             git.nhsoul.fr/nhpro/orion-drive:${{ github.ref_name }}
             git.nhsoul.fr/nhpro/orion-drive:latest
+          # Layer cache stored in the registry itself: it persists indefinitely
+          # (no size-based eviction like the Actions cache) and survives runner
+          # changes. mode=max also caches the intermediate build stages, so
+          # unchanged npm ci / go mod download layers are reused across releases.
+          cache-from: type=registry,ref=git.nhsoul.fr/nhpro/orion-drive:buildcache
+          cache-to: type=registry,ref=git.nhsoul.fr/nhpro/orion-drive:buildcache,mode=max
 
   goreleaser:
     runs-on: ubuntu-latest
