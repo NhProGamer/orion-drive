@@ -154,11 +154,13 @@ TimeoutSeconds = 0
 SharePublicRatePerMin = 120
 
 [Thumbnail]
-; Preview-thumbnail generation. JPG/PNG/GIF/WebP/BMP/TIFF and e-book/comic covers
-; (EPUB/CBZ/FB2/MOBI/AZW3) are handled in pure Go; richer formats use external
-; tools when present: ffmpeg (video frames, audio cover art), libvips
-; (HEIC/AVIF/JXL/SVG/...), LibRaw (camera RAW), LibreOffice + poppler (Office/ODF
-; and PDF). Each external tool is skipped when its binary is missing.
+; Preview-thumbnail generation. Handled in pure Go: JPG/PNG/GIF/WebP/BMP/TIFF,
+; e-book & comic covers (EPUB/CBZ/CBT/FB2/MOBI/AZW3), Photoshop previews
+; (PSD/PSB) and font specimens (TTF/OTF/TTC). Richer formats use external tools
+; when present: ffmpeg (video frames, audio cover art), libvips
+; (HEIC/AVIF/JXL/SVG/ICO/TGA/...), LibRaw (camera RAW), LibreOffice + poppler
+; (Office/ODF, EPS/AI and PDF). Each external tool is skipped when its binary is
+; missing.
 ; Disable          : master off-switch for all thumbnails.
 ; MaxDim / Quality : longest edge in px (default 400) and JPEG quality (default 82).
 ; DisableVideo/Audio/Vips/Raw/PDF/Document/Ebook : force a generator off even if present.

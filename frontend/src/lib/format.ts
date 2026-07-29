@@ -15,7 +15,7 @@ const EXT_KIND: Record<string, string> = {
   js: 'code', ts: 'code', css: 'code', html: 'code', py: 'code', sh: 'code', go: 'code', rs: 'code',
   yml: 'config', yaml: 'config', toml: 'config', env: 'config', conf: 'config', ini: 'config', json: 'config',
   iso: 'disc', img: 'disc',
-  fig: 'design', sketch: 'design',
+  fig: 'design', sketch: 'design', psd: 'design', psb: 'design', ai: 'design', eps: 'design', xcf: 'design',
 }
 
 export function kindFromName(name: string): string {
@@ -53,7 +53,7 @@ export function isMarkdown(name: string): boolean {
 // Extensions the backend can generate a thumbnail for (image built-in / vips /
 // libraw / ffmpeg / poppler / libreoffice). A 404 falls back to the type icon.
 const THUMB_EXT =
-  /\.(jpe?g|png|gif|webp|tiff?|bmp|svg|heic|heif|avif|jxl|jp2|jpx|cr2|cr3|nef|nrw|arw|sr2|srf|dng|raf|orf|rw2|pef|srw|k25|kdc|dcr|mrw|x3f|3fr|mef|iiq|mos|raw|mp4|mov|webm|mkv|m4v|avi|flv|wmv|mpe?g|3gp|3g2|ts|m2ts|mts|ogv|asf|mp3|flac|m4a|aac|ogg|opus|wma|aiff|wav|pdf|docx?|odt|rtf|xlsx?|ods|pptx?|odp|epub|cbz|cbt|fb2|mobi|azw3?)$/i
+  /\.(jpe?g|png|gif|webp|tiff?|bmp|svg|heic|heif|avif|jxl|jp2|jpx|ico|tga|xcf|dds|qoi|pcx|hdr|cr2|cr3|nef|nrw|arw|sr2|srf|dng|raf|orf|rw2|pef|srw|k25|kdc|dcr|mrw|x3f|3fr|mef|iiq|mos|raw|mp4|mov|webm|mkv|m4v|avi|flv|wmv|mpe?g|3gp|3g2|ts|m2ts|mts|ogv|asf|mp3|flac|m4a|aac|ogg|opus|wma|aiff|wav|pdf|docx?|odt|rtf|xlsx?|ods|pptx?|odp|eps|ai|psd|psb|ttf|otf|ttc|otc|epub|cbz|cbt|fb2|mobi|azw3?)$/i
 
 /** Whether OrionDrive may have a thumbnail for this file. */
 export function canThumbnail(name: string): boolean {

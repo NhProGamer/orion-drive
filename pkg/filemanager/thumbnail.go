@@ -80,7 +80,7 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 	}
 
 	switch kind {
-	case thumb.KindImage:
+	case thumb.KindImage, thumb.KindFont:
 		rc, err := m.openContent(ctx, f)
 		if err != nil {
 			return nil, err
@@ -90,8 +90,11 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 		if err != nil {
 			return nil, err
 		}
+		if kind == thumb.KindFont {
+			return thumb.FontSpecimen(data)
+		}
 		return thumb.Image(data)
-	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF, thumb.KindEbook:
+	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF, thumb.KindEbook, thumb.KindPSD:
 		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
@@ -113,6 +116,8 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return thumb.PDF(ctx, p)
 		case thumb.KindEbook:
 			return thumb.Ebook(p, path.Ext(f.Name))
+		case thumb.KindPSD:
+			return thumb.PSD(p)
 		}
 	}
 	return nil, ErrNoThumbnail

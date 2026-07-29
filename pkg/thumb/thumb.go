@@ -3,8 +3,9 @@
 // ffmpeg (video frames, audio cover art), libvips (extended image formats such as
 // HEIC/AVIF/TIFF), LibRaw (camera RAW), and LibreOffice + poppler (Office/ODF
 // documents and PDF). Each external generator is optional and skipped when its
-// binary is missing. E-book / comic covers (EPUB/CBZ/FB2/MOBI/AZW3) are handled
-// in pure Go.
+// binary is missing. E-book / comic covers (EPUB/CBZ/CBT/FB2/MOBI/AZW3),
+// Photoshop previews (PSD/PSB) and font specimens (TTF/OTF/TTC) are handled in
+// pure Go.
 package thumb
 
 import (
@@ -54,6 +55,8 @@ const (
 	KindDocument = "document" // LibreOffice -> PDF -> poppler
 	KindPDF      = "pdf"      // poppler
 	KindEbook    = "ebook"    // built-in Go (epub/cbz/fb2/mobi/azw3 cover art)
+	KindPSD      = "psd"      // built-in Go (embedded Photoshop preview)
+	KindFont     = "font"     // built-in Go (font specimen render)
 )
 
 // Kind reports the thumbnail strategy for a file extension, or "" if none.
@@ -61,7 +64,8 @@ func Kind(ext string) string {
 	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
 	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif":
 		return KindImage
-	case "heic", "heif", "avif", "jxl", "jp2", "jpx", "svg":
+	case "heic", "heif", "avif", "jxl", "jp2", "jpx", "svg",
+		"ico", "tga", "xcf", "dds", "qoi", "pcx", "hdr":
 		return KindVIPS
 	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf",
 		"rw2", "pef", "srw", "k25", "kdc", "dcr", "mrw", "x3f", "3fr", "mef", "iiq", "mos", "raw":
@@ -73,7 +77,12 @@ func Kind(ext string) string {
 		return KindAudio
 	case "epub", "cbz", "cbt", "fb2", "mobi", "azw", "azw3":
 		return KindEbook
-	case "docx", "doc", "odt", "rtf", "xlsx", "xls", "ods", "pptx", "ppt", "odp":
+	case "psd", "psb":
+		return KindPSD
+	case "ttf", "otf", "ttc", "otc":
+		return KindFont
+	case "docx", "doc", "odt", "rtf", "xlsx", "xls", "ods", "pptx", "ppt", "odp",
+		"eps", "ai":
 		return KindDocument
 	case "pdf":
 		return KindPDF
@@ -217,6 +226,8 @@ func Available(kind string) bool {
 		return true
 	case KindEbook:
 		return !disEbook // pure Go, no external tool required
+	case KindPSD, KindFont:
+		return true // pure Go, no external tool required
 	case KindVideo:
 		return !disVideo && FFmpegAvailable()
 	case KindAudio:

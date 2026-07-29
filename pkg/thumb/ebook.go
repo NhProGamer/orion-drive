@@ -1,6 +1,7 @@
 package thumb
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"encoding/base64"
 	"encoding/binary"
@@ -15,7 +16,8 @@ import (
 
 // Ebook extracts the cover image embedded in an e-book / comic file and returns
 // it scaled down as a JPEG. It is pure Go (no external tool) and supports:
-//   - EPUB, CBZ, CBT   — ZIP containers (cover metadata for EPUB, first image otherwise)
+//   - EPUB, CBZ        — ZIP containers (cover metadata for EPUB, first image otherwise)
+//   - CBT              — TAR container (first image page)
 //   - FB2              — XML with base64-embedded binaries
 //   - MOBI, AZW, AZW3  — Palm database with embedded image records (EXTH cover)
 //
@@ -26,8 +28,10 @@ func Ebook(path_ string, ext string) ([]byte, error) {
 	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
 	case "epub":
 		cover, err = epubCover(path_)
-	case "cbz", "cbt":
+	case "cbz":
 		cover, err = zipFirstImage(path_)
+	case "cbt":
+		cover, err = tarFirstImage(path_)
 	case "fb2":
 		cover, err = fb2Cover(path_)
 	case "mobi", "azw", "azw3":
@@ -83,6 +87,43 @@ func readZipEntry(f *zip.File) ([]byte, error) {
 	}
 	defer rc.Close()
 	return io.ReadAll(io.LimitReader(rc, maxCoverSource))
+}
+
+// tarFirstImage returns the lowest-named image entry of a TAR (CBT comic), its
+// cover page. TAR is sequential, so it buffers the best candidate as it scans.
+func tarFirstImage(p string) ([]byte, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	tr := tar.NewReader(f)
+	var bestName string
+	var best []byte
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if h.Typeflag != tar.TypeReg || !imageZipExts[strings.ToLower(path.Ext(h.Name))] {
+			continue
+		}
+		if best != nil && h.Name >= bestName {
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(tr, maxCoverSource))
+		if err != nil {
+			continue
+		}
+		best, bestName = data, h.Name
+	}
+	if best == nil {
+		return nil, fmt.Errorf("thumb: no image in archive")
+	}
+	return best, nil
 }
 
 // --- EPUB ------------------------------------------------------------------
