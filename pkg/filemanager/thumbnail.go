@@ -91,7 +91,7 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return nil, err
 		}
 		return thumb.Image(data)
-	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF:
+	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF, thumb.KindEbook:
 		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
@@ -111,6 +111,8 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return thumb.Document(ctx, p)
 		case thumb.KindPDF:
 			return thumb.PDF(ctx, p)
+		case thumb.KindEbook:
+			return thumb.Ebook(p, path.Ext(f.Name))
 		}
 	}
 	return nil, ErrNoThumbnail

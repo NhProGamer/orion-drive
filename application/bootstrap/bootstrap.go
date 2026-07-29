@@ -82,6 +82,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		DisableRaw:      cfg.Thumbnail.DisableRaw,
 		DisablePDF:      cfg.Thumbnail.DisablePDF,
 		DisableDocument: cfg.Thumbnail.DisableDocument,
+		DisableEbook:    cfg.Thumbnail.DisableEbook,
 		FFmpegPath:      cfg.Thumbnail.FFmpegPath,
 		VipsPath:        cfg.Thumbnail.VipsPath,
 		PopplerPath:     cfg.Thumbnail.PopplerPath,

@@ -41,6 +41,7 @@ type Thumbnail struct {
 	DisableRaw      bool   `ini:"DisableRaw"`
 	DisablePDF      bool   `ini:"DisablePDF"`
 	DisableDocument bool   `ini:"DisableDocument"`
+	DisableEbook    bool   `ini:"DisableEbook"`
 	FFmpegPath      string `ini:"FFmpegPath"`
 	VipsPath        string `ini:"VipsPath"`
 	PopplerPath     string `ini:"PopplerPath"`

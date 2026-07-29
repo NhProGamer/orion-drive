@@ -3,7 +3,8 @@
 // ffmpeg (video frames, audio cover art), libvips (extended image formats such as
 // HEIC/AVIF/TIFF), LibRaw (camera RAW), and LibreOffice + poppler (Office/ODF
 // documents and PDF). Each external generator is optional and skipped when its
-// binary is missing.
+// binary is missing. E-book / comic covers (EPUB/CBZ/FB2/MOBI/AZW3) are handled
+// in pure Go.
 package thumb
 
 import (
@@ -52,6 +53,7 @@ const (
 	KindAudio    = "audio"    // ffmpeg cover art
 	KindDocument = "document" // LibreOffice -> PDF -> poppler
 	KindPDF      = "pdf"      // poppler
+	KindEbook    = "ebook"    // built-in Go (epub/cbz/fb2/mobi/azw3 cover art)
 )
 
 // Kind reports the thumbnail strategy for a file extension, or "" if none.
@@ -59,15 +61,18 @@ func Kind(ext string) string {
 	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
 	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif":
 		return KindImage
-	case "heic", "heif", "avif", "jxl", "jp2", "jpx":
+	case "heic", "heif", "avif", "jxl", "jp2", "jpx", "svg":
 		return KindVIPS
 	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf",
 		"rw2", "pef", "srw", "k25", "kdc", "dcr", "mrw", "x3f", "3fr", "mef", "iiq", "mos", "raw":
 		return KindRaw
-	case "mp4", "mov", "webm", "mkv", "m4v", "avi":
+	case "mp4", "mov", "webm", "mkv", "m4v", "avi",
+		"flv", "wmv", "mpg", "mpeg", "3gp", "3g2", "ts", "m2ts", "mts", "ogv", "asf":
 		return KindVideo
-	case "mp3", "flac", "m4a", "aac", "ogg", "opus":
+	case "mp3", "flac", "m4a", "aac", "ogg", "opus", "wma", "aiff", "wav":
 		return KindAudio
+	case "epub", "cbz", "cbt", "fb2", "mobi", "azw", "azw3":
+		return KindEbook
 	case "docx", "doc", "odt", "rtf", "xlsx", "xls", "ods", "pptx", "ppt", "odp":
 		return KindDocument
 	case "pdf":
@@ -81,20 +86,20 @@ func Kind(ext string) string {
 // back to the default names (resolved on PATH); the disable flags force a
 // generator off even when its binary is present.
 var (
-	disabled                                           bool
-	binFFmpeg                                          = "ffmpeg"
-	binVips                                            = "vips"
-	binPoppler                                         = "pdftoppm"
-	binLibre                                           string // "" → soffice, then libreoffice
-	binLibRaw                                          string // "" → simple_dcraw, then dcraw_emu
-	disVideo, disAudio, disVips, disRaw, disPDF, disDoc bool
+	disabled                                                      bool
+	binFFmpeg                                                     = "ffmpeg"
+	binVips                                                       = "vips"
+	binPoppler                                                    = "pdftoppm"
+	binLibre                                                      string // "" → soffice, then libreoffice
+	binLibRaw                                                     string // "" → simple_dcraw, then dcraw_emu
+	disVideo, disAudio, disVips, disRaw, disPDF, disDoc, disEbook bool
 )
 
 // Options configures the thumbnail generators. A zero value keeps the defaults.
 type Options struct {
-	Disable         bool // master switch: disable all thumbnails
-	MaxDim, Quality int  // 0 keeps the default
-	DisableVideo, DisableAudio, DisableVips, DisableRaw, DisablePDF, DisableDocument bool
+	Disable                                                                                        bool // master switch: disable all thumbnails
+	MaxDim, Quality                                                                                int  // 0 keeps the default
+	DisableVideo, DisableAudio, DisableVips, DisableRaw, DisablePDF, DisableDocument, DisableEbook bool
 	// Binary path overrides (empty = default name resolved on PATH).
 	FFmpegPath, VipsPath, PopplerPath, LibreOfficePath, LibRawPath string
 }
@@ -111,6 +116,7 @@ func Configure(o Options) {
 	disVideo, disAudio = o.DisableVideo, o.DisableAudio
 	disVips, disRaw = o.DisableVips, o.DisableRaw
 	disPDF, disDoc = o.DisablePDF, o.DisableDocument
+	disEbook = o.DisableEbook
 	if o.FFmpegPath != "" {
 		binFFmpeg = o.FFmpegPath
 	}
@@ -209,6 +215,8 @@ func Available(kind string) bool {
 	switch kind {
 	case KindImage:
 		return true
+	case KindEbook:
+		return !disEbook // pure Go, no external tool required
 	case KindVideo:
 		return !disVideo && FFmpegAvailable()
 	case KindAudio:
