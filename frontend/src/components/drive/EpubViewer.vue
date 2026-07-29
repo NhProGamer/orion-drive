@@ -53,10 +53,10 @@ function extOf(name?: string): string {
 }
 
 // buildComicBook opens a CBZ/CBT through the ZIP loader (streamed when src is a
-// RemoteBlob) and forces single-page layout. Comic archives declare no page
-// spread, so foliate's fixed-layout renderer would otherwise pair pages into
-// two-up spreads and push the cover to the right, leaving a phantom blank page
-// before it. spread:'none' renders one centred image per page.
+// RemoteBlob). Comic archives declare no page spread, so foliate's fixed-layout
+// renderer starts an LTR two-up spread with the cover on the right, leaving an
+// empty left page before it. Marking the cover as a centred standalone page
+// removes that phantom blank while keeping the interior pages as two-up spreads.
 async function buildComicBook(src: RemoteBlob | File, name: string) {
   const zip: any = await import('foliate-js/vendor/zip.js')
   zip.configure({ useWebWorkers: false })
@@ -73,7 +73,7 @@ async function buildComicBook(src: RemoteBlob | File, name: string) {
   }
   const { makeComicBook } = await import('foliate-js/comic-book.js')
   const book: any = await makeComicBook(loader, { name })
-  book.rendition = { ...(book.rendition || {}), spread: 'none' }
+  if (book.sections?.length) book.sections[0].pageSpread = 'center'
   return book
 }
 
