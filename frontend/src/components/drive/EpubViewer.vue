@@ -48,6 +48,35 @@ class RemoteBlob {
   }
 }
 
+function extOf(name?: string): string {
+  return (name || '').toLowerCase().split('.').pop() || ''
+}
+
+// buildComicBook opens a CBZ/CBT through the ZIP loader (streamed when src is a
+// RemoteBlob) and forces single-page layout. Comic archives declare no page
+// spread, so foliate's fixed-layout renderer would otherwise pair pages into
+// two-up spreads and push the cover to the right, leaving a phantom blank page
+// before it. spread:'none' renders one centred image per page.
+async function buildComicBook(src: RemoteBlob | File, name: string) {
+  const zip: any = await import('foliate-js/vendor/zip.js')
+  zip.configure({ useWebWorkers: false })
+  const reader = new zip.ZipReader(new zip.BlobReader(src))
+  const entries = await reader.getEntries()
+  const map = new Map<string, any>(entries.map((e: any) => [e.filename, e]))
+  const load = (f: (e: any, ...a: any[]) => any) => (n: string, ...a: any[]) =>
+    map.has(n) ? f(map.get(n), ...a) : null
+  const loader = {
+    entries,
+    loadText: load((e) => e.getData(new zip.TextWriter())),
+    loadBlob: load((e, type) => e.getData(new zip.BlobWriter(type))),
+    getSize: (n: string) => map.get(n)?.uncompressedSize ?? 0,
+  }
+  const { makeComicBook } = await import('foliate-js/comic-book.js')
+  const book: any = await makeComicBook(loader, { name })
+  book.rendition = { ...(book.rendition || {}), spread: 'none' }
+  return book
+}
+
 // probeSize issues a 1-byte range GET (the content route is GET-only, so HEAD
 // is not available): a 206 + Content-Range confirms range support and reveals
 // the total size. Returns 0 when the server does not stream.
@@ -77,11 +106,14 @@ onMounted(async () => {
 
     // Stream every format through range requests when the server supports them;
     // otherwise fall back to a full download. foliate reads only what it needs.
-    let src: RemoteBlob | File
+    const name = props.name || 'book.epub'
     const size = await probeSize(props.url).catch(() => 0)
-    if (size > 0) src = new RemoteBlob(props.url, size, props.name || 'book.epub')
-    else src = await downloadBook()
-    await view.open(src)
+    const src: RemoteBlob | File = size > 0 ? new RemoteBlob(props.url, size, name) : await downloadBook()
+    // Comics need explicit single-page layout; other formats open as-is and
+    // foliate's makeBook detects them from the blob's magic bytes and name.
+    const ext = extOf(props.name)
+    const book = ext === 'cbz' || ext === 'cbt' ? await buildComicBook(src, name) : src
+    await view.open(book)
   } catch {
     error.value = true
   }
