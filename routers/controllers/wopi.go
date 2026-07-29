@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"html"
 	"io"
@@ -32,16 +34,16 @@ const wopiTokenTTL = 10 * time.Hour
 
 // wopiFile verifies the access_token, checks it is bound to :id, and loads the
 // user and file. It writes a 401 and returns false on failure.
-func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite, ok bool) {
+func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite bool, editorID, editorName string, ok bool) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
-		return 0, 0, false, false
+		return 0, 0, false, "", "", false
 	}
-	tf, tu, tw, ts, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
+	tf, tu, tw, ts, ei, en, err := ctl.dep.WOPI.Verify(c.Query("access_token"))
 	if err != nil || tf != id {
 		c.AbortWithStatus(http.StatusUnauthorized)
-		return 0, 0, false, false
+		return 0, 0, false, "", "", false
 	}
 	// For a share-originated session, revalidate the share on every call so that
 	// deleting/expiring/downgrading it takes effect within the token lifetime
@@ -51,16 +53,16 @@ func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite, 
 		cw, valid := ctl.dep.Shares.WOPIStillValid(c.Request.Context(), ts)
 		if !valid {
 			c.AbortWithStatus(http.StatusUnauthorized)
-			return 0, 0, false, false
+			return 0, 0, false, "", "", false
 		}
 		tw = tw && cw
 	}
 	// Proof-key check (opt-in): prove the call really came from the doc server.
 	if !ctl.wopiProofOK(c) {
 		c.AbortWithStatus(http.StatusInternalServerError)
-		return 0, 0, false, false
+		return 0, 0, false, "", "", false
 	}
-	return tu, id, tw, true
+	return tu, id, tw, ei, en, true
 }
 
 // wopiProofOK verifies the WOPI proof-key signature when enabled. It fails
@@ -90,13 +92,8 @@ func (ctl *Controller) wopiProofOK(c *gin.Context) bool {
 
 // WopiCheckFileInfo returns file metadata to the Office editor (WOPI GET).
 func (ctl *Controller) WopiCheckFileInfo(c *gin.Context) {
-	uid, id, canWrite, ok := ctl.wopiFile(c)
+	uid, id, canWrite, editorID, editorName, ok := ctl.wopiFile(c)
 	if !ok {
-		return
-	}
-	u, err := ctl.dep.Repo.User.GetByID(c.Request.Context(), uid)
-	if err != nil {
-		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 	f, err := ctl.dep.Repo.File.GetByID(c.Request.Context(), uid, id)
@@ -112,8 +109,8 @@ func (ctl *Controller) WopiCheckFileInfo(c *gin.Context) {
 		"BaseFileName":     f.Name,
 		"Size":             f.Size,
 		"OwnerId":          fmt.Sprintf("%d", f.OwnerID),
-		"UserId":           fmt.Sprintf("%d", uid),
-		"UserFriendlyName": u.DisplayName(),
+		"UserId":           editorID,
+		"UserFriendlyName": editorName,
 		"Version":          version,
 		"UserCanWrite":     canWrite,
 		"SupportsUpdate":   canWrite,
@@ -156,7 +153,7 @@ func wopiLockConflict(c *gin.Context, current string) {
 // silently clobber each other. Locks are held in the shared cache and expire
 // after wopiLockTTL if the editor stops refreshing.
 func (ctl *Controller) WopiLock(c *gin.Context) {
-	_, id, canWrite, ok := ctl.wopiFile(c)
+	_, id, canWrite, _, _, ok := ctl.wopiFile(c)
 	if !ok {
 		return
 	}
@@ -216,7 +213,7 @@ func (ctl *Controller) WopiLock(c *gin.Context) {
 
 // WopiGetFile streams the file's content to the editor (WOPI GET contents).
 func (ctl *Controller) WopiGetFile(c *gin.Context) {
-	uid, id, _, ok := ctl.wopiFile(c)
+	uid, id, _, _, _, ok := ctl.wopiFile(c)
 	if !ok {
 		return
 	}
@@ -238,7 +235,7 @@ func (ctl *Controller) WopiGetFile(c *gin.Context) {
 
 // WopiPutFile saves editor changes as a new version (WOPI POST contents).
 func (ctl *Controller) WopiPutFile(c *gin.Context) {
-	uid, id, canWrite, ok := ctl.wopiFile(c)
+	uid, id, canWrite, _, _, ok := ctl.wopiFile(c)
 	if !ok {
 		return
 	}
@@ -364,8 +361,10 @@ func (ctl *Controller) OfficeLaunch(c *gin.Context) {
 		return
 	}
 	// The owner always edits their own file; an empty one opens as a new document.
-	// No share token: the owner's own access never needs revalidation.
-	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true, f.Size == 0, "")
+	// No share token: the owner's own access never needs revalidation. The editor
+	// id equals the owner id (matches OwnerId in CheckFileInfo) so the document
+	// server recognises them as the owner.
+	ctl.serveOfficeLauncher(c, id, u.ID, f.Name, true, f.Size == 0, "", strconv.FormatUint(uint64(u.ID), 10), u.DisplayName())
 }
 
 // OfficeLaunchShare opens a shared Office file in the editor for an anonymous
@@ -384,7 +383,26 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 		return
 	}
 	// Bind the token to the share so each WOPI call revalidates it (revocation).
-	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite, false, c.Param("token"))
+	// Every share visitor gets a distinct guest editor identity (unique per open)
+	// so co-editors show up as separate users with their own name, not all as the
+	// file owner. The display name is what the visitor typed, or a generic label.
+	editorName := strings.TrimSpace(c.Query("name"))
+	if editorName == "" {
+		editorName = "Invité"
+	}
+	ctl.serveOfficeLauncher(c, fileID, ownerID, name, canWrite, false, c.Param("token"), guestEditorID(), editorName)
+}
+
+// guestEditorID returns a random opaque identifier for an anonymous share
+// visitor's editing session. It is distinct from any real user id (and from the
+// file's OwnerId), so the document server treats concurrent share editors as
+// separate, non-owner participants.
+func guestEditorID() string {
+	var b [9]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "g0"
+	}
+	return "g" + base64.RawURLEncoding.EncodeToString(b[:])
 }
 
 // serveOfficeLauncher resolves the editor URL for the file's format from the
@@ -392,7 +410,7 @@ func (ctl *Controller) OfficeLaunchShare(c *gin.Context) {
 // and writes the auto-submitting launch page. The write grant is downgraded to
 // view when the format has no editable action, and the request is rejected when
 // the format is not supported at all.
-func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite, preferNew bool, shareToken string) {
+func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, name string, canWrite, preferNew bool, shareToken, editorID, editorName string) {
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(name), "."))
 	base := strings.TrimRight(ctl.dep.Config.System.SiteURL, "/")
 	if base == "" {
@@ -426,7 +444,7 @@ func (ctl *Controller) serveOfficeLauncher(c *gin.Context, fileID, uid uint, nam
 		}
 	}
 
-	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, shareToken, wopiTokenTTL)
+	token, err := ctl.dep.WOPI.Sign(fileID, uid, editable, shareToken, editorID, editorName, wopiTokenTTL)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "cannot start the editor")
 		return

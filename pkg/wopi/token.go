@@ -24,6 +24,11 @@ type payload struct {
 	CanWrite bool   `json:"w,omitempty"`
 	Exp      int64  `json:"e"`
 	Share    string `json:"s,omitempty"` // originating share token (empty for owner sessions)
+	// Editor identity shown in the online editor, distinct from UID (the storage
+	// owner). For the owner it equals their id; for a share visitor it is a unique
+	// per-session id + display name, so co-editors are not all shown as the owner.
+	EditorID   string `json:"i,omitempty"`
+	EditorName string `json:"n,omitempty"`
 }
 
 // Token binds a file and user, signed with the server secret.
@@ -36,8 +41,11 @@ func NewToken(secret string) *Token { return &Token{secret: []byte(secret)} }
 // whether the holder may save changes back (false = view-only). shareToken is
 // the originating public share (empty for an owner editing their own file); it
 // lets the host revalidate the share on each call so revocation takes effect.
-func (t *Token) Sign(fileID, uid uint, canWrite bool, shareToken string, ttl time.Duration) (string, error) {
-	body, err := json.Marshal(payload{FileID: fileID, UID: uid, CanWrite: canWrite, Exp: time.Now().Add(ttl).Unix(), Share: shareToken})
+// editorID/editorName carry the identity shown in the online editor — for a
+// share visitor this is a distinct per-session identity, not the owner's, so
+// co-editors are no longer all labelled with the file owner's name.
+func (t *Token) Sign(fileID, uid uint, canWrite bool, shareToken, editorID, editorName string, ttl time.Duration) (string, error) {
+	body, err := json.Marshal(payload{FileID: fileID, UID: uid, CanWrite: canWrite, Exp: time.Now().Add(ttl).Unix(), Share: shareToken, EditorID: editorID, EditorName: editorName})
 	if err != nil {
 		return "", err
 	}
@@ -45,9 +53,10 @@ func (t *Token) Sign(fileID, uid uint, canWrite bool, shareToken string, ttl tim
 	return enc + "." + b64.EncodeToString(t.mac([]byte(enc))), nil
 }
 
-// Verify checks a token and returns the bound file, user, write permission, and
-// originating share token (empty for an owner session).
-func (t *Token) Verify(token string) (fileID, uid uint, canWrite bool, shareToken string, err error) {
+// Verify checks a token and returns the bound file, user, write permission,
+// originating share token (empty for an owner session), and the editor identity
+// (id + display name) to show in the online editor.
+func (t *Token) Verify(token string) (fileID, uid uint, canWrite bool, shareToken, editorID, editorName string, err error) {
 	var body, sig string
 	for i := 0; i < len(token); i++ {
 		if token[i] == '.' {
@@ -56,24 +65,24 @@ func (t *Token) Verify(token string) (fileID, uid uint, canWrite bool, shareToke
 		}
 	}
 	if body == "" || sig == "" {
-		return 0, 0, false, "", ErrInvalidToken
+		return 0, 0, false, "", "", "", ErrInvalidToken
 	}
 	got, err := b64.DecodeString(sig)
 	if err != nil || !hmac.Equal(t.mac([]byte(body)), got) {
-		return 0, 0, false, "", ErrInvalidToken
+		return 0, 0, false, "", "", "", ErrInvalidToken
 	}
 	raw, err := b64.DecodeString(body)
 	if err != nil {
-		return 0, 0, false, "", ErrInvalidToken
+		return 0, 0, false, "", "", "", ErrInvalidToken
 	}
 	var p payload
 	if err := json.Unmarshal(raw, &p); err != nil {
-		return 0, 0, false, "", ErrInvalidToken
+		return 0, 0, false, "", "", "", ErrInvalidToken
 	}
 	if time.Now().Unix() > p.Exp {
-		return 0, 0, false, "", ErrInvalidToken
+		return 0, 0, false, "", "", "", ErrInvalidToken
 	}
-	return p.FileID, p.UID, p.CanWrite, p.Share, nil
+	return p.FileID, p.UID, p.CanWrite, p.Share, p.EditorID, p.EditorName, nil
 }
 
 func (t *Token) mac(body []byte) []byte {

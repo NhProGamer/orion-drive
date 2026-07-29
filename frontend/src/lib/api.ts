@@ -323,8 +323,8 @@ export const api = {
     shareUrl(token, 'content', { path, password }),
   shareArchiveUrl: (token: string, path?: string, password?: string) =>
     shareUrl(token, 'archive', { path, password }),
-  shareOfficeUrl: (token: string, path?: string, password?: string) =>
-    shareUrl(token, 'office', { path, password }),
+  shareOfficeUrl: (token: string, path?: string, password?: string, name?: string) =>
+    shareUrl(token, 'office', { path, password, name }),
   shareThumbUrl: (token: string, path?: string) => shareUrl(token, 'thumb', { path }),
   shareInlineUrl: (token: string, path?: string, password?: string) =>
     shareUrl(token, 'content', { path, password, inline: '1' }),

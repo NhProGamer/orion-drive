@@ -44,7 +44,9 @@ function officeLabel(name: string): string {
 }
 
 function openOffice(path?: string) {
-  window.open(api.shareOfficeUrl(token, path, password.value || undefined), '_blank')
+  // Pass the visitor's name so collaborative editors show each person by their
+  // own name instead of the file owner's; blank falls back to a generic label.
+  window.open(api.shareOfficeUrl(token, path, password.value || undefined, contributor.value.trim() || undefined), '_blank')
 }
 
 const meta = computed(() => (data.value ? metaFor(kindFromName(data.value.name)) : metaFor('file')))

@@ -42,7 +42,7 @@ func TestWopiLockLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	tok, err := ctl.dep.WOPI.Sign(f.ID, user.ID, true, "", time.Hour)
+	tok, err := ctl.dep.WOPI.Sign(f.ID, user.ID, true, "", "1", "Owner", time.Hour)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestWopiLockLifecycle(t *testing.T) {
 func TestWopiLockReadOnly(t *testing.T) {
 	ctl, mgr, user := ogEnv(t)
 	f, _ := mgr.WriteFile(context.Background(), user, nil, "doc.docx", bytes.NewReader([]byte("x")), 1)
-	tok, _ := ctl.dep.WOPI.Sign(f.ID, user.ID, false, "", time.Hour) // canWrite=false
+	tok, _ := ctl.dep.WOPI.Sign(f.ID, user.ID, false, "", "1", "Owner", time.Hour) // canWrite=false
 	if w := wopiCall(ctl, f.ID, tok, "LOCK", "L1", ""); w.Code != 403 {
 		t.Fatalf("read-only LOCK should be 403, got %d", w.Code)
 	}
@@ -98,7 +98,7 @@ func TestWopiLockReadOnly(t *testing.T) {
 func TestWopiPutFileRespectsLock(t *testing.T) {
 	ctl, mgr, user := ogEnv(t)
 	f, _ := mgr.WriteFile(context.Background(), user, nil, "doc.docx", bytes.NewReader([]byte("orig")), 4)
-	tok, _ := ctl.dep.WOPI.Sign(f.ID, user.ID, true, "", time.Hour)
+	tok, _ := ctl.dep.WOPI.Sign(f.ID, user.ID, true, "", "1", "Owner", time.Hour)
 
 	// Editor A takes the lock.
 	if w := wopiCall(ctl, f.ID, tok, "LOCK", "A", ""); w.Code != 200 {
