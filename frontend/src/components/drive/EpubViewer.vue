@@ -14,17 +14,74 @@ const error = ref(false)
 // <foliate-view> element auto-detects the format and paginates by default.
 let view: any = null
 
+// RemoteBlob is a lazy, Blob-like view over a remote file. foliate's readers
+// (the ZIP loader for EPUB/CBZ, the MOBI/AZW3 record reader) only touch a file
+// through `.size` and `.slice(a, b).arrayBuffer()`, so backing those with HTTP
+// range requests streams the book: only the index and the parts actually read
+// are fetched, never the whole file up front. `<foliate-view>.open()` detects
+// the `arrayBuffer` method and drives format detection off `.name`/`.type`.
+// (FB2 is a single XML document with no random access, so foliate reads it whole
+// through one range request — correct, just not incremental.)
+class RemoteBlob {
+  url: string
+  size: number
+  name: string
+  type = ''
+  constructor(url: string, size: number, name: string) {
+    this.url = url
+    this.size = size
+    this.name = name
+  }
+  private async range(start: number, end: number): Promise<ArrayBuffer> {
+    const res = await fetch(this.url, {
+      credentials: 'include',
+      headers: { Range: `bytes=${start}-${end - 1}` },
+    })
+    if (!res.ok) throw new Error(`range ${start}-${end}: ${res.status}`)
+    return res.arrayBuffer()
+  }
+  arrayBuffer(): Promise<ArrayBuffer> {
+    return this.range(0, this.size)
+  }
+  slice(start = 0, end = this.size) {
+    return { size: end - start, arrayBuffer: () => this.range(start, end) }
+  }
+}
+
+// probeSize issues a 1-byte range GET (the content route is GET-only, so HEAD
+// is not available): a 206 + Content-Range confirms range support and reveals
+// the total size. Returns 0 when the server does not stream.
+async function probeSize(url: string): Promise<number> {
+  const res = await fetch(url, { credentials: 'include', headers: { Range: 'bytes=0-0' } })
+  const cr = res.headers.get('Content-Range') // e.g. "bytes 0-0/12345"
+  if (res.status !== 206 || !cr) return 0
+  const size = Number(cr.split('/')[1])
+  return Number.isFinite(size) && size > 0 ? size : 0
+}
+
+// downloadBook fetches the whole file as a fallback for servers without range
+// support, handing foliate a plain File.
+async function downloadBook(): Promise<File> {
+  const res = await fetch(props.url, { credentials: 'include' })
+  if (!res.ok) throw new Error('fetch failed')
+  const blob = await res.blob()
+  return new File([blob], props.name || 'book.epub')
+}
+
 onMounted(async () => {
   try {
     await import('foliate-js/view.js') // registers the <foliate-view> custom element
-    const res = await fetch(props.url, { credentials: 'include' })
-    if (!res.ok) throw new Error('fetch failed')
-    const blob = await res.blob()
-    const file = new File([blob], props.name || 'book.epub')
     view = document.createElement('foliate-view') as any
     view.style.cssText = 'display:block;width:100%;height:100%'
     host.value?.append(view)
-    await view.open(file)
+
+    // Stream every format through range requests when the server supports them;
+    // otherwise fall back to a full download. foliate reads only what it needs.
+    let src: RemoteBlob | File
+    const size = await probeSize(props.url).catch(() => 0)
+    if (size > 0) src = new RemoteBlob(props.url, size, props.name || 'book.epub')
+    else src = await downloadBook()
+    await view.open(src)
   } catch {
     error.value = true
   }
