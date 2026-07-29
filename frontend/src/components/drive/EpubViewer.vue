@@ -114,6 +114,10 @@ onMounted(async () => {
     const ext = extOf(props.name)
     const book = ext === 'cbz' || ext === 'cbt' ? await buildComicBook(src, name) : src
     await view.open(book)
+    // open() only sets up the renderer; both the paginator and the fixed-layout
+    // renderer start on an empty view (index -1). Render the first page/spread,
+    // exactly as foliate's own reader does after opening.
+    view.renderer?.next?.()
   } catch {
     error.value = true
   }
