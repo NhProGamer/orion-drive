@@ -192,6 +192,11 @@ type WOPI struct {
 	// (X-WOPI-Proof). Off by default since some servers (e.g. OnlyOffice) do not
 	// sign requests; enable it with Collabora/Office Online for defence in depth.
 	VerifyProof bool `ini:"VerifyProof"`
+	// ConvertSecret is the OnlyOffice Document Server JWT secret, used only to
+	// sign document-thumbnail conversion requests. Leave empty for Collabora
+	// (its convert-to API needs no signing); setting it selects the OnlyOffice
+	// conversion path instead.
+	ConvertSecret string `ini:"ConvertSecret"`
 }
 
 // TokenSecret returns the secret used to sign WOPI access tokens, falling back

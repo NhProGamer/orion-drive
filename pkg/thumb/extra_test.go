@@ -3,11 +3,37 @@ package thumb
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
+	"strings"
 	"testing"
 
 	"golang.org/x/image/font/gofont/goregular"
 )
+
+// TestSignJWT produces a verifiable HS256 token for the OnlyOffice convert API.
+func TestSignJWT(t *testing.T) {
+	secret := "s3cr3t"
+	tok, err := signJWT(map[string]any{"filetype": "docx", "outputtype": "png"}, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		t.Fatalf("token has %d parts, want 3", len(parts))
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(parts[0] + "." + parts[1]))
+	want := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if parts[2] != want {
+		t.Error("HS256 signature mismatch")
+	}
+	if hdr, _ := base64.RawURLEncoding.DecodeString(parts[0]); !strings.Contains(string(hdr), "HS256") {
+		t.Errorf("header = %s, want HS256", hdr)
+	}
+}
 
 func be32(v uint32) []byte {
 	b := make([]byte, 4)
@@ -119,6 +145,34 @@ func TestFontSpecimen(t *testing.T) {
 	assertJPEGThumb(t, out)
 }
 
+// makeICO builds a single-entry icon whose image is a PNG.
+func makeICO(t *testing.T, png []byte) []byte {
+	t.Helper()
+	le := binary.LittleEndian
+	var b bytes.Buffer
+	hdr := make([]byte, 6)
+	le.PutUint16(hdr[2:4], 1) // type: icon
+	le.PutUint16(hdr[4:6], 1) // count
+	b.Write(hdr)
+	e := make([]byte, 16)
+	e[0], e[1] = 64, 64 // width, height
+	le.PutUint32(e[8:12], uint32(len(png)))
+	le.PutUint32(e[12:16], 6+16) // offset after header + entry
+	b.Write(e)
+	b.Write(png)
+	return b.Bytes()
+}
+
+// TestICO decodes the largest image out of a Windows icon.
+func TestICO(t *testing.T) {
+	p := writeTemp(t, "icon.ico", makeICO(t, makePNG(t, 64, 64)))
+	out, err := ICO(p)
+	if err != nil {
+		t.Fatalf("ICO: %v", err)
+	}
+	assertJPEGThumb(t, out)
+}
+
 // TestExtraKinds maps the new extensions to the right strategies.
 func TestExtraKinds(t *testing.T) {
 	cases := map[string]string{
@@ -126,14 +180,15 @@ func TestExtraKinds(t *testing.T) {
 		".ttf": KindFont, ".otf": KindFont, ".ttc": KindFont,
 		".cbt": KindEbook,
 		".eps": KindDocument, ".ai": KindDocument,
-		".ico": KindVIPS, ".tga": KindVIPS,
+		".svg": KindSVG, ".svgz": KindSVG,
+		".ico": KindICO, ".tga": KindVIPS,
 	}
 	for ext, want := range cases {
 		if got := Kind(ext); got != want {
 			t.Errorf("Kind(%q) = %q, want %q", ext, got, want)
 		}
 	}
-	for _, k := range []string{KindPSD, KindFont} {
+	for _, k := range []string{KindPSD, KindFont, KindICO} {
 		if !Available(k) {
 			t.Errorf("%s should be available (pure Go)", k)
 		}

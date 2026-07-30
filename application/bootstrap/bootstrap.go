@@ -5,11 +5,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/conf"
+	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
@@ -27,15 +31,15 @@ import (
 
 // Dependency is the application's injected dependency container.
 type Dependency struct {
-	Config *conf.Config
-	Logger *slog.Logger
-	DB     *gorm.DB
-	Cache  cache.Store
-	Repo   *repository.Repository
-	Files  *filemanager.Manager
-	Shares *share.Service
-	Tasks  *queue.Queue
-	Auth   *auth.Authenticator
+	Config   *conf.Config
+	Logger   *slog.Logger
+	DB       *gorm.DB
+	Cache    cache.Store
+	Repo     *repository.Repository
+	Files    *filemanager.Manager
+	Shares   *share.Service
+	Tasks    *queue.Queue
+	Auth     *auth.Authenticator
 	Signer   *auth.Signer
 	WOPI     *wopi.Token
 	WOPIDisc *wopi.Discovery
@@ -88,6 +92,9 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		PopplerPath:     cfg.Thumbnail.PopplerPath,
 		LibreOfficePath: cfg.Thumbnail.LibreOfficePath,
 		LibRawPath:      cfg.Thumbnail.LibRawPath,
+		// Reuse the configured WOPI document server (Collabora) to render
+		// document thumbnails when LibreOffice is not installed locally.
+		DocServerURL: cfg.WOPI.ServerURL,
 	})
 
 	tasks := queue.New(4)
@@ -112,20 +119,57 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 	}
 
 	dep := &Dependency{
-		Config: cfg,
-		Logger: logger,
-		DB:     db,
-		Cache:  c,
-		Repo:   repo,
-		Files:  files,
-		Shares: share.New(repo, files),
-		Tasks:  tasks,
-		Auth:   authn,
+		Config:   cfg,
+		Logger:   logger,
+		DB:       db,
+		Cache:    c,
+		Repo:     repo,
+		Files:    files,
+		Shares:   share.New(repo, files),
+		Tasks:    tasks,
+		Auth:     authn,
 		Signer:   auth.NewSigner(cfg.System.SessionSecret),
 		WOPI:     wopi.NewToken(cfg.WOPI.TokenSecret(cfg.System.SessionSecret)),
 		WOPIDisc: wopi.NewDiscovery(cfg.WOPI.Discovery(), time.Hour),
 	}
+
+	// Render document thumbnails via the configured WOPI document server when
+	// LibreOffice is not installed locally (Collabora upload, or OnlyOffice
+	// fetch-by-URL). Only used by the KindDocument thumbnail path.
+	if cfg.WOPI.ServerURL != "" {
+		files.SetDocThumbnailer(docThumbnailer(cfg, dep.WOPI))
+	}
 	return dep, nil
+}
+
+// docThumbnailer builds the document-server thumbnail fallback. With no
+// ConvertSecret it uploads the file to Collabora's convert-to API; with a
+// secret it drives OnlyOffice's conversion API, which fetches the file itself
+// from a short-lived tokenised WOPI URL (so System.SiteURL must be reachable
+// from the document server).
+func docThumbnailer(cfg *conf.Config, signer *wopi.Token) filemanager.DocThumbFunc {
+	return func(ctx context.Context, f *model.File, path string) ([]byte, error) {
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(f.Name), "."))
+		if cfg.WOPI.ConvertSecret == "" {
+			return thumb.CollaboraConvert(ctx, cfg.WOPI.ServerURL, path)
+		}
+		site := strings.TrimRight(cfg.System.SiteURL, "/")
+		if site == "" {
+			return nil, fmt.Errorf("thumbnail: OnlyOffice conversion needs System.SiteURL")
+		}
+		tok, err := signer.Sign(f.ID, f.OwnerID, false, "",
+			strconv.FormatUint(uint64(f.OwnerID), 10), "thumbnail", 5*time.Minute)
+		if err != nil {
+			return nil, err
+		}
+		fileURL := fmt.Sprintf("%s/wopi/files/%d/contents?access_token=%s", site, f.ID, url.QueryEscape(tok))
+		var ver uint
+		if f.PrimaryEntityID != nil {
+			ver = *f.PrimaryEntityID
+		}
+		key := fmt.Sprintf("odthumb-%d-%d", f.ID, ver)
+		return thumb.OnlyOfficeConvert(ctx, cfg.WOPI.ServerURL, cfg.WOPI.ConvertSecret, fileURL, ext, key)
+	}
 }
 
 // openCache returns the Redis-backed cache when a server is configured,

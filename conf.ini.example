@@ -113,11 +113,17 @@ StoragePath = data/slave-storage
 ; by default (OnlyOffice does not sign); enable with Collabora/Office Online.
 ; Secret signs WOPI access tokens. Empty falls back to System.SessionSecret; set
 ; a dedicated value to rotate the WOPI and session keys independently.
+; ConvertSecret is ONLY for document thumbnails (see [Thumbnail]): leave empty
+; for Collabora (its convert-to API needs no auth); set it to the OnlyOffice
+; Document Server JWT secret to use OnlyOffice's conversion API instead. With
+; OnlyOffice, System.SiteURL must be reachable from the document server (it
+; fetches the file itself). No local LibreOffice is required either way.
 ServerURL =
 DiscoveryURL =
 EditURLTemplate =
 Secret =
 VerifyProof = false
+ConvertSecret =
 
 [SFTP]
 ; Expose the drive over SFTP, authenticated with the SAME dedicated credentials
@@ -158,9 +164,12 @@ SharePublicRatePerMin = 120
 ; e-book & comic covers (EPUB/CBZ/CBT/FB2/MOBI/AZW3), Photoshop previews
 ; (PSD/PSB) and font specimens (TTF/OTF/TTC). Richer formats use external tools
 ; when present: ffmpeg (video frames, audio cover art), libvips
-; (HEIC/AVIF/JXL/SVG/ICO/TGA/...), LibRaw (camera RAW), LibreOffice + poppler
+; (HEIC/AVIF/TGA/...), librsvg (SVG), LibRaw (camera RAW), LibreOffice + poppler
 ; (Office/ODF, EPS/AI and PDF). Each external tool is skipped when its binary is
-; missing.
+; missing. When LibreOffice is absent but a WOPI document server is configured
+; ([WOPI] ServerURL), Office/ODF thumbnails are rendered through it instead — no
+; local LibreOffice needed. Collabora is used directly; for OnlyOffice, also set
+; [WOPI] ConvertSecret (its JWT secret).
 ; Disable          : master off-switch for all thumbnails.
 ; MaxDim / Quality : longest edge in px (default 400) and JPEG quality (default 82).
 ; DisableVideo/Audio/Vips/Raw/PDF/Document/Ebook : force a generator off even if present.

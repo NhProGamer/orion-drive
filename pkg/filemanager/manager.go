@@ -51,7 +51,19 @@ type Manager struct {
 	thumbSem chan struct{}
 	// dedup is the content-addressed deduplication mode: "off", "user" or "global".
 	dedup string
+	// docThumb renders document thumbnails via an external WOPI document server
+	// (Collabora/OnlyOffice) when LibreOffice is not installed locally. Injected
+	// at bootstrap; nil disables the fallback.
+	docThumb DocThumbFunc
 }
+
+// DocThumbFunc renders a JPEG thumbnail for a document file, given its buffered
+// (decrypted) content path. Implementations talk to a Collabora/OnlyOffice
+// document server. See Manager.SetDocThumbnailer.
+type DocThumbFunc func(ctx context.Context, f *model.File, contentPath string) ([]byte, error)
+
+// SetDocThumbnailer wires the external document-server thumbnail fallback.
+func (m *Manager) SetDocThumbnailer(fn DocThumbFunc) { m.docThumb = fn }
 
 // Deduplication modes for SetDedup.
 const (

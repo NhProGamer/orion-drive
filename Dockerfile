@@ -34,14 +34,17 @@ FROM alpine:3.20
 # Thumbnail toolchain (all optional — each generator is skipped if its binary is absent):
 #   ffmpeg        video frames + audio cover art
 #   vips-tools    extended image formats (HEIC/AVIF/TIFF/WebP/...); libheif adds HEIF/AVIF
+#   librsvg       SVG rasterisation (rsvg-convert)
 #   libraw-tools  camera RAW previews (CR2/NEF/ARW/DNG/...)
 #   poppler-utils PDF page rasterisation (pdftoppm)
 # ca-certificates for OIDC/S3 TLS; tzdata for local times.
 # Document (Office/ODF) thumbnails also need LibreOffice — it is NOT installed by
-# default (~800 MB). To enable it, add `libreoffice` to the apk line below.
+# default (~800 MB). Instead of installing it, configure a WOPI document server
+# ([WOPI] ServerURL) — Collabora or OnlyOffice (+ ConvertSecret) — and OrionDrive
+# renders Office thumbnails through it. (Or add `libreoffice` to the apk line.)
 RUN apk add --no-cache \
       ca-certificates tzdata \
-      ffmpeg vips-tools libheif libraw-tools poppler-utils \
+      ffmpeg vips-tools libheif librsvg libraw-tools poppler-utils \
  && adduser -D -u 1000 orion \
  && mkdir -p /app/data \
  && chown -R orion:orion /app

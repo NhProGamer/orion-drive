@@ -94,7 +94,7 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 			return thumb.FontSpecimen(data)
 		}
 		return thumb.Image(data)
-	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF, thumb.KindEbook, thumb.KindPSD:
+	case thumb.KindVideo, thumb.KindAudio, thumb.KindVIPS, thumb.KindRaw, thumb.KindDocument, thumb.KindPDF, thumb.KindEbook, thumb.KindPSD, thumb.KindSVG, thumb.KindICO:
 		// These generators work on a file path; buffer the (decrypted) content.
 		p, err := m.bufferContent(ctx, f)
 		if err != nil {
@@ -111,13 +111,25 @@ func (m *Manager) generateThumb(ctx context.Context, f *model.File, kind string)
 		case thumb.KindRaw:
 			return thumb.Raw(ctx, p)
 		case thumb.KindDocument:
-			return thumb.Document(ctx, p)
+			// Prefer local LibreOffice; otherwise render via the configured
+			// WOPI document server (Collabora/OnlyOffice), if wired.
+			if thumb.LibreOfficeAvailable() {
+				return thumb.Document(ctx, p)
+			}
+			if m.docThumb != nil {
+				return m.docThumb(ctx, f, p)
+			}
+			return nil, ErrNoThumbnail
 		case thumb.KindPDF:
 			return thumb.PDF(ctx, p)
 		case thumb.KindEbook:
 			return thumb.Ebook(p, path.Ext(f.Name))
 		case thumb.KindPSD:
 			return thumb.PSD(p)
+		case thumb.KindSVG:
+			return thumb.SVG(ctx, p)
+		case thumb.KindICO:
+			return thumb.ICO(p)
 		}
 	}
 	return nil, ErrNoThumbnail

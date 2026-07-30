@@ -57,6 +57,8 @@ const (
 	KindEbook    = "ebook"    // built-in Go (epub/cbz/fb2/mobi/azw3 cover art)
 	KindPSD      = "psd"      // built-in Go (embedded Photoshop preview)
 	KindFont     = "font"     // built-in Go (font specimen render)
+	KindICO      = "ico"      // built-in Go (Windows icon)
+	KindSVG      = "svg"      // rsvg-convert (librsvg), falling back to libvips
 )
 
 // Kind reports the thumbnail strategy for a file extension, or "" if none.
@@ -64,9 +66,11 @@ func Kind(ext string) string {
 	switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
 	case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif":
 		return KindImage
-	case "heic", "heif", "avif", "jxl", "jp2", "jpx", "svg",
-		"ico", "tga", "xcf", "dds", "qoi", "pcx", "hdr":
+	case "heic", "heif", "avif", "jxl", "jp2", "jpx",
+		"tga", "xcf", "dds", "qoi", "pcx", "hdr":
 		return KindVIPS
+	case "svg", "svgz":
+		return KindSVG
 	case "cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "dng", "raf", "orf",
 		"rw2", "pef", "srw", "k25", "kdc", "dcr", "mrw", "x3f", "3fr", "mef", "iiq", "mos", "raw":
 		return KindRaw
@@ -81,6 +85,8 @@ func Kind(ext string) string {
 		return KindPSD
 	case "ttf", "otf", "ttc", "otc":
 		return KindFont
+	case "ico":
+		return KindICO
 	case "docx", "doc", "odt", "rtf", "xlsx", "xls", "ods", "pptx", "ppt", "odp",
 		"eps", "ai":
 		return KindDocument
@@ -99,6 +105,7 @@ var (
 	binFFmpeg                                                     = "ffmpeg"
 	binVips                                                       = "vips"
 	binPoppler                                                    = "pdftoppm"
+	binRsvg                                                       = "rsvg-convert"
 	binLibre                                                      string // "" → soffice, then libreoffice
 	binLibRaw                                                     string // "" → simple_dcraw, then dcraw_emu
 	disVideo, disAudio, disVips, disRaw, disPDF, disDoc, disEbook bool
@@ -111,6 +118,9 @@ type Options struct {
 	DisableVideo, DisableAudio, DisableVips, DisableRaw, DisablePDF, DisableDocument, DisableEbook bool
 	// Binary path overrides (empty = default name resolved on PATH).
 	FFmpegPath, VipsPath, PopplerPath, LibreOfficePath, LibRawPath string
+	// DocServerURL is a Collabora document-server base URL used to render
+	// document thumbnails when LibreOffice is not installed (from WOPI.ServerURL).
+	DocServerURL string
 }
 
 // Configure applies runtime settings; called once at startup.
@@ -137,6 +147,7 @@ func Configure(o Options) {
 	}
 	binLibre = o.LibreOfficePath
 	binLibRaw = o.LibRawPath
+	docServerURL = o.DocServerURL
 }
 
 // hasCache memoises binary-presence probes. exec.LookPath scans every $PATH
@@ -203,6 +214,9 @@ func FFmpegAvailable() bool { return has(binFFmpeg) }
 // VipsAvailable reports whether libvips is present (extended image formats).
 func VipsAvailable() bool { return has(binVips) }
 
+// RsvgAvailable reports whether rsvg-convert (librsvg) is present (SVG raster).
+func RsvgAvailable() bool { return has(binRsvg) }
+
 // RawAvailable reports whether a LibRaw tool is present (camera RAW).
 func RawAvailable() bool { return libRawBin() != "" }
 
@@ -226,8 +240,10 @@ func Available(kind string) bool {
 		return true
 	case KindEbook:
 		return !disEbook // pure Go, no external tool required
-	case KindPSD, KindFont:
+	case KindPSD, KindFont, KindICO:
 		return true // pure Go, no external tool required
+	case KindSVG:
+		return !disVips && (RsvgAvailable() || VipsAvailable())
 	case KindVideo:
 		return !disVideo && FFmpegAvailable()
 	case KindAudio:
@@ -239,7 +255,8 @@ func Available(kind string) bool {
 	case KindPDF:
 		return !disPDF && PopplerAvailable()
 	case KindDocument:
-		return !disDoc && LibreOfficeAvailable()
+		// LibreOffice locally, or a Collabora document server as a fallback.
+		return !disDoc && (LibreOfficeAvailable() || docServerURL != "")
 	default:
 		return false
 	}
@@ -329,6 +346,35 @@ func VIPS(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("thumb: vips: %v: %s", err, strings.TrimSpace(errBuf.String()))
 	}
 	return os.ReadFile(out)
+}
+
+// SVG rasterises a vector image to a JPEG thumbnail. It prefers rsvg-convert
+// (librsvg), which is far more capable than libvips' SVG loader, and falls back
+// to libvips when rsvg-convert is not installed.
+func SVG(ctx context.Context, path string) ([]byte, error) {
+	if !has(binRsvg) {
+		return VIPS(ctx, path)
+	}
+	dir, err := os.MkdirTemp("", "thumb-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	out := filepath.Join(dir, "out.png")
+	// -w/-h bound the output; -a preserves the aspect ratio within that box.
+	cmd := exec.CommandContext(ctx, binRsvg,
+		"-w", fmt.Sprintf("%d", maxDim), "-h", fmt.Sprintf("%d", maxDim), "-a",
+		"-o", out, path)
+	var errBuf bytes.Buffer
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("thumb: rsvg-convert: %v: %s", err, strings.TrimSpace(errBuf.String()))
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		return nil, err
+	}
+	return Image(data)
 }
 
 // Raw extracts the embedded preview from a camera RAW file with LibRaw and scales
