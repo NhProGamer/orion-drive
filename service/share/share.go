@@ -56,7 +56,7 @@ func New(repo *repository.Repository, files *filemanager.Manager) *Service {
 // CreateOptions describes a new share link.
 type CreateOptions struct {
 	FileID       uint
-	Permission   string        // "" defaults to read
+	Permission   string // "" defaults to read
 	Password     string
 	ExpiresIn    time.Duration // 0 = never expires
 	MaxDownloads int           // 0 = unlimited
@@ -680,13 +680,20 @@ func (s *Service) uniqueName(ctx context.Context, ownerID uint, parentID *uint, 
 	}
 	ext := path.Ext(name)
 	base := strings.TrimSuffix(name, ext)
-	for i := 2; i < 10000; i++ {
+	// Probe a few human-friendly suffixes ("name (2)", "name (3)", ...).
+	for i := 2; i < 50; i++ {
 		cand := fmt.Sprintf("%s (%d)%s", base, i, ext)
 		if _, err := s.repo.File.FindChildByName(ctx, ownerID, parentID, cand); err != nil {
 			return cand
 		}
 	}
-	return name
+	// Pathological collision count: switch to a random suffix so we settle in one
+	// more probe instead of thousands of sequential queries.
+	cand := fmt.Sprintf("%s (%s)%s", base, randToken(6), ext)
+	if _, err := s.repo.File.FindChildByName(ctx, ownerID, parentID, cand); err != nil {
+		return cand
+	}
+	return cand
 }
 
 // tagProvenance records who contributed a file through a share (best-effort).
