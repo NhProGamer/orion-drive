@@ -423,8 +423,7 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		return nil, 0, err
 	}
 
-	user.StorageUsed += size
-	m.persistStorage(ctx, user)
+	m.addStorage(ctx, user, size)
 	return file, size, nil
 }
 

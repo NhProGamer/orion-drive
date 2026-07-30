@@ -68,6 +68,16 @@ func (r *UserRepo) Update(ctx context.Context, u *model.User) error {
 	return r.db.WithContext(ctx).Save(u).Error
 }
 
+// AddStorage atomically adjusts a user's storage counter by delta (which may be
+// negative), clamped at zero, in a single UPDATE. This avoids the lost-update
+// race of a read-modify-write on the in-memory counter under concurrent
+// uploads/deletes. The CASE expression is portable across sqlite/postgres/mysql.
+func (r *UserRepo) AddStorage(ctx context.Context, id uint, delta int64) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).
+		UpdateColumn("storage_used", gorm.Expr(
+			"CASE WHEN storage_used + ? < 0 THEN 0 ELSE storage_used + ? END", delta, delta)).Error
+}
+
 // DefaultGroupID returns the ID of the earliest-created group (used as the
 // default for auto-provisioned accounts).
 func (r *UserRepo) DefaultGroupID(ctx context.Context) (uint, error) {

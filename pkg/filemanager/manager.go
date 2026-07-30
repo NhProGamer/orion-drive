@@ -443,14 +443,20 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 			members = append(members, member{m.pathString(ctx, user.ID, f, map[uint]string{}), f.IsFolder()})
 		}
 	}
+	var freed int64
 	for _, id := range all {
 		f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)
 		if err != nil {
 			continue
 		}
-		// Remove any share links and direct links pointing at this file.
-		_ = m.repo.Share.DeleteByFile(ctx, user.ID, f.ID)
-		_ = m.repo.DirectLink.DeleteByFile(ctx, user.ID, f.ID)
+		// Remove any share links and direct links pointing at this file. Failures
+		// here would leave dangling links to a purged file, so log rather than drop.
+		if err := m.repo.Share.DeleteByFile(ctx, user.ID, f.ID); err != nil {
+			slog.Warn("purge: removing shares for file failed", "file_id", f.ID, "error", err)
+		}
+		if err := m.repo.DirectLink.DeleteByFile(ctx, user.ID, f.ID); err != nil {
+			slog.Warn("purge: removing direct links for file failed", "file_id", f.ID, "error", err)
+		}
 		// Remove the file's thumbnail, if any (not counted against quota).
 		if t, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil {
 			m.removeEntity(ctx, t.ID)
@@ -459,18 +465,15 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 		versions, _ := m.repo.Entity.ListVersions(ctx, f.ID)
 		if len(versions) == 0 && f.PrimaryEntityID != nil {
 			m.removeEntity(ctx, *f.PrimaryEntityID)
-			user.StorageUsed -= f.Size
+			freed += f.Size
 			continue
 		}
 		for i := range versions {
 			m.removeEntity(ctx, versions[i].ID)
-			user.StorageUsed -= versions[i].Size
+			freed += versions[i].Size
 		}
 	}
-	if user.StorageUsed < 0 {
-		user.StorageUsed = 0
-	}
-	m.persistStorage(ctx, user)
+	m.addStorage(ctx, user, -freed)
 	if err := m.repo.File.Purge(ctx, user.ID, all); err != nil {
 		return err
 	}
@@ -567,11 +570,17 @@ func (m *Manager) Capacity(ctx context.Context, user *model.User) (used, total i
 	return used, total, nil
 }
 
-// persistStorage saves the user's hand-maintained StorageUsed counter. A failed
-// write only causes quota drift (not a failed operation), so it is logged rather
-// than propagated — but it must never vanish silently.
-func (m *Manager) persistStorage(ctx context.Context, user *model.User) {
-	if err := m.repo.User.Update(ctx, user); err != nil {
+// addStorage atomically adjusts the user's storage counter by delta in the
+// database (avoiding the read-modify-write race under concurrent operations) and
+// mirrors the change on the in-memory user so it stays coherent within the
+// request. A failed write only causes quota drift (not a failed operation), so
+// it is logged rather than propagated — but it must never vanish silently.
+func (m *Manager) addStorage(ctx context.Context, user *model.User, delta int64) {
+	user.StorageUsed += delta
+	if user.StorageUsed < 0 {
+		user.StorageUsed = 0
+	}
+	if err := m.repo.User.AddStorage(ctx, user.ID, delta); err != nil {
 		slog.Error("storage counter update failed; quota may drift", "user_id", user.ID, "error", err)
 	}
 }
@@ -760,8 +769,7 @@ func (m *Manager) finalize(ctx context.Context, user *model.User, parentID *uint
 		}
 	}
 
-	user.StorageUsed += size
-	m.persistStorage(ctx, user)
+	m.addStorage(ctx, user, size)
 	m.journalFile(ctx, user.ID, file, false) // new file or new version → upsert
 	return file, nil
 }

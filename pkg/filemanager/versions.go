@@ -75,11 +75,7 @@ func (m *Manager) DeleteVersion(ctx context.Context, user *model.User, fileID, e
 		return errors.New("cannot delete the current version")
 	}
 	m.removeEntity(ctx, e.ID)
-	user.StorageUsed -= e.Size
-	if user.StorageUsed < 0 {
-		user.StorageUsed = 0
-	}
-	m.persistStorage(ctx, user)
+	m.addStorage(ctx, user, -e.Size)
 	return nil
 }
 

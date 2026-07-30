@@ -47,12 +47,7 @@ func (m *Manager) PurgeExpiredTrash(ctx context.Context, retention time.Duration
 	total := 0
 	for owner, ids := range byOwner {
 		if u, err := m.repo.User.GetByID(ctx, owner); err == nil {
-			u.Group = nil // detach association so Save doesn't touch group_id
-			u.StorageUsed -= freed[owner]
-			if u.StorageUsed < 0 {
-				u.StorageUsed = 0
-			}
-			m.persistStorage(ctx, u)
+			m.addStorage(ctx, u, -freed[owner])
 		}
 		if err := m.repo.File.Purge(ctx, owner, ids); err == nil {
 			total += len(ids)

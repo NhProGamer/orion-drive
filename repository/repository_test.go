@@ -108,6 +108,35 @@ func TestAPITokenGetByHash(t *testing.T) {
 	}
 }
 
+// TestUserAddStorage proves the atomic storage counter accumulates deltas and
+// clamps at zero (never goes negative), the invariant that replaced the racy
+// in-memory read-modify-write.
+func TestUserAddStorage(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	u := &model.User{Email: "s@t.u", Subject: "sub-store", GroupID: 1}
+	if err := repo.User.Create(ctx, u); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if err := repo.User.AddStorage(ctx, u.ID, 1000); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := repo.User.AddStorage(ctx, u.ID, 500); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if got, _ := repo.User.GetByID(ctx, u.ID); got.StorageUsed != 1500 {
+		t.Fatalf("after +1000 +500, storage = %d, want 1500", got.StorageUsed)
+	}
+	// Over-subtracting must clamp at zero, not underflow negative.
+	if err := repo.User.AddStorage(ctx, u.ID, -5000); err != nil {
+		t.Fatalf("sub: %v", err)
+	}
+	if got, _ := repo.User.GetByID(ctx, u.ID); got.StorageUsed != 0 {
+		t.Fatalf("after -5000, storage = %d, want 0 (clamped)", got.StorageUsed)
+	}
+}
+
 // TestUserLookup covers the email/id lookups used at login and in auth.
 func TestUserLookup(t *testing.T) {
 	repo := testRepo(t)

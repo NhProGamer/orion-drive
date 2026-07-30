@@ -100,7 +100,6 @@ func (m *Manager) storeVersion(ctx context.Context, user *model.User, file *mode
 		return err
 	}
 
-	user.StorageUsed += size
-	m.persistStorage(ctx, user)
+	m.addStorage(ctx, user, size)
 	return nil
 }
