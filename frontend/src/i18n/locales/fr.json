@@ -258,7 +258,12 @@
     "rotateLeft": "Rotation gauche",
     "rotateRight": "Rotation droite",
     "flipHorizontal": "Miroir horizontal",
-    "flipVertical": "Miroir vertical"
+    "flipVertical": "Miroir vertical",
+    "crop": "Recadrer",
+    "applyCrop": "Appliquer",
+    "undo": "Annuler",
+    "reset": "Réinitialiser",
+    "quality": "Qualité"
   },
   "shell": {
     "myDrive": "Mon Drive",

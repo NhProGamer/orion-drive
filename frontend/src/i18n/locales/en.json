@@ -258,7 +258,12 @@
     "rotateLeft": "Rotate left",
     "rotateRight": "Rotate right",
     "flipHorizontal": "Flip horizontal",
-    "flipVertical": "Flip vertical"
+    "flipVertical": "Flip vertical",
+    "crop": "Crop",
+    "applyCrop": "Apply",
+    "undo": "Undo",
+    "reset": "Reset",
+    "quality": "Quality"
   },
   "shell": {
     "myDrive": "My Drive",

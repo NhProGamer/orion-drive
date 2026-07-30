@@ -69,16 +69,6 @@ html[data-halo='off'] body::before {
   padding: var(--s-2) var(--s-2) 0;
   user-select: none;
 }
-.logo .glyph {
-  color: var(--accent);
-  font-size: 18px;
-  line-height: 1;
-  text-shadow: 0 0 12px var(--accent);
-  transition: transform var(--t-med);
-}
-.logo:hover .glyph {
-  transform: rotate(45deg);
-}
 
 .new-wrap {
   position: relative;
@@ -1985,6 +1975,21 @@ html[data-halo='off'] body::before {
   max-height: 100%;
   object-fit: contain;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+.ov-imgedit-canvas canvas.cropping {
+  cursor: crosshair;
+}
+.ov-imgedit-quality {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ov-imgedit-quality input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
 }
 .ov-imgedit-bar {
   flex: none;
