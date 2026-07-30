@@ -95,6 +95,11 @@ export function fmtEta(seconds: number): string {
   return rm ? `${h} h ${rm} min` : `${h} h`
 }
 
+/** Absolute date + time (short), formatted for the active locale. */
+export function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(currentLocale(), { dateStyle: 'short', timeStyle: 'short' })
+}
+
 /** Relative-then-absolute date, formatted for the active locale. */
 export function fmtDate(iso: string): string {
   const loc = currentLocale()

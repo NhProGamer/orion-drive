@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Server, Cloud, Terminal, HardDrive, Copy, Check, Trash2, Plus, KeyRound, TriangleAlert } from 'lucide-vue-next'
 import { api, type WebdavAccount } from '@/lib/api'
+import { fmtDateTime } from '@/lib/format'
 import { useUiStore } from '@/stores/ui'
 import AccessDialog from './AccessDialog.vue'
 import AccessSwitch from './AccessSwitch.vue'
@@ -76,8 +77,7 @@ function selectAll(e: FocusEvent) {
 }
 
 function fmtDate(s: string | null): string {
-  if (!s) return t('webdav.never')
-  return new Date(s).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
+  return s ? fmtDateTime(s) : t('webdav.never')
 }
 
 onMounted(load)
