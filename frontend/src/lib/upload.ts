@@ -1,6 +1,6 @@
 /** The upload-session fields the chunk driver needs (a subset of UploadInit,
  *  so both the drive and share init responses satisfy it). */
-export interface ChunkInit {
+interface ChunkInit {
   session_id: string
   chunk_size: number
   num_chunks: number

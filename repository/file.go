@@ -214,18 +214,6 @@ func (r *FileRepo) Purge(ctx context.Context, ownerID uint, ids []uint) error {
 		Delete(&model.File{}).Error
 }
 
-// SumSize returns the total size of the owner's non-trashed files.
-func (r *FileRepo) SumSize(ctx context.Context, ownerID uint) (int64, error) {
-	var total *int64
-	err := r.db.WithContext(ctx).Model(&model.File{}).
-		Where("owner_id = ? AND type = ?", ownerID, model.FileTypeFile).
-		Select("COALESCE(SUM(size), 0)").Scan(&total).Error
-	if total == nil {
-		return 0, err
-	}
-	return *total, err
-}
-
 // ListTrashedBefore returns files (any owner) trashed before the given time —
 // used by the background trash-purge job.
 func (r *FileRepo) ListTrashedBefore(ctx context.Context, before time.Time) ([]model.File, error) {

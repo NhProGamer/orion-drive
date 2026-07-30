@@ -23,7 +23,7 @@ export interface KindMeta {
 
 /** Per-kind icon, i18n label key and tint class. `label` is an i18n key
  *  (kinds.*) resolved with t() at render time, so labels are localised. */
-export const kindMeta: Record<string, KindMeta> = {
+const kindMeta: Record<string, KindMeta> = {
   folder: { icon: Folder, label: 'kinds.folder', tint: 'folder' },
   doc: { icon: FileText, label: 'kinds.doc', tint: 'doc' },
   text: { icon: FileText, label: 'kinds.text', tint: 'doc' },
