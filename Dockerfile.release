@@ -1,0 +1,36 @@
+# Slim runtime image used by GoReleaser (see .goreleaser.yaml `dockers`). Unlike
+# the top-level Dockerfile, this does NOT build anything: GoReleaser already
+# compiled the binary (with the SPA embedded) and drops it into the build
+# context, so the image is just the runtime layer + a COPY. This avoids
+# recompiling Go / rebuilding the frontend a second time at release.
+#
+# Thumbnail toolchain (all optional — each generator is skipped if its binary is
+# absent): ffmpeg (video/audio), vips-tools + libheif (HEIC/AVIF/...), librsvg
+# (SVG), libraw-tools (camera RAW), poppler-utils (PDF). ca-certificates for
+# OIDC/S3 TLS; tzdata for local times. Office/ODF thumbnails need either
+# LibreOffice (add `libreoffice` below) or a configured WOPI document server.
+FROM alpine:3.20
+RUN apk add --no-cache \
+      ca-certificates tzdata \
+      ffmpeg vips-tools libheif librsvg libraw-tools poppler-utils \
+ && adduser -D -u 1000 orion \
+ && mkdir -p /app/data \
+ && chown -R orion:orion /app
+WORKDIR /app
+# GoReleaser places the prebuilt binary in the build context as `orion-drive`.
+COPY orion-drive /usr/local/bin/orion-drive
+
+USER orion
+
+# Sensible defaults; override any with OD_CONF_<Section>_<Key> env vars.
+ENV OD_CONF_System_Mode=release \
+    OD_CONF_System_Listen=:5212 \
+    OD_CONF_Database_DBFile=/app/data/orion.db \
+    OD_CONF_Storage_LocalBasePath=/app/data/storage
+
+VOLUME ["/app/data"]
+EXPOSE 5212
+
+# `server` runs migrations then serves the API + embedded SPA on one port.
+ENTRYPOINT ["orion-drive"]
+CMD ["server"]

@@ -4,39 +4,15 @@ on:
   push:
     tags: ["v*"]
 
-# On a tag we (1) build & push the container image and (2) cut the binary
-# release — cross-platform archives + checksums — to Forgejo with GoReleaser.
+# On a tag, GoReleaser does it all in one job: build the frontend once (before
+# hook), cross-compile the binaries, cut the Forgejo release (archives +
+# checksums), AND build+push the container image from the already-compiled
+# linux/amd64 binary (see .goreleaser.yaml `dockers`). This avoids the previous
+# duplicate Go compile + frontend build that a separate docker job incurred.
 # Third-party actions use full github.com URLs because the Forgejo runner
 # resolves bare `owner/repo` against data.forgejo.org, which only mirrors actions/*.
 jobs:
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: https://github.com/docker/setup-buildx-action@v3
-      - uses: https://github.com/docker/login-action@v3
-        with:
-          registry: git.nhsoul.fr
-          username: ${{ github.actor }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
-      - uses: https://github.com/docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            COMMIT=${{ github.sha }}
-          tags: |
-            git.nhsoul.fr/nhpro/orion-drive:${{ github.ref_name }}
-            git.nhsoul.fr/nhpro/orion-drive:latest
-          # Layer cache stored in the registry itself: it persists indefinitely
-          # (no size-based eviction like the Actions cache) and survives runner
-          # changes. mode=max also caches the intermediate build stages, so
-          # unchanged npm ci / go mod download layers are reused across releases.
-          cache-from: type=registry,ref=git.nhsoul.fr/nhpro/orion-drive:buildcache
-          cache-to: type=registry,ref=git.nhsoul.fr/nhpro/orion-drive:buildcache,mode=max
-
-  goreleaser:
+  release:
     runs-on: ubuntu-latest
     steps:
       # Full history + tags are needed for the changelog and version inference.
@@ -54,6 +30,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # Log in so GoReleaser can push the image it builds from the binary.
+      - uses: https://github.com/docker/login-action@v3
+        with:
+          registry: git.nhsoul.fr
+          username: ${{ github.actor }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
       - uses: https://github.com/goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"

@@ -41,6 +41,24 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Build & push the container image from the already-compiled linux/amd64 binary
+# (SPA embedded), so Go is not recompiled and the frontend is not rebuilt a
+# second time. The runner must `docker login` to git.nhsoul.fr beforehand.
+dockers:
+  - id: orion-drive
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.release
+    image_templates:
+      # .Tag keeps the leading "v" (v0.16.1), matching the previous image tags.
+      - "git.nhsoul.fr/nhpro/orion-drive:{{ .Tag }}"
+      - "git.nhsoul.fr/nhpro/orion-drive:latest"
+    build_flag_templates:
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://git.nhsoul.fr/nhpro/orion-drive"
+
 changelog:
   sort: asc
   filters:
