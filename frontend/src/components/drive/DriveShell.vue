@@ -61,8 +61,11 @@ const tokensOpen = ref(false)
 const moveNodes = ref<FileNode[] | null>(null)
 // Off-canvas sidebar drawer (mobile only; ignored on wide layouts via CSS).
 const sidebarOpen = ref(false)
-// Search filter bar toggle (lets users filter without typing a query).
+// Search filter panel toggle (lets users filter without typing a query). It is
+// user-dismissable: reveal it automatically when a search starts, but never
+// force it open, so it can always be closed even while a filter is active.
 const filtersOpen = ref(false)
+watch(() => files.searching, (on) => { if (on) filtersOpen.value = true })
 
 const searchTerm = ref('')
 let searchTimer: number | undefined
@@ -657,7 +660,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Search filters -->
-          <SearchFiltersBar v-if="(filtersOpen || files.searching) && files.view === 'drive'" />
+          <SearchFiltersBar v-if="filtersOpen && files.view === 'drive'" @close="filtersOpen = false" />
 
           <!-- Storage view -->
           <StoragePanel v-if="files.view === 'storage'" :files="files.storageFiles" :total="files.quota.total" @open="files.previewId = $event.id" />

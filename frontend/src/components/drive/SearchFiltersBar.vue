@@ -6,6 +6,7 @@ import { useFilesStore, type SearchType, type SearchKind, type SearchSince } fro
 
 const { t } = useI18n()
 const files = useFilesStore()
+const emit = defineEmits<{ close: [] }>()
 
 const types: { v: SearchType; label: string }[] = [
   { v: '', label: 'search.typeAll' },
@@ -94,6 +95,9 @@ const count = computed(() => files.nodes.length)
       <span class="sf-spacer"></span>
       <button v-if="files.hasFilters" class="sf-clear" @click="files.clearFilters()">
         <X :size="14" />{{ t('search.clearFilters') }}
+      </button>
+      <button class="sf-close" :title="t('common.close')" @click="emit('close')">
+        <X :size="16" />
       </button>
     </header>
 
