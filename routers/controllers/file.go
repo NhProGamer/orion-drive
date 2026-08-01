@@ -225,6 +225,22 @@ func (ctl *Controller) Move(c *gin.Context) {
 }
 
 // Star toggles the starred flag on a file.
+// Ancestors returns the breadcrumb trail (root-first folders) for a file or
+// folder, so the UI can rebuild navigation state from a bookmarked/refreshed URL.
+func (ctl *Controller) Ancestors(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		return
+	}
+	crumbs, err := ctl.dep.Files.Ancestors(c.Request.Context(), ctl.user(c), id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(crumbs))
+}
+
 func (ctl *Controller) Star(c *gin.Context) {
 	var req struct {
 		ID uint `json:"id"`

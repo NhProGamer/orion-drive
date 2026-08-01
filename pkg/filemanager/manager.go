@@ -65,6 +65,12 @@ type DocThumbFunc func(ctx context.Context, f *model.File, contentPath string) (
 // SetDocThumbnailer wires the external document-server thumbnail fallback.
 func (m *Manager) SetDocThumbnailer(fn DocThumbFunc) { m.docThumb = fn }
 
+// Ancestors returns the breadcrumb trail of folders leading to a file or folder
+// owned by the user (used to rebuild navigation from a bookmarked URL).
+func (m *Manager) Ancestors(ctx context.Context, user *model.User, id uint) ([]repository.Crumb, error) {
+	return m.repo.File.Ancestors(ctx, user.ID, id)
+}
+
 // Deduplication modes for SetDedup.
 const (
 	DedupOff    = "off"

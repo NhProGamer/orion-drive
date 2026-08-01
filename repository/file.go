@@ -22,6 +22,39 @@ func (r *FileRepo) GetByID(ctx context.Context, ownerID, id uint) (*model.File, 
 	return &f, err
 }
 
+// Crumb is one hop of a breadcrumb trail (a folder's id and name).
+type Crumb struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
+// Ancestors returns the breadcrumb trail (root-first) of folders leading to the
+// node's containing folder: the folder itself when id is a folder, or its parent
+// chain when id is a file. Owner-scoped; the trail excludes the virtual root.
+func (r *FileRepo) Ancestors(ctx context.Context, ownerID, id uint) ([]Crumb, error) {
+	node, err := r.GetByID(ctx, ownerID, id)
+	if err != nil {
+		return nil, err
+	}
+	cur := node.ParentID
+	if node.IsFolder() {
+		cur = &node.ID
+	}
+	out := []Crumb{}
+	for i := 0; cur != nil && i < 100; i++ { // depth cap guards against cycles
+		f, err := r.GetByID(ctx, ownerID, *cur)
+		if err != nil {
+			break
+		}
+		out = append(out, Crumb{ID: f.ID, Name: f.Name})
+		cur = f.ParentID
+	}
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out, nil
+}
+
 // GetByIDUnscoped loads a file owned by ownerID even if it is trashed (used for
 // download and restore/purge).
 func (r *FileRepo) GetByIDUnscoped(ctx context.Context, ownerID, id uint) (*model.File, error) {

@@ -219,6 +219,7 @@ export const api = {
       max_size?: string
     },
   ) => get<FileNode[]>('/file', { params }),
+  ancestors: (id: number) => get<{ id: number; name: string }[]>('/file/ancestors/' + id),
   createFolder: (parent: string, name: string) =>
     post<FileNode>('/file/folder', { parent, name }),
   ensureFolderPath: (parent: string, path: string) =>

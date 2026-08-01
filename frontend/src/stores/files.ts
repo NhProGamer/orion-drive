@@ -197,6 +197,29 @@ export const useFilesStore = defineStore('files', {
       this.load()
     },
 
+    // Rebuild drive navigation from a bookmarked/refreshed URL: resolve the
+    // breadcrumb trail of a folder (or a file's parent) from the server, load it,
+    // and optionally open the file's preview. id null returns to the drive root.
+    async restoreNav(id: number | null, preview: boolean) {
+      this.view = 'drive'
+      this.q = ''
+      this.filters = emptyFilters()
+      this.clearSel()
+      this.previewId = null
+      this.overlayId = null
+      if (id == null) {
+        this.path = []
+      } else {
+        try {
+          this.path = await api.ancestors(id)
+        } catch {
+          this.path = []
+        }
+      }
+      await this.load()
+      if (preview && id != null) this.overlayId = id // open the file full-screen
+    },
+
     crumbTo(index: number) {
       // index 0 is the view root; 1.. map into the path trail.
       this.path = this.path.slice(0, index)

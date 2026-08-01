@@ -31,8 +31,11 @@ import WebdavDialog from './WebdavDialog.vue'
 import TokensDialog from './TokensDialog.vue'
 import MoveDialog from './MoveDialog.vue'
 import ContextMenu, { type MenuItem } from './ContextMenu.vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const files = useFilesStore()
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -483,8 +486,58 @@ const dropTargetName = computed(() => {
 function onDocClick() {
   if (newMenuOpen.value || accountMenuOpen.value || notifOpen.value) closeMenus()
 }
+// --- URL ⇄ navigation sync (bookmark/refresh a folder or file) ---
+// The drive's current folder is reflected as ?folder=<id> and an open file as
+// ?file=<id>, so a refresh or bookmark lands back where you were.
+let applyingRoute = false
+
+async function applyRoute() {
+  const folder = route.query.folder ? Number(route.query.folder) : null
+  const file = route.query.file ? Number(route.query.file) : null
+  if (folder == null && file == null) {
+    // No target: only reset to root if deep in a drive folder — don't yank
+    // trash/storage/shares back to the drive view.
+    if (files.view === 'drive' && files.folderId != null) {
+      applyingRoute = true
+      try { await files.restoreNav(null, false) } finally { applyingRoute = false }
+    }
+    return
+  }
+  // Already matches the store (e.g. our own URL update) → nothing to do.
+  if (files.view === 'drive' && (files.folderId ?? null) === folder && (files.overlayId ?? null) === (file ?? null)) return
+  applyingRoute = true
+  try {
+    if (file) await files.restoreNav(file, true)
+    else await files.restoreNav(folder, false)
+  } finally {
+    applyingRoute = false
+  }
+}
+
+function syncRoute() {
+  if (applyingRoute) return
+  const query: Record<string, string> = {}
+  if (files.view === 'drive') {
+    if (files.folderId != null) query.folder = String(files.folderId)
+    if (files.overlayId != null) query.file = String(files.overlayId)
+  }
+  if ((route.query.folder ?? undefined) === (query.folder ?? undefined)
+    && (route.query.file ?? undefined) === (query.file ?? undefined)) return
+  router.replace({ query })
+}
+
+watch(() => [files.view, files.folderId, files.overlayId], syncRoute)
+watch(() => route.query, applyRoute)
+
 onMounted(() => {
-  files.init()
+  files.loadCapacity()
+  files.refreshTrashCount()
+  // Initial navigation comes from the URL (folder/file), defaulting to root.
+  const folder = route.query.folder ? Number(route.query.folder) : null
+  const file = route.query.file ? Number(route.query.file) : null
+  applyingRoute = true
+  const done = file ? files.restoreNav(file, true) : files.restoreNav(folder, false)
+  done.finally(() => { applyingRoute = false })
   ui.watchPointer()
   ui.loadOffice()
   document.addEventListener('keydown', onKey)

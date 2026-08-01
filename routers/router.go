@@ -148,6 +148,7 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.Use(middleware.RequireAuth())
 
 	f.GET("/file", ctl.ListFiles)
+	f.GET("/file/ancestors/:id", ctl.Ancestors)
 	f.POST("/file/folder", ctl.CreateFolder)
 	f.POST("/file/folder-path", ctl.EnsureFolderPath)
 	f.POST("/file/rename", ctl.Rename)

@@ -137,6 +137,40 @@ func TestUserAddStorage(t *testing.T) {
 	}
 }
 
+// TestAncestors proves the breadcrumb trail is rebuilt root-first for a folder
+// (including itself) and for a file (its parent chain), and stays owner-scoped.
+func TestAncestors(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	a := &model.File{Name: "A", Type: model.FileTypeFolder, OwnerID: 1}
+	if err := repo.File.Create(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	b := &model.File{Name: "B", Type: model.FileTypeFolder, OwnerID: 1, ParentID: &a.ID}
+	if err := repo.File.Create(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	doc := &model.File{Name: "doc.txt", Type: model.FileTypeFile, OwnerID: 1, ParentID: &b.ID}
+	if err := repo.File.Create(ctx, doc); err != nil {
+		t.Fatal(err)
+	}
+
+	// Folder → trail includes itself.
+	tr, err := repo.File.Ancestors(ctx, 1, b.ID)
+	if err != nil || len(tr) != 2 || tr[0].Name != "A" || tr[1].Name != "B" {
+		t.Fatalf("folder ancestors = %+v (err %v), want [A B]", tr, err)
+	}
+	// File → trail is its parent folders.
+	tr, err = repo.File.Ancestors(ctx, 1, doc.ID)
+	if err != nil || len(tr) != 2 || tr[1].Name != "B" {
+		t.Fatalf("file ancestors = %+v (err %v), want [A B]", tr, err)
+	}
+	// Another owner must not resolve it.
+	if _, err := repo.File.Ancestors(ctx, 2, b.ID); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("cross-owner ancestors must be ErrNotFound, got %v", err)
+	}
+}
+
 // TestUserLookup covers the email/id lookups used at login and in auth.
 func TestUserLookup(t *testing.T) {
 	repo := testRepo(t)
