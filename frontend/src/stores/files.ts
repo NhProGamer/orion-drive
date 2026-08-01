@@ -33,9 +33,15 @@ export interface SearchFilters {
   kind: SearchKind
   starred: boolean
   since: SearchSince
+  after: string // custom range start (yyyy-mm-dd); '' = none. Ignored when `since` is set.
+  before: string // custom range end (yyyy-mm-dd); '' = none.
+  minSize: number // bytes; 0 = none
+  maxSize: number // bytes; 0 = none
 }
 
-const emptyFilters = (): SearchFilters => ({ type: '', kind: '', starred: false, since: '' })
+const emptyFilters = (): SearchFilters => ({
+  type: '', kind: '', starred: false, since: '', after: '', before: '', minSize: 0, maxSize: 0,
+})
 
 // Map a "modified since" preset to an ISO timestamp cutoff.
 const SINCE_DAYS: Record<Exclude<SearchSince, ''>, number> = { '1d': 1, '7d': 7, '30d': 30, '365d': 365 }
@@ -74,7 +80,10 @@ export const useFilesStore = defineStore('files', {
 
   getters: {
     viewLabel: (s) => t(VIEW_LABEL_KEY[s.view]),
-    hasFilters: (s) => !!(s.filters.type || s.filters.kind || s.filters.starred || s.filters.since),
+    hasFilters: (s) => {
+      const f = s.filters
+      return !!(f.type || f.kind || f.starred || f.since || f.after || f.before || f.minSize || f.maxSize)
+    },
     searching(): boolean {
       return this.q.trim().length > 0 || this.hasFilters
     },
@@ -138,7 +147,13 @@ export const useFilesStore = defineStore('files', {
           if (f.since) {
             const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
             params.after = cutoff.toISOString()
+          } else {
+            // Custom date range (only when no relative preset is active).
+            if (f.after) params.after = new Date(f.after + 'T00:00:00').toISOString()
+            if (f.before) params.before = new Date(f.before + 'T23:59:59').toISOString()
           }
+          if (f.minSize > 0) params.min_size = String(f.minSize)
+          if (f.maxSize > 0) params.max_size = String(f.maxSize)
         } else if (this.view === 'trash') params.view = 'trash'
         else params.parent = this.currentParentParam
         this.nodes = await api.list(params)

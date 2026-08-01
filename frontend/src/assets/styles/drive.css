@@ -2446,72 +2446,261 @@ html[data-halo='off'] body::before {
 }
 
 /* Search filter bar */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
+/* Advanced search panel */
+.sf {
   background: var(--bg-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
 }
-.filter-icon {
+.sf-head {
   display: flex;
-  color: var(--fg-3);
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-2);
 }
-.filter-group {
-  display: inline-flex;
-  gap: 4px;
+.sf-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--fg-0);
 }
-.filter-chip {
+.sf-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-fg);
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+  font-variant-numeric: tabular-nums;
+}
+.sf-spacer {
+  flex: 1;
+}
+.sf-clear {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  font-size: 12.5px;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.sf-clear:hover {
+  background: var(--bg-2);
+  color: var(--fg-0);
+}
+.sf-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4) var(--s-5);
+  padding: var(--s-4);
+}
+.sf-group.sf-span {
+  grid-column: 1 / -1;
+}
+.sf-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  font-weight: 600;
+  margin-bottom: var(--s-3);
+}
+.sf-label svg {
+  color: var(--fg-2);
+}
+.sf-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+}
+.sf-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.sf-seg button[aria-pressed='true'] {
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.sf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.sf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
   color: var(--fg-1);
   background: var(--bg-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--r-full);
   cursor: pointer;
   transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
 }
-.filter-chip:hover {
-  border-color: var(--border);
+.sf-chip:hover {
+  border-color: var(--border-strong);
   color: var(--fg-0);
 }
-.filter-chip.active {
+.sf-chip[aria-pressed='true'] {
   background: var(--accent-bg);
   border-color: color-mix(in oklab, var(--accent) 45%, transparent);
   color: var(--accent-fg);
 }
-.filter-sep {
+.sf-vsep {
   width: 1px;
-  height: 18px;
+  align-self: stretch;
+  min-height: 20px;
   background: var(--border-subtle);
+  margin: 0 4px;
 }
-.filter-select {
-  height: 30px;
-  padding: 0 8px;
-  font-size: 12.5px;
-}
-.filter-clear {
+.sf-field {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin-left: auto;
-  border: none;
-  background: transparent;
-  color: var(--fg-2);
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
+}
+.sf-field span {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.sf-field small {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.sf-field input {
+  border: 0;
+  background: transparent;
+  color: var(--fg-0);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  min-width: 0;
+}
+.sf-field.sf-mono input {
+  width: 62px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.sf-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.sf-track {
+  width: 40px;
+  height: 23px;
+  border-radius: var(--r-full);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background var(--t-fast);
+}
+.sf-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: var(--r-full);
+  background: var(--fg-2);
+  transition: transform var(--t-med), background var(--t-fast);
+}
+.sf-switch[aria-pressed='true'] .sf-track {
+  background: var(--accent);
+  border-color: transparent;
+}
+.sf-switch[aria-pressed='true'] .sf-track::after {
+  transform: translateX(17px);
+  background: var(--bg-0);
+}
+.sf-switch-txt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--fg-1);
+}
+.sf-active {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.sf-active-lead {
+  font-size: 12px;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  margin-right: 2px;
+}
+.sf-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 5px 4px 11px;
+  border-radius: var(--r-full);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--fg-1);
+  font-size: 12px;
+}
+.sf-tag button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--fg-3);
   cursor: pointer;
 }
-.filter-clear:hover {
-  background: var(--bg-2);
-  color: var(--fg-0);
+.sf-tag button:hover {
+  background: var(--danger);
+  color: #fff;
+}
+@media (max-width: 640px) {
+  .sf-groups {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Location line shown on search-result cards */
