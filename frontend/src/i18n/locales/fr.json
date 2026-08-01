@@ -453,5 +453,10 @@
     "loadError": "Échec du chargement des jetons",
     "createError": "Échec de création du jeton",
     "revokeError": "Échec de la révocation"
+  },
+  "archive": {
+    "title": "Contenu de l'archive",
+    "empty": "Dossier vide",
+    "error": "Impossible de lire l'archive"
   }
 }

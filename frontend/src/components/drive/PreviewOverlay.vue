@@ -8,6 +8,7 @@ import { renderMarkdown } from '@/lib/markdown'
 import { useFilesStore } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
 import EpubViewer from './EpubViewer.vue'
+import ArchiveViewer from './ArchiveViewer.vue'
 import ImageEditor from './ImageEditor.vue'
 
 const props = defineProps<{ node: FileNode }>()
@@ -91,6 +92,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <audio v-else-if="kind === 'audio'" :src="src" controls class="ov-audio"></audio>
         <iframe v-else-if="kind === 'pdf'" :src="src" class="ov-frame" title="PDF"></iframe>
         <EpubViewer v-else-if="kind === 'epub'" :url="src" :name="node.name" :key="node.id" />
+        <ArchiveViewer v-else-if="kind === 'archive'" :node="node" :key="node.id" />
 
         <template v-else-if="kind === 'text'">
           <div v-if="loading" class="ov-empty">{{ t('common.loading') }}</div>

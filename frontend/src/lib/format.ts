@@ -33,12 +33,14 @@ export function isArchive(name: string): boolean {
   return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
 }
 
-export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'none'
+export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'archive' | 'none'
 
 /** How a file can be previewed inline in the browser. */
 export function previewKind(name: string): PreviewKind {
   // foliate-js renders these e-book / comic formats through the same viewer.
   if (/\.(epub|mobi|azw3?|fb2|cbz)$/i.test(String(name))) return 'epub'
+  // Archives are browsed as a tree (listed from their index, never extracted).
+  if (isArchive(name)) return 'archive'
   const k = kindFromName(name)
   if (k === 'image' || k === 'video' || k === 'audio' || k === 'pdf') return k
   if (k === 'text' || k === 'code' || k === 'config') return 'text'
