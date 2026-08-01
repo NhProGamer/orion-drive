@@ -246,6 +246,11 @@ html[data-halo='off'] body::before {
   background: color-mix(in oklab, var(--bg-1) 65%, transparent);
   backdrop-filter: blur(14px) saturate(1.4);
   flex: none;
+  /* backdrop-filter creates a stacking context that would trap the language /
+     notifications / account dropdowns behind the workspace below; give the bar
+     its own positioned context above the content (but below modal overlays). */
+  position: relative;
+  z-index: 30;
 }
 .searchbox {
   display: flex;
