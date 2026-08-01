@@ -55,6 +55,11 @@ html[data-halo='off'] body::before {
   flex-direction: column;
   gap: var(--s-5);
 }
+/* Keep each block at its natural height so the list rows aren't squeezed to fit
+   the bounded column — .content should scroll, not compress its children. */
+.content > * {
+  flex-shrink: 0;
+}
 
 /* Sidebar */
 .sidebar {
