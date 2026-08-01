@@ -29,6 +29,9 @@ html[data-halo='off'] body::before {
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
+  /* Bound the single row to the viewport (minmax(0,…) lets children shrink) so
+     .main → .content becomes the scroll region instead of growing with content. */
+  grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -36,6 +39,7 @@ html[data-halo='off'] body::before {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0; /* allow .content (overflow-y:auto) to scroll rather than expand */
 }
 .workspace {
   display: flex;
