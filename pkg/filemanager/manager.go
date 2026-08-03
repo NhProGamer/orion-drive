@@ -51,6 +51,8 @@ type Manager struct {
 	thumbSem chan struct{}
 	// dedup is the content-addressed deduplication mode: "off", "user" or "global".
 	dedup string
+	// maxVersions caps kept versions per file; <= 0 means unlimited.
+	maxVersions int
 	// docThumb renders document thumbnails via an external WOPI document server
 	// (Collabora/OnlyOffice) when LibreOffice is not installed locally. Injected
 	// at bootstrap; nil disables the fallback.
@@ -100,8 +102,25 @@ func NewManager(repo *repository.Repository, c cache.Store, tmpDir string, ciphe
 	}
 	return &Manager{
 		repo: repo, cache: c, tmpDir: tmpDir, cipher: cipher, queue: q,
-		archive:  ArchiveLimits{}.withDefaults(),
-		thumbSem: make(chan struct{}, n),
+		archive:     ArchiveLimits{}.withDefaults(),
+		thumbSem:    make(chan struct{}, n),
+		maxVersions: defaultMaxVersions,
+	}
+}
+
+// defaultMaxVersions is the version-retention cap applied when none is configured.
+const defaultMaxVersions = 10
+
+// SetMaxVersions sets the per-file version-retention cap. 0 keeps the built-in
+// default; a negative value keeps unlimited history.
+func (m *Manager) SetMaxVersions(n int) {
+	switch {
+	case n == 0:
+		m.maxVersions = defaultMaxVersions
+	case n < 0:
+		m.maxVersions = 0 // unlimited
+	default:
+		m.maxVersions = n
 	}
 }
 
@@ -776,6 +795,7 @@ func (m *Manager) finalize(ctx context.Context, user *model.User, parentID *uint
 	}
 
 	m.addStorage(ctx, user, size)
+	m.pruneVersions(ctx, user, file)
 	m.journalFile(ctx, user.ID, file, false) // new file or new version → upsert
 	return file, nil
 }

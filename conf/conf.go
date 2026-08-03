@@ -162,6 +162,10 @@ type Storage struct {
 	//            content — an existence-leak side channel). Encrypted policies are
 	//            never deduplicated (random IV per object).
 	Dedup string `ini:"Dedup"`
+	// MaxVersions caps how many versions are kept per file; older ones are pruned
+	// (and their storage freed) on each save. 0 keeps the built-in default (10);
+	// a negative value keeps unlimited history.
+	MaxVersions int `ini:"MaxVersions"`
 }
 
 // Slave turns this node into a storage slave when Secret is set: it exposes the

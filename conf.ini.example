@@ -80,6 +80,10 @@ EncryptionKey =
 ;            that's acceptable for your threat model.
 ; Encrypted policies are never deduplicated (each object has a random IV).
 Dedup = off
+; Per-file version retention. Each save (edit, upload of the same name, Office
+; autosave) keeps a new version; older ones beyond this cap are pruned and their
+; storage freed on the next save. 0 = default (10); negative = unlimited history.
+MaxVersions = 10
 
 [Slave]
 ; Set Secret to turn this node into a storage slave: it then exposes the signed

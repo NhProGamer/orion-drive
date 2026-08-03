@@ -3,12 +3,42 @@ package filemanager
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/NhProGamer/orion-drive/model"
 )
 
 // ErrVersionNotFound is returned when a version does not belong to the file.
 var ErrVersionNotFound = errors.New("version not found")
+
+// pruneVersions enforces the retention cap by removing the oldest versions of f
+// beyond maxVersions (never the current one), freeing their storage. Called
+// after a new version is committed; a no-op when history is unlimited or within
+// the cap. Best-effort: a failure only leaves extra history, so it is logged.
+func (m *Manager) pruneVersions(ctx context.Context, user *model.User, f *model.File) {
+	if m.maxVersions <= 0 {
+		return
+	}
+	versions, err := m.repo.Entity.ListVersions(ctx, f.ID) // newest first
+	if err != nil {
+		slog.Warn("version prune: list failed", "file_id", f.ID, "error", err)
+		return
+	}
+	if len(versions) <= m.maxVersions {
+		return
+	}
+	var freed int64
+	for _, e := range versions[m.maxVersions:] {
+		if f.PrimaryEntityID != nil && e.ID == *f.PrimaryEntityID {
+			continue // never drop the current version
+		}
+		m.removeEntity(ctx, e.ID)
+		freed += e.Size
+	}
+	if freed > 0 {
+		m.addStorage(ctx, user, -freed)
+	}
+}
 
 // Version describes one stored revision of a file.
 type Version struct {

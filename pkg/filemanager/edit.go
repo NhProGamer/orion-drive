@@ -101,5 +101,6 @@ func (m *Manager) storeVersion(ctx context.Context, user *model.User, file *mode
 	}
 
 	m.addStorage(ctx, user, size)
+	m.pruneVersions(ctx, user, file)
 	return nil
 }
