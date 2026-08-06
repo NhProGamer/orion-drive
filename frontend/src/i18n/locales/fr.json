@@ -458,5 +458,10 @@
     "title": "Contenu de l'archive",
     "empty": "Dossier vide",
     "error": "Impossible de lire l'archive"
+  },
+  "tasks": {
+    "title": "Tâches en cours",
+    "extracting": "Extraction",
+    "compressing": "Compression"
   }
 }

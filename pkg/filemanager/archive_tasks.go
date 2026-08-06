@@ -218,6 +218,10 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		// read cheaply: sum the declared uncompressed sizes and reject the whole job
 		// up front if it would not fit — so no partial tree is written. TAR has no
 		// central directory, so it relies on the per-entry streaming bounds below.
+		// total is the number of file entries, when known up front (central-directory
+		// formats), used to report a real extraction percentage. TAR streams, so it
+		// stays 0 and progress is reported as indeterminate (a running file count).
+		fileTotal := 0
 		if fm := archive.Format(f.Name); fm == archive.FormatZip || fm == archive.Format7z {
 			entries, err := archive.List(tmpPath)
 			if err != nil {
@@ -228,7 +232,11 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 			}
 			var declared int64
 			for _, e := range entries {
-				if e.IsDir || e.Size <= 0 {
+				if e.IsDir {
+					continue
+				}
+				fileTotal++
+				if e.Size <= 0 {
 					continue
 				}
 				declared += e.Size
@@ -278,7 +286,11 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 			created = append(created, file.ID)
 			budget -= written
 			count++
-			report(-1, fmt.Sprintf("%d fichier(s) extrait(s)", count))
+			pct := -1 // indeterminate (streaming formats)
+			if fileTotal > 0 {
+				pct = count * 100 / fileTotal
+			}
+			report(pct, fmt.Sprintf("%d fichier(s) extrait(s)", count))
 			return nil
 		})
 		if err != nil {

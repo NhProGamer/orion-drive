@@ -458,5 +458,10 @@
     "title": "Archive contents",
     "empty": "Empty folder",
     "error": "Could not read the archive"
+  },
+  "tasks": {
+    "title": "Background tasks",
+    "extracting": "Extracting",
+    "compressing": "Compressing"
   }
 }

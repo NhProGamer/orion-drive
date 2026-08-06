@@ -25,6 +25,7 @@ import PreviewOverlay from './PreviewOverlay.vue'
 import StoragePanel from './StoragePanel.vue'
 import SharesPanel from './SharesPanel.vue'
 import UploadsPanel from './UploadsPanel.vue'
+import TasksPanel from './TasksPanel.vue'
 import Toasts from './Toasts.vue'
 import ShareDialog from './ShareDialog.vue'
 import WebdavDialog from './WebdavDialog.vue'
@@ -532,6 +533,7 @@ watch(() => route.query, applyRoute)
 onMounted(() => {
   files.loadCapacity()
   files.refreshTrashCount()
+  files.restoreTasks() // re-attach to background jobs still running (survives refresh)
   // Initial navigation comes from the URL (folder/file), defaulting to root.
   const folder = route.query.folder ? Number(route.query.folder) : null
   const file = route.query.file ? Number(route.query.file) : null
@@ -864,7 +866,10 @@ onUnmounted(() => {
     <TokensDialog v-if="tokensOpen" @close="tokensOpen = false" />
     <MoveDialog v-if="moveNodes" :nodes="moveNodes" @close="moveNodes = null" @moved="moveNodes = null" />
 
-    <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
+    <div v-if="files.uploads.length || files.tasks.length" class="corner-stack">
+      <TasksPanel v-if="files.tasks.length" :tasks="files.tasks" />
+      <UploadsPanel v-if="files.uploads.length" :uploads="files.uploads" />
+    </div>
     <Toasts />
 
     <div v-if="dragDepth > 0" class="drop-overlay">

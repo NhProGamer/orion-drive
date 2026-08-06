@@ -19,6 +19,15 @@ export interface Upload {
   done: boolean
 }
 
+// A tracked background job (archive extraction / compression). Progress is a
+// percentage, or -1 when indeterminate (streaming formats report a running count).
+export interface BgTask {
+  id: string
+  type: string // 'extract' | 'compress'
+  progress: number
+  message: string
+}
+
 interface Crumb {
   id: number | null
   name: string
@@ -70,6 +79,7 @@ export const useFilesStore = defineStore('files', {
     previewId: null as number | null,
     overlayId: null as number | null, // full-screen content preview
     uploads: [] as Upload[],
+    tasks: [] as BgTask[], // tracked background jobs (extract/compress), shown live
     quota: { used: 0, total: 0 },
     trashCount: 0,
     storageFiles: [] as FileNode[], // full non-trashed file list for the storage view
@@ -452,30 +462,73 @@ export const useFilesStore = defineStore('files', {
       window.open(api.archiveUrl(ids), '_blank')
     },
 
-    // Poll a background task until it finishes, then run onDone.
-    pollTask(id: string, onDone: () => void) {
+    // Track a background job in `tasks` (so its progress shows live), polling
+    // until it finishes. Idempotent: re-tracking an already-tracked id is a no-op,
+    // so restoreTasks() can safely re-attach after a page refresh.
+    trackTask(id: string, type: string, onDone: () => void) {
+      if (this.tasks.some((t) => t.id === id)) return
+      this.tasks.push({ id, type, progress: 0, message: '' })
+      const remove = () => {
+        this.tasks = this.tasks.filter((t) => t.id !== id)
+      }
       const started = Date.now()
       const tick = async () => {
         try {
           const task = await api.taskStatus(id)
-          if (task.status === 'done') return onDone()
+          const cur = this.tasks.find((t) => t.id === id)
+          if (cur) {
+            cur.progress = task.progress
+            cur.message = task.message
+          }
+          if (task.status === 'done') {
+            remove()
+            return onDone()
+          }
           if (task.status === 'failed') {
+            remove()
             this.ui().toast(t('files.taskFailed') + (task.error ? ` : ${task.error}` : ''), 'x')
             return
           }
         } catch {
           /* keep polling */
         }
-        if (Date.now() - started < 120000) setTimeout(tick, 500)
+        // Bound the poll; extraction may take a while, so allow up to 30 min.
+        if (Date.now() - started < 1_800_000) setTimeout(tick, 500)
+        else remove()
       }
       setTimeout(tick, 300)
+    },
+
+    // Re-attach to the user's still-running background jobs after a page refresh,
+    // so their progress reappears (survives reload). Called on startup.
+    async restoreTasks() {
+      try {
+        const jobs = await api.taskList()
+        for (const j of jobs) {
+          if (j.status === 'running' || j.status === 'pending') {
+            const done =
+              j.type === 'extract'
+                ? async () => {
+                    await Promise.all([this.load(), this.loadCapacity()])
+                    this.ui().toast(t('files.archiveExtracted'), 'file-archive')
+                  }
+                : async () => {
+                    await Promise.all([this.load(), this.loadCapacity()])
+                    this.ui().toast(t('files.archiveCreated'), 'file-archive')
+                  }
+            this.trackTask(j.id, j.type, done)
+          }
+        }
+      } catch {
+        /* no tasks / not reachable */
+      }
     },
 
     async compress(ids: number[]) {
       if (!ids.length) return
       const task = await api.compress(this.currentParentParam, ids)
       this.ui().toast(t('files.compressing'), 'file-archive')
-      this.pollTask(task.id, async () => {
+      this.trackTask(task.id, 'compress', async () => {
         await Promise.all([this.load(), this.loadCapacity()])
         this.ui().toast(t('files.archiveCreated'), 'file-archive')
       })
@@ -490,7 +543,7 @@ export const useFilesStore = defineStore('files', {
     async extract(node: FileNode) {
       const task = await api.extract(node.id, this.currentParentParam)
       this.ui().toast(t('files.extracting'), 'file-archive')
-      this.pollTask(task.id, async () => {
+      this.trackTask(task.id, 'extract', async () => {
         await Promise.all([this.load(), this.loadCapacity()])
         this.ui().toast(t('files.archiveExtracted'), 'file-archive')
       })

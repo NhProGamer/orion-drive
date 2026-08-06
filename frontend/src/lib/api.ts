@@ -247,6 +247,7 @@ export const api = {
   extract: (id: number, parent: string) => post<Task>('/file/archive/extract', { id, parent }),
   archiveEntries: (id: number) => get<ArchiveEntry[]>(`/file/archive/entries/${id}`),
   taskStatus: (id: string) => get<Task>(`/task/${id}`),
+  taskList: () => get<Task[]>('/task'),
 
   // Locking
   lock: (id: number) => post<FileNode>('/file/lock', { id }),
