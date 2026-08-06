@@ -30,7 +30,27 @@ func OpenDatabase(cfg *conf.Config) (*gorm.DB, error) {
 				return nil, fmt.Errorf("create db dir: %w", err)
 			}
 		}
-		return gorm.Open(sqlite.Open(cfg.Database.DBFile), gormCfg)
+		// SQLite tuning for a concurrent server: WAL lets readers run while a
+		// writer is active, busy_timeout makes a contended lock wait instead of
+		// failing immediately, NORMAL sync is safe under WAL. Without these,
+		// parallel writers (e.g. several SFTP uploads at once) hit SQLITE_BUSY.
+		dsn := cfg.Database.DBFile +
+			"?_pragma=journal_mode(WAL)" +
+			"&_pragma=busy_timeout(10000)" +
+			"&_pragma=synchronous(NORMAL)" +
+			"&_pragma=foreign_keys(ON)"
+		db, err := gorm.Open(sqlite.Open(dsn), gormCfg)
+		if err != nil {
+			return nil, err
+		}
+		// SQLite allows only ONE writer at a time, and the pure-Go driver breaks
+		// under concurrent transactions ("cannot start a transaction within a
+		// transaction"). Serialise all access through a single connection so
+		// concurrent operations queue cleanly instead of erroring.
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.SetMaxOpenConns(1)
+		}
+		return db, nil
 	case "postgres":
 		return gorm.Open(postgres.Open(postgresDSN(cfg.Database)), gormCfg)
 	case "mysql":
