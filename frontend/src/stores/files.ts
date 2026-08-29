@@ -294,7 +294,6 @@ export const useFilesStore = defineStore('files', {
         if (a > -1 && b > -1) {
           const [s, e] = a < b ? [a, b] : [b, a]
           this.sel = ids.slice(s, e + 1)
-          this.syncPreview()
           return
         }
       }
@@ -302,20 +301,12 @@ export const useFilesStore = defineStore('files', {
       if (ev && (ev.metaKey || ev.ctrlKey)) {
         this.sel = this.sel.includes(id) ? this.sel.filter((x) => x !== id) : [...this.sel, id]
         this.anchor = id
-        this.syncPreview()
         return
       }
-      // Plain click: just select. The details panel is opened deliberately via the
-      // context menu, not on a plain click — but if it is already open, follow the
-      // selection so it stays in sync.
+      // Plain click: only select. Left-click never touches the details panel —
+      // it is opened deliberately via the context menu and closed from its header.
       this.sel = [id]
       this.anchor = id
-      if (this.previewId != null) this.previewId = id
-    },
-    // syncPreview keeps an already-open details panel in sync with the selection
-    // (single item), and never opens it on its own.
-    syncPreview() {
-      if (this.previewId != null) this.previewId = this.sel.length === 1 ? this.sel[0] : null
     },
     clearSel() {
       this.sel = []
