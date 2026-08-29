@@ -305,14 +305,17 @@ export const useFilesStore = defineStore('files', {
         this.syncPreview()
         return
       }
-      // Plain click: select exactly one item and show its details on the right.
+      // Plain click: just select. The details panel is opened deliberately via the
+      // context menu, not on a plain click — but if it is already open, follow the
+      // selection so it stays in sync.
       this.sel = [id]
       this.anchor = id
-      this.previewId = id
+      if (this.previewId != null) this.previewId = id
     },
-    // syncPreview shows the details panel only when a single item is selected.
+    // syncPreview keeps an already-open details panel in sync with the selection
+    // (single item), and never opens it on its own.
     syncPreview() {
-      this.previewId = this.sel.length === 1 ? this.sel[0] : null
+      if (this.previewId != null) this.previewId = this.sel.length === 1 ? this.sel[0] : null
     },
     clearSel() {
       this.sel = []

@@ -237,10 +237,11 @@ function ctxItems(): MenuItem[] {
     if (n.type === 'folder') items.push({ id: 'open', label: t('common.open'), icon: Folder })
     else items.push({ id: 'preview', label: t('shell.preview'), icon: Eye })
     if (n.type === 'file') items.push({ id: 'download', label: t('common.download'), icon: Download })
-    // Touch has no hover/side-panel, so surface details and multi-select here.
-    if (ui.coarse) {
-      items.push({ id: 'details', label: t('shell.details'), icon: Info })
-      if (!files.selectionMode) items.push({ id: 'selectItem', label: t('shell.select'), icon: Check })
+    // Details is opened deliberately from here (no longer on a plain click).
+    items.push({ id: 'details', label: t('shell.details'), icon: Info })
+    // Touch has no long-press affordance surfaced elsewhere, so add multi-select here.
+    if (ui.coarse && !files.selectionMode) {
+      items.push({ id: 'selectItem', label: t('shell.select'), icon: Check })
     }
   } else {
     items.push({ id: 'download', label: t('common.download'), icon: Download })
