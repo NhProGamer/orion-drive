@@ -92,7 +92,7 @@ func TestMetaDoesNotCountView(t *testing.T) {
 	if after.Views != 0 {
 		t.Fatalf("Meta must not count views, got %d", after.Views)
 	}
-	if _, err := svc.View(context.Background(), sh.Token); err != nil {
+	if _, err := svc.View(context.Background(), sh.Token, ""); err != nil {
 		t.Fatalf("view: %v", err)
 	}
 	after, _ = repo.Share.GetByToken(context.Background(), sh.Token)

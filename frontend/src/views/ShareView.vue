@@ -108,6 +108,16 @@ async function openList(p: string) {
     entries.value = res.entries
     curPath.value = p
     opened.value = true
+    // A password-protected share hides its name until unlocked; now that the
+    // password is proven correct, re-fetch the metadata to reveal it (so the
+    // unlocked folder view matches an unprotected share). Runs once.
+    if (data.value && data.value.has_password && !data.value.name) {
+      try {
+        data.value = await api.shareView(token, password.value || undefined)
+      } catch {
+        /* keep the listing even if the metadata refresh fails */
+      }
+    }
   } catch (e: any) {
     if (e?.code === 42900) error.value = t('shareView.tooManyRequests')
     else error.value = e?.code === 401 ? t('shareView.passwordIncorrect') : e?.message || t('shareView.accessDenied')

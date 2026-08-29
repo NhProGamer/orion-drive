@@ -292,7 +292,8 @@ export const api = {
     },
   ) => http.patch(`/share/${token}`, input),
   deleteShare: (token: string) => http.delete(`/share/${token}`),
-  shareView: (token: string) => get<ShareView>(`/share/${token}`),
+  shareView: (token: string, password?: string) =>
+    get<ShareView>(`/share/${token}${password ? `?password=${encodeURIComponent(password)}` : ''}`),
   shareList: (token: string, path: string, password?: string) =>
     get<{ name: string; entries: ShareEntry[] }>(`/share/${token}/list`, { params: { path, password } }),
 

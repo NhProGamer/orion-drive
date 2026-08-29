@@ -127,7 +127,7 @@ func (ctl *Controller) DeleteShare(c *gin.Context) {
 
 // ShareView returns public metadata for a share (no auth).
 func (ctl *Controller) ShareView(c *gin.Context) {
-	view, err := ctl.dep.Shares.View(c.Request.Context(), c.Param("token"))
+	view, err := ctl.dep.Shares.View(c.Request.Context(), c.Param("token"), c.Query("password"))
 	if err != nil {
 		failShare(c, err)
 		return

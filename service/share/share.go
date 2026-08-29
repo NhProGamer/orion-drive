@@ -211,7 +211,19 @@ type PublicView struct {
 // meta builds the public metadata for a share without recording a view. It
 // returns the share alongside the view so callers can act on it (record a view,
 // build a preview URL).
-func (s *Service) meta(ctx context.Context, token string) (*model.Share, *PublicView, error) {
+// revealed reports whether a share's metadata may be shown: it is accessible
+// (not expired) and either has no password or the supplied password matches.
+func (s *Service) revealed(share *model.Share, password string) bool {
+	if share.Expired() {
+		return false
+	}
+	if !share.HasPassword() {
+		return true
+	}
+	return password != "" && bcrypt.CompareHashAndPassword([]byte(share.Password), []byte(password)) == nil
+}
+
+func (s *Service) meta(ctx context.Context, token, password string) (*model.Share, *PublicView, error) {
 	share, err := s.repo.Share.GetByToken(ctx, token)
 	if err != nil {
 		return nil, nil, err
@@ -226,18 +238,23 @@ func (s *Service) meta(ctx context.Context, token string) (*model.Share, *Public
 		HasPassword: share.HasPassword(),
 		Expired:     share.Expired(),
 		Exhausted:   share.Exhausted(),
+		// Whether the target is a folder is not sensitive (it leaks no name, size
+		// or content) and the landing page needs it to show the right unlock action
+		// — "open folder" vs "download" — before the password is entered.
+		IsDir: f.IsFolder(),
 	}
 	// Only reveal the file name, size, owner identity, and download count once the
 	// share is actually accessible. For a password-protected or expired share,
 	// merely holding the token must not leak this metadata (the client shows a
-	// password prompt / expired notice from the flags above instead).
-	if !share.HasPassword() && !share.Expired() {
+	// password prompt / expired notice from the flags above instead) — until the
+	// correct password is supplied, at which point the name is revealed so the
+	// unlocked folder view matches an unprotected share.
+	if s.revealed(share, password) {
 		owner := ""
 		if u, err := s.repo.User.GetByID(ctx, share.UserID); err == nil {
 			owner = u.DisplayName()
 		}
 		view.Name = f.Name
-		view.IsDir = f.IsFolder()
 		view.Size = f.Size
 		view.Downloads = share.Downloads
 		view.Owner = owner
@@ -253,8 +270,8 @@ func (s *Service) meta(ctx context.Context, token string) (*model.Share, *Public
 }
 
 // View returns public metadata for a share and records a view.
-func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
-	share, view, err := s.meta(ctx, token)
+func (s *Service) View(ctx context.Context, token, password string) (*PublicView, error) {
+	share, view, err := s.meta(ctx, token, password)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +283,7 @@ func (s *Service) View(ctx context.Context, token string) (*PublicView, error) {
 // by the server-rendered share preview (OpenGraph tags), which must not inflate
 // the view counter on every social-media crawl or page load.
 func (s *Service) Meta(ctx context.Context, token string) (*PublicView, error) {
-	_, view, err := s.meta(ctx, token)
+	_, view, err := s.meta(ctx, token, "") // OG preview: never reveals protected metadata
 	return view, err
 }
 
