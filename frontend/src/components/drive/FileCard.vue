@@ -35,7 +35,7 @@ function onClick(ev: MouseEvent) {
     return
   }
   if (ui.coarse) return
-  files.previewId = props.node.id
+  emit('select', props.node, ev)
 }
 
 function onDragStart(ev: DragEvent) {

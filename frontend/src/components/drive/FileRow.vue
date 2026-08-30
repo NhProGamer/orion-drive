@@ -31,7 +31,7 @@ function onClick(ev: MouseEvent) {
     return
   }
   if (ui.coarse) return
-  files.previewId = props.node.id
+  emit('select', props.node, ev)
 }
 const gestures = useItemGestures({
   onTap: () => (files.selectionMode ? files.toggleSel(props.node) : emit('open', props.node)),
