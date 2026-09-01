@@ -1984,15 +1984,45 @@ html[data-halo='off'] body::before {
   padding: 16px;
   overflow: auto;
 }
-.ov-imgedit-canvas canvas {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+.ov-imgedit-stage {
+  position: relative;
+  line-height: 0;
+  overflow: hidden; /* clips the crop mask (a large box-shadow) to the image */
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
-.ov-imgedit-canvas canvas.cropping {
-  cursor: crosshair;
+.ov-imgedit-canvas canvas {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 220px);
 }
+/* Crop rectangle: a draggable box whose big outward shadow dims everything
+   outside it, with eight resize handles on the edges and corners. */
+.ov-crop {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+.ov-crop-h {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+.ov-crop-h.h-nw { left: 0; top: 0; cursor: nwse-resize; }
+.ov-crop-h.h-n { left: 50%; top: 0; cursor: ns-resize; }
+.ov-crop-h.h-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.ov-crop-h.h-e { left: 100%; top: 50%; cursor: ew-resize; }
+.ov-crop-h.h-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.ov-crop-h.h-s { left: 50%; top: 100%; cursor: ns-resize; }
+.ov-crop-h.h-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.ov-crop-h.h-w { left: 0; top: 50%; cursor: ew-resize; }
 .ov-imgedit-quality {
   display: flex;
   align-items: center;

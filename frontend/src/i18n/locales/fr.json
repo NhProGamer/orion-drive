@@ -263,7 +263,8 @@
     "applyCrop": "Appliquer",
     "undo": "Annuler",
     "reset": "Réinitialiser",
-    "quality": "Qualité"
+    "quality": "Qualité",
+    "saveFailed": "Échec de l'enregistrement"
   },
   "shell": {
     "myDrive": "Mon Drive",
