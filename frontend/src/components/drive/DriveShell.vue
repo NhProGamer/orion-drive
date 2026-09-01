@@ -193,8 +193,8 @@ function onCtx(node: FileNode, ev: MouseEvent) {
   // Right-click selects the item (without opening the details panel).
   if (!files.sel.includes(node.id)) files.sel = [node.id]
   menu.value = {
-    x: Math.min(ev.clientX, window.innerWidth - 240),
-    y: Math.min(ev.clientY, window.innerHeight - 300),
+    x: ev.clientX,
+    y: ev.clientY,
     items: ctxItems(),
   }
   newMenuOpen.value = false
@@ -204,8 +204,8 @@ function bgCtx(ev: MouseEvent) {
   if (files.view !== 'drive' || files.searching) return
   files.clearSel()
   menu.value = {
-    x: Math.min(ev.clientX, window.innerWidth - 240),
-    y: Math.min(ev.clientY, window.innerHeight - 140),
+    x: ev.clientX,
+    y: ev.clientY,
     items: [
       { header: t('shell.secCreate') },
       { id: 'newfolder', label: t('shell.newFolder'), icon: FolderPlus },
