@@ -337,7 +337,8 @@
     "untitledDocument": "Document sans titre",
     "untitledSpreadsheet": "Feuille sans titre",
     "untitledPresentation": "Présentation sans titre",
-    "apiTokens": "Jetons d'API"
+    "apiTokens": "Jetons d'API",
+    "loadMore": "Charger plus"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

@@ -876,6 +876,11 @@ html[data-halo='off'] body::before {
   max-width: 360px;
   text-wrap: pretty;
 }
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-4) var(--s-6) var(--s-8);
+}
 
 /* Context menu & dropdown */
 .menu {

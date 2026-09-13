@@ -43,12 +43,28 @@ func (ctl *Controller) ListFiles(c *gin.Context) {
 	if filters.Query != "" || filters.Type != "" || filters.Starred ||
 		filters.MinSize > 0 || filters.MaxSize > 0 || filters.After != nil ||
 		filters.Before != nil || kind != "" {
-		files, err := ctl.dep.Files.Search(ctx, u, filters, kind)
+		// Paginate: a searchable drive can match thousands of files, and returning
+		// them all (plus resolving every hit's location) is the heaviest listing.
+		perPage := searchPerPage
+		if v, err := strconv.Atoi(c.Query("per_page")); err == nil && v > 0 && v <= searchMaxPerPage {
+			perPage = v
+		}
+		offset := 0
+		if v, err := strconv.Atoi(c.Query("offset")); err == nil && v > 0 {
+			offset = v
+		}
+		filters.Limit = perPage
+		filters.Offset = offset
+		files, hasMore, err := ctl.dep.Files.Search(ctx, u, filters, kind)
 		if err != nil {
 			fail(c, err)
 			return
 		}
-		respond(c, serializer.OK(ctl.searchDTOs(ctx, u, files, owner)))
+		respond(c, serializer.OK(searchPage{
+			Items:      ctl.searchDTOs(ctx, u, files, owner),
+			HasMore:    hasMore,
+			NextOffset: offset + perPage,
+		}))
 		return
 	}
 
@@ -83,6 +99,21 @@ func (ctl *Controller) ListFiles(c *gin.Context) {
 		return
 	}
 	respond(c, serializer.OK(toDTOs(files, owner)))
+}
+
+// Search pagination sizes: a comfortable page plus a hard ceiling so a client
+// can't ask for an unbounded page.
+const (
+	searchPerPage    = 100
+	searchMaxPerPage = 500
+)
+
+// searchPage is the paginated search response: one page of hits plus whether a
+// further page exists and the offset to request it with.
+type searchPage struct {
+	Items      []fileDTO `json:"items"`
+	HasMore    bool      `json:"has_more"`
+	NextOffset int       `json:"next_offset"`
 }
 
 // searchDTOs maps search results to DTOs, resolving each hit's location (the

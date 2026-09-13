@@ -167,6 +167,8 @@ type SearchFilters struct {
 	MaxSize int64  // bytes; 0 = ignore
 	After   *time.Time
 	Before  *time.Time
+	Limit   int // 0 = no limit (return everything)
+	Offset  int // rows to skip; only meaningful with Limit > 0
 }
 
 // Search returns non-trashed files owned by ownerID matching the filters,
@@ -198,8 +200,12 @@ func (r *FileRepo) Search(ctx context.Context, ownerID uint, f SearchFilters) ([
 	if f.Before != nil {
 		q = q.Where("updated_at <= ?", *f.Before)
 	}
+	q = q.Order("type desc, name asc")
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit).Offset(f.Offset)
+	}
 	var files []model.File
-	err := q.Order("type desc, name asc").Find(&files).Error
+	err := q.Find(&files).Error
 	return files, err
 }
 

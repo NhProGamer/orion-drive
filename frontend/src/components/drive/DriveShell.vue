@@ -798,6 +798,13 @@ onUnmounted(() => {
                 <template v-else>{{ t('shell.folderEmptySub') }}</template>
               </span>
             </div>
+
+            <!-- Load more (search results are paginated) -->
+            <div v-if="files.searching && files.searchHasMore" class="load-more">
+              <button class="btn btn-secondary" :disabled="files.loadingMore" @click="files.loadMoreSearch">
+                {{ files.loadingMore ? t('common.loading') : t('shell.loadMore') }}
+              </button>
+            </div>
           </template>
         </main>
 

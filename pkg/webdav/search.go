@@ -32,7 +32,7 @@ func (h *authHandler) handleSearch(w http.ResponseWriter, r *http.Request, user 
 	}
 
 	ctx := r.Context()
-	hits, err := h.fs.mgr.Search(ctx, user, repository.SearchFilters{Query: term}, "")
+	hits, _, err := h.fs.mgr.Search(ctx, user, repository.SearchFilters{Query: term}, "")
 	if err != nil {
 		http.Error(w, "search failed", http.StatusInternalServerError)
 		return

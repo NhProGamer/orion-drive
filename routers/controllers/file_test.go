@@ -72,6 +72,16 @@ func dtosOf(t *testing.T, e envelope) []fileDTO {
 	return d
 }
 
+// searchPageOf decodes an envelope's data into a paginated search response.
+func searchPageOf(t *testing.T, e envelope) searchPage {
+	t.Helper()
+	var p searchPage
+	if err := json.Unmarshal(e.Data, &p); err != nil {
+		t.Fatalf("decode searchPage %q: %v", e.Data, err)
+	}
+	return p
+}
+
 func TestCreateFolder(t *testing.T) {
 	ctl, mgr, user := ogEnv(t)
 
@@ -277,7 +287,7 @@ func TestListFilesSearchFilters(t *testing.T) {
 			t.Fatalf("ListFiles(%q) code = %d (%s)", query, e.Code, w.Body.String())
 		}
 		set := map[uint]bool{}
-		for _, d := range dtosOf(t, e) {
+		for _, d := range searchPageOf(t, e).Items {
 			set[d.ID] = true
 		}
 		return set
@@ -324,6 +334,33 @@ func TestListFilesSearchFilters(t *testing.T) {
 	// after= in the past includes the recent items.
 	if got := ids("q=report&after=" + past); !got[small.ID] {
 		t.Fatalf("after=past should include recent files, got %v", got)
+	}
+
+	// Pagination: 3 "report" hits with per_page=2 gives a full first page that
+	// reports has_more, then a final page of the remainder.
+	page := func(query string) searchPage {
+		c, w := authReq(user, "GET", "/file?"+query, "")
+		ctl.ListFiles(c)
+		return searchPageOf(t, decode(t, w))
+	}
+	p1 := page("q=report&per_page=2")
+	if len(p1.Items) != 2 || !p1.HasMore || p1.NextOffset != 2 {
+		t.Fatalf("page1: items=%d has_more=%v next=%d, want 2/true/2", len(p1.Items), p1.HasMore, p1.NextOffset)
+	}
+	p2 := page("q=report&per_page=2&offset=2")
+	if len(p2.Items) != 1 || p2.HasMore {
+		t.Fatalf("page2: items=%d has_more=%v, want 1/false", len(p2.Items), p2.HasMore)
+	}
+	// The two pages together cover all three matches with no overlap.
+	seen := map[uint]bool{}
+	for _, d := range append(p1.Items, p2.Items...) {
+		if seen[d.ID] {
+			t.Fatalf("id %d returned on both pages", d.ID)
+		}
+		seen[d.ID] = true
+	}
+	if !seen[small.ID] || !seen[big.ID] || !seen[folder.ID] {
+		t.Fatalf("paginated pages missed a hit: %v", seen)
 	}
 }
 

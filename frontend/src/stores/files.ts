@@ -86,6 +86,9 @@ export const useFilesStore = defineStore('files', {
     shares: [] as ShareInfo[], // the user's own share links (My shares view)
     dragIds: [] as number[], // ids currently being drag-moved
     dragOverId: null as number | null, // folder highlighted as a drop target
+    searchHasMore: false, // a further page of search results exists
+    searchNextOffset: 0, // offset to request the next search page with
+    loadingMore: false, // a "load more" page fetch is in flight
   }),
 
   getters: {
@@ -157,28 +160,55 @@ export const useFilesStore = defineStore('files', {
           this.shares = await api.listShares()
           return
         }
-        const params: Record<string, string> = {}
         if (this.searching) {
-          if (this.q.trim()) params.q = this.q.trim()
-          const f = this.filters
-          if (f.type) params.type = f.type
-          if (f.kind) params.kind = f.kind
-          if (f.starred) params.starred = '1'
-          if (f.since) {
-            const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
-            params.after = cutoff.toISOString()
-          } else {
-            // Custom date range (only when no relative preset is active).
-            if (f.after) params.after = new Date(f.after + 'T00:00:00').toISOString()
-            if (f.before) params.before = new Date(f.before + 'T23:59:59').toISOString()
-          }
-          if (f.minSize > 0) params.min_size = String(f.minSize)
-          if (f.maxSize > 0) params.max_size = String(f.maxSize)
-        } else if (this.view === 'trash') params.view = 'trash'
+          const page = await api.search(this.searchParams(0))
+          this.nodes = page.items
+          this.searchHasMore = page.has_more
+          this.searchNextOffset = page.next_offset
+          return
+        }
+        const params: Record<string, string> = {}
+        if (this.view === 'trash') params.view = 'trash'
         else params.parent = this.currentParentParam
         this.nodes = await api.list(params)
       } finally {
         this.loading = false
+      }
+    },
+
+    // searchParams builds the query for the active search at a given row offset.
+    searchParams(offset: number): Record<string, string> {
+      const params: Record<string, string> = {}
+      if (this.q.trim()) params.q = this.q.trim()
+      const f = this.filters
+      if (f.type) params.type = f.type
+      if (f.kind) params.kind = f.kind
+      if (f.starred) params.starred = '1'
+      if (f.since) {
+        const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
+        params.after = cutoff.toISOString()
+      } else {
+        // Custom date range (only when no relative preset is active).
+        if (f.after) params.after = new Date(f.after + 'T00:00:00').toISOString()
+        if (f.before) params.before = new Date(f.before + 'T23:59:59').toISOString()
+      }
+      if (f.minSize > 0) params.min_size = String(f.minSize)
+      if (f.maxSize > 0) params.max_size = String(f.maxSize)
+      if (offset > 0) params.offset = String(offset)
+      return params
+    },
+
+    // loadMoreSearch appends the next page of search results in place.
+    async loadMoreSearch() {
+      if (!this.searchHasMore || this.loadingMore) return
+      this.loadingMore = true
+      try {
+        const page = await api.search(this.searchParams(this.searchNextOffset))
+        this.nodes = this.nodes.concat(page.items)
+        this.searchHasMore = page.has_more
+        this.searchNextOffset = page.next_offset
+      } finally {
+        this.loadingMore = false
       }
     },
 

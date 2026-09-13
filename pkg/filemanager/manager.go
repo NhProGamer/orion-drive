@@ -221,10 +221,24 @@ func (m *Manager) ListAllFiles(ctx context.Context, user *model.User) ([]model.F
 }
 
 // Search returns non-trashed files matching query.
-func (m *Manager) Search(ctx context.Context, user *model.User, f repository.SearchFilters, kind string) ([]model.File, error) {
-	files, err := m.repo.File.Search(ctx, user.ID, f)
+// Search returns the files matching the filters and whether more results exist
+// past the requested page. When f.Limit > 0 the search is paginated: the caller
+// gets at most f.Limit raw rows (advance f.Offset by f.Limit for the next page),
+// and hasMore reports whether a further row exists. hasMore is measured on raw
+// DB rows — before the extension-based kind filter — so paging stays aligned to
+// the SQL offset even when a page's category filter drops some rows.
+func (m *Manager) Search(ctx context.Context, user *model.User, f repository.SearchFilters, kind string) (files []model.File, hasMore bool, err error) {
+	limit := f.Limit
+	if limit > 0 {
+		f.Limit = limit + 1 // over-fetch one to detect a next page
+	}
+	files, err = m.repo.File.Search(ctx, user.ID, f)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+	if limit > 0 && len(files) > limit {
+		hasMore = true
+		files = files[:limit] // drop the probe row; it belongs to the next page
 	}
 	// Category filtering depends on the extension, so it runs here rather than
 	// in SQL. A kind filter implies files (folders have no category).
@@ -237,7 +251,7 @@ func (m *Manager) Search(ctx context.Context, user *model.User, f repository.Sea
 		}
 		files = out
 	}
-	return files, nil
+	return files, hasMore, nil
 }
 
 // CreateFolder creates a new folder under parentID.

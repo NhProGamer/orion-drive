@@ -337,7 +337,8 @@
     "untitledDocument": "Untitled document",
     "untitledSpreadsheet": "Untitled spreadsheet",
     "untitledPresentation": "Untitled presentation",
-    "apiTokens": "API tokens"
+    "apiTokens": "API tokens",
+    "loadMore": "Load more"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

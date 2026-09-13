@@ -14,6 +14,13 @@ export interface FileNode {
   location?: string // "/"-joined ancestor folder path, present on search results
 }
 
+// SearchPage is one page of paginated search results.
+export interface SearchPage {
+  items: FileNode[]
+  has_more: boolean
+  next_offset: number
+}
+
 export interface Version {
   id: number
   size: number
@@ -219,6 +226,9 @@ export const api = {
       max_size?: string
     },
   ) => get<FileNode[]>('/file', { params }),
+  // search hits the same endpoint but returns a paginated envelope; callers pass
+  // offset/per_page and append pages until has_more is false.
+  search: (params: Record<string, string>) => get<SearchPage>('/file', { params }),
   ancestors: (id: number) => get<{ id: number; name: string }[]>('/file/ancestors/' + id),
   createFolder: (parent: string, name: string) =>
     post<FileNode>('/file/folder', { parent, name }),
