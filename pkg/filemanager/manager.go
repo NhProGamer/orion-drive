@@ -468,33 +468,36 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 			members = append(members, member{m.pathString(ctx, user.ID, f, map[uint]string{}), f.IsFolder()})
 		}
 	}
+	// Drop every share and direct link pointing into the subtree in one statement
+	// each, rather than two deletes per file. Failures would leave dangling links
+	// to purged files, so log rather than abort the purge.
+	if err := m.repo.Share.DeleteByFiles(ctx, user.ID, all); err != nil {
+		slog.Warn("purge: removing shares failed", "error", err)
+	}
+	if err := m.repo.DirectLink.DeleteByFiles(ctx, user.ID, all); err != nil {
+		slog.Warn("purge: removing direct links failed", "error", err)
+	}
+	// One storage Handler per policy is reused across every entity in the batch.
+	dcache := map[uint]driver.Handler{}
 	var freed int64
 	for _, id := range all {
 		f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)
 		if err != nil {
 			continue
 		}
-		// Remove any share links and direct links pointing at this file. Failures
-		// here would leave dangling links to a purged file, so log rather than drop.
-		if err := m.repo.Share.DeleteByFile(ctx, user.ID, f.ID); err != nil {
-			slog.Warn("purge: removing shares for file failed", "file_id", f.ID, "error", err)
-		}
-		if err := m.repo.DirectLink.DeleteByFile(ctx, user.ID, f.ID); err != nil {
-			slog.Warn("purge: removing direct links for file failed", "file_id", f.ID, "error", err)
-		}
 		// Remove the file's thumbnail, if any (not counted against quota).
 		if t, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil {
-			m.removeEntity(ctx, t.ID)
+			m.removeEntityWith(ctx, t.ID, dcache)
 		}
 		// Remove every stored version of the file.
 		versions, _ := m.repo.Entity.ListVersions(ctx, f.ID)
 		if len(versions) == 0 && f.PrimaryEntityID != nil {
-			m.removeEntity(ctx, *f.PrimaryEntityID)
+			m.removeEntityWith(ctx, *f.PrimaryEntityID, dcache)
 			freed += f.Size
 			continue
 		}
 		for i := range versions {
-			m.removeEntity(ctx, versions[i].ID)
+			m.removeEntityWith(ctx, versions[i].ID, dcache)
 			freed += versions[i].Size
 		}
 	}
@@ -512,6 +515,13 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 // object is removed only when no other entity still references the same Source,
 // so a blob shared via deduplication survives until its last reference is gone.
 func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
+	m.removeEntityWith(ctx, entityID, nil)
+}
+
+// removeEntityWith is removeEntity with an optional per-batch driver cache keyed
+// by storage-policy id, so purging many entities of the same policy builds the
+// storage Handler once instead of once per entity. Pass nil for a one-off.
+func (m *Manager) removeEntityWith(ctx context.Context, entityID uint, dcache map[uint]driver.Handler) {
 	e, err := m.repo.Entity.GetByID(ctx, entityID)
 	if err != nil {
 		return
@@ -521,13 +531,33 @@ func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
 		shared = true
 	}
 	if !shared {
-		if policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID); err == nil {
-			if h, err := m.driverForPolicy(policy); err == nil {
-				_, _ = h.Delete(ctx, e.Source)
-			}
+		if h, err := m.driverForPolicyCached(ctx, e.StoragePolicyID, dcache); err == nil {
+			_, _ = h.Delete(ctx, e.Source)
 		}
 	}
 	_ = m.repo.Entity.Delete(ctx, entityID)
+}
+
+// driverForPolicyCached resolves the storage Handler for a policy id, reusing
+// dcache when provided (see removeEntityWith).
+func (m *Manager) driverForPolicyCached(ctx context.Context, policyID uint, dcache map[uint]driver.Handler) (driver.Handler, error) {
+	if dcache != nil {
+		if h, ok := dcache[policyID]; ok {
+			return h, nil
+		}
+	}
+	policy, err := m.repo.Policy.GetByID(ctx, policyID)
+	if err != nil {
+		return nil, err
+	}
+	h, err := m.driverForPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	if dcache != nil {
+		dcache[policyID] = h
+	}
+	return h, nil
 }
 
 // collectSubtree returns id plus the ids of everything nested under it. With
@@ -535,28 +565,31 @@ func (m *Manager) removeEntity(ctx context.Context, entityID uint) {
 // tree already in the recycle bin).
 func (m *Manager) collectSubtree(ctx context.Context, ownerID, id uint, unscoped bool) ([]uint, error) {
 	ids := []uint{id}
-	var (
-		children []model.File
-		err      error
-	)
-	if unscoped {
-		children, err = m.repo.File.ListChildrenUnscoped(ctx, ownerID, &id)
-	} else {
-		children, err = m.repo.File.ListChildren(ctx, ownerID, &id)
-	}
-	if err != nil {
-		return nil, err
-	}
-	for i := range children {
-		if children[i].IsFolder() {
-			sub, err := m.collectSubtree(ctx, ownerID, children[i].ID, unscoped)
-			if err != nil {
-				return nil, err
-			}
-			ids = append(ids, sub...)
+	// Walk level by level, batching all folders of a depth into one query
+	// (WHERE parent_id IN ...) instead of one query per folder. Depth of the
+	// tree, not its node count, bounds the number of round-trips.
+	level := []uint{id}
+	for len(level) > 0 {
+		var (
+			kids []model.File
+			err  error
+		)
+		if unscoped {
+			kids, err = m.repo.File.ChildrenOfManyUnscoped(ctx, ownerID, level)
 		} else {
-			ids = append(ids, children[i].ID)
+			kids, err = m.repo.File.ChildrenOfMany(ctx, ownerID, level)
 		}
+		if err != nil {
+			return nil, err
+		}
+		var next []uint
+		for i := range kids {
+			ids = append(ids, kids[i].ID)
+			if kids[i].IsFolder() {
+				next = append(next, kids[i].ID)
+			}
+		}
+		level = next
 	}
 	return ids, nil
 }

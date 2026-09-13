@@ -49,6 +49,17 @@ func (r *DirectLinkRepo) DeleteByFile(ctx context.Context, ownerID, fileID uint)
 		Delete(&model.DirectLink{}).Error
 }
 
+// DeleteByFiles removes all of a user's direct links to any of fileIDs, in a
+// single statement (used when purging a whole subtree at once).
+func (r *DirectLinkRepo) DeleteByFiles(ctx context.Context, ownerID uint, fileIDs []uint) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Where("owner_id = ? AND file_id IN ?", ownerID, fileIDs).
+		Delete(&model.DirectLink{}).Error
+}
+
 // IncrementDownloads bumps a link's download counter.
 func (r *DirectLinkRepo) IncrementDownloads(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Model(&model.DirectLink{}).

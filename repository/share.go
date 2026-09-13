@@ -28,6 +28,17 @@ func (r *ShareRepo) DeleteByFile(ctx context.Context, userID, fileID uint) error
 		Delete(&model.Share{}).Error
 }
 
+// DeleteByFiles removes all of a user's shares pointing at any of fileIDs, in a
+// single statement (used when purging a whole subtree at once).
+func (r *ShareRepo) DeleteByFiles(ctx context.Context, userID uint, fileIDs []uint) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Where("user_id = ? AND file_id IN ?", userID, fileIDs).
+		Delete(&model.Share{}).Error
+}
+
 // GetByToken loads a share by its public token.
 func (r *ShareRepo) GetByToken(ctx context.Context, token string) (*model.Share, error) {
 	var s model.Share
