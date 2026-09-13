@@ -1,13 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '@/views/HomeView.vue'
-import ShareView from '@/views/ShareView.vue'
-import AdminView from '@/views/AdminView.vue'
 
+// Every view is lazily loaded so each ends up in its own chunk: a public
+// share-link visitor downloads only the small entry + the ShareView chunk,
+// not the whole drive shell, image editor or admin panel.
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
-    { path: '/admin', name: 'admin', component: AdminView },
-    { path: '/s/:token', name: 'share', component: ShareView },
+    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+    { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
+    { path: '/s/:token', name: 'share', component: () => import('@/views/ShareView.vue') },
   ],
 })

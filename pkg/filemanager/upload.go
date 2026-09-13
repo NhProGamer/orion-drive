@@ -251,29 +251,30 @@ func (m *Manager) CompleteUpload(ctx context.Context, user *model.User, id strin
 		return nil, errors.New("upload incomplete")
 	}
 
-	policy, err := m.repo.Policy.GetByID(ctx, s.PolicyID)
-	if err != nil {
-		return nil, err
-	}
-	h, err := m.driverForPolicy(policy)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stream the staged file (or an empty reader) into the backend.
-	var reader io.Reader = strings.NewReader("")
-	if s.Size > 0 {
-		tmp, err := os.Open(s.TempPath)
+	var file *model.File
+	if s.Size == 0 {
+		// Empty file: nothing was staged, so commit an empty object directly.
+		policy, err := m.repo.Policy.GetByID(ctx, s.PolicyID)
 		if err != nil {
 			return nil, err
 		}
-		defer tmp.Close()
-		reader = io.LimitReader(tmp, s.Size)
-	}
-
-	file, err := m.commitContent(ctx, user, s.ParentID, s.Name, s.FileID, policy, h, reader, s.Size)
-	if err != nil {
-		return nil, err
+		h, err := m.driverForPolicy(policy)
+		if err != nil {
+			return nil, err
+		}
+		file, err = m.commitContent(ctx, user, s.ParentID, s.Name, s.FileID, policy, h, strings.NewReader(""), 0)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Adopt the staged file into storage: on a same-filesystem backend this is a
+		// rename (no second write of the whole object), and it still hashes and
+		// deduplicates. Falls back to a streamed copy for S3/remote/encrypted policies.
+		f, err := m.WriteFileFrom(ctx, user, s.ParentID, s.Name, s.TempPath, s.Size)
+		if err != nil {
+			return nil, err
+		}
+		file = f
 	}
 
 	m.discardSession(s)

@@ -112,8 +112,18 @@ export const useFilesStore = defineStore('files', {
     orderedIds(): number[] {
       return this.orderedNodes.map((n) => n.id)
     },
+    // O(1) membership for the per-item `:selected` binding: a plain array made
+    // each of N items run includes() on every selection change (O(N²)).
+    selSet(): Set<number> {
+      return new Set(this.sel)
+    },
+    // id → node map so selNodes / preview lookups are O(1) instead of a linear
+    // find over all nodes per id.
+    nodeById(): Map<number, FileNode> {
+      return new Map(this.nodes.map((n) => [n.id, n]))
+    },
     selNodes(): FileNode[] {
-      return this.sel.map((id) => this.nodes.find((n) => n.id === id)).filter(Boolean) as FileNode[]
+      return this.sel.map((id) => this.nodeById.get(id)).filter(Boolean) as FileNode[]
     },
     previewNode(): FileNode | null {
       return this.previewId ? this.nodes.find((n) => n.id === this.previewId) || null : null

@@ -47,8 +47,20 @@ onMounted(() => {
   el.src = props.url // same-origin (cookie) → the canvas stays untainted for export
 })
 
+// Full-resolution canvases are large (w×h×4 bytes each), so cap the undo history
+// and release the backing store of any canvas we drop — otherwise a big photo
+// edited many times retains hundreds of MB.
+const UNDO_CAP = 12
+function freeCanvas(cv?: HTMLCanvasElement) {
+  if (cv) {
+    cv.width = 0
+    cv.height = 0
+  }
+}
 function push(cv: HTMLCanvasElement) {
   stack.push(cv)
+  // Drop the oldest EDIT beyond the cap (keep stack[0] = the original for reset).
+  while (stack.length > UNDO_CAP) freeCanvas(stack.splice(1, 1)[0])
   depth.value = stack.length
   render()
 }
@@ -89,12 +101,13 @@ function flip(axis: 'h' | 'v') {
 
 function undo() {
   if (stack.length > 1) {
-    stack.pop()
+    freeCanvas(stack.pop())
     depth.value = stack.length
     render()
   }
 }
 function reset() {
+  for (const cv of stack.slice(1)) freeCanvas(cv)
   stack = stack.slice(0, 1)
   depth.value = 1
   cropping.value = false
