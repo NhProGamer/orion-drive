@@ -75,7 +75,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="ov-backdrop" :class="{ 'ov-backdrop-bare': kind === 'board' }" @click.self="!dirty && emit('close')">
+  <!-- Drag events stop here. The drive shell listens for drops on its root to
+       upload files, so a drop meant for the whiteboard canvas would otherwise
+       land in the folder behind as well. They are also prevented, since without
+       that the browser treats an unclaimed drop as "navigate to this file". -->
+  <div
+    class="ov-backdrop"
+    :class="{ 'ov-backdrop-bare': kind === 'board' }"
+    @click.self="!dirty && emit('close')"
+    @dragenter.stop.prevent
+    @dragover.stop.prevent
+    @dragleave.stop.prevent
+    @drop.stop.prevent
+  >
     <div ref="panel" class="ov-panel" :class="{ 'ov-panel-viewport': kind === 'board' }">
       <header class="ov-head">
         <span class="ov-title">{{ node.name }}</span>
