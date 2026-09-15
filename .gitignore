@@ -38,3 +38,6 @@ conf.ini
 
 # Design assets staged here (branding); not part of the build
 /tmp/
+
+# Excalidraw runtime fonts, copied out of node_modules at build time
+/frontend/public/excalidraw-assets/
