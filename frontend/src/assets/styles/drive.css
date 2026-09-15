@@ -3151,9 +3151,20 @@ from {
 /* Collaborative whiteboard (Excalidraw canvas + relay status).
    These rules are global on purpose: the canvas is rendered by React, outside
    the scope Vue's scoped styles reach. */
-.ov-panel-wide {
-  width: min(1600px, 98vw);
-  height: 94vh;
+/* A whiteboard is worked in, not glanced at: it fills the browser view instead
+   of sitting in a centred panel, and the backdrop stops insetting it. */
+.ov-backdrop-bare {
+  padding: 0;
+  background: var(--bg-0);
+  backdrop-filter: none;
+}
+.ov-panel-viewport,
+.ov-panel:fullscreen {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
 }
 .ov-board,
 .ov-board-host {

@@ -181,6 +181,8 @@
     "offline": "Hors ligne",
     "saved": "Enregistré",
     "readOnly": "Lecture seule",
+    "fullscreen": "Plein écran",
+    "exitFullscreen": "Quitter le plein écran",
     "alone": "Vous seul",
     "peers": "{count} autre(s) participant(s)",
     "loadFailed": "Impossible de charger l'éditeur de tableau blanc."

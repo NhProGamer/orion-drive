@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Download, Save, Eye, Pencil, FileQuestion, Crop } from 'lucide-vue-next'
+import { X, Download, Save, Eye, Pencil, FileQuestion, Crop, Maximize2, Minimize2 } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { previewKind, isMarkdown } from '@/lib/format'
 import { renderMarkdown } from '@/lib/markdown'
 import { useFilesStore } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
+import { useFullscreen } from '@/composables/useFullscreen'
 import EpubViewer from './EpubViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
 import ImageEditor from './ImageEditor.vue'
@@ -27,6 +28,11 @@ const kind = computed(() => previewKind(props.node.name))
 const src = computed(() => api.inlineUrl(props.node.id))
 const markdown = computed(() => isMarkdown(props.node.name))
 const editingImage = ref(false)
+
+// A whiteboard is the one preview worth handing the whole screen: it is a
+// canvas people draw on together, not something you glance at.
+const panel = ref<HTMLElement | null>(null)
+const { active: isFullscreen, supported: canFullscreen, toggle: toggleFullscreen } = useFullscreen(panel)
 
 const text = ref('')
 const original = ref('')
@@ -56,7 +62,9 @@ async function save() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && !dirty.value) emit('close')
+  // Escape leaves fullscreen first (the browser handles that itself), so it
+  // must not also close the panel underneath.
+  if (e.key === 'Escape' && !dirty.value && !isFullscreen.value) emit('close')
   if ((e.metaKey || e.ctrlKey) && e.key === 's' && kind.value === 'text') {
     e.preventDefault()
     if (dirty.value) save()
@@ -67,8 +75,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="ov-backdrop" @click.self="!dirty && emit('close')">
-    <div class="ov-panel" :class="{ 'ov-panel-wide': kind === 'board' }">
+  <div class="ov-backdrop" :class="{ 'ov-backdrop-bare': kind === 'board' }" @click.self="!dirty && emit('close')">
+    <div ref="panel" class="ov-panel" :class="{ 'ov-panel-viewport': kind === 'board' }">
       <header class="ov-head">
         <span class="ov-title">{{ node.name }}</span>
         <div class="ov-actions">
@@ -81,6 +89,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               <Save :size="15" />{{ t('common.save') }}
             </button>
           </template>
+          <button
+            v-if="kind === 'board' && canFullscreen"
+            class="icon-btn"
+            :title="isFullscreen ? t('board.exitFullscreen') : t('board.fullscreen')"
+            @click="toggleFullscreen()"
+          >
+            <component :is="isFullscreen ? Minimize2 : Maximize2" :size="16" />
+          </button>
           <button v-if="kind === 'image' && !editingImage" class="icon-btn" :title="t('previewOverlay.editImage')" @click="editingImage = true">
             <Crop :size="16" />
           </button>

@@ -181,6 +181,8 @@
     "offline": "Offline",
     "saved": "Saved",
     "readOnly": "Read-only",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
     "alone": "Just you",
     "peers": "{count} other(s) here",
     "loadFailed": "The whiteboard editor could not be loaded."

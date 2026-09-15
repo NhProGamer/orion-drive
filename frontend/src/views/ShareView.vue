@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Download, Lock, TriangleAlert, Sun, Moon, Folder, FileText, ChevronRight,
   FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check, Eye, X,
+  Maximize2, Minimize2,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
 import { kindFromName, fmtSize, previewKind, canThumbnail, isBoard } from '@/lib/format'
@@ -12,10 +13,16 @@ import { uploadInChunks } from '@/lib/upload'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
+import { useFullscreen } from '@/composables/useFullscreen'
 
 // React + Excalidraw stay out of the public share bundle until a visitor opens
 // an actual whiteboard.
 const BoardEditor = defineAsyncComponent(() => import('@/components/drive/BoardEditor.vue'))
+
+// Visitors are anonymous, so the name they pick is the only thing that tells
+// the other people on the board who is drawing. It is remembered locally so a
+// returning visitor — or one who also uploads into the share — keeps it.
+const GUEST_NAME_KEY = 'od-guest-name'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -33,7 +40,27 @@ const entries = ref<ShareEntry[]>([])
 const curPath = ref('')
 
 // Write/deposit state.
-const contributor = ref('')
+const contributor = ref(readGuestName())
+
+function readGuestName(): string {
+  try {
+    return localStorage.getItem(GUEST_NAME_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Applies a name the visitor typed and remembers it for next time. */
+function setGuestName(value: string) {
+  const name = value.trim().slice(0, 32)
+  if (name === contributor.value) return
+  contributor.value = name
+  try {
+    localStorage.setItem(GUEST_NAME_KEY, name)
+  } catch {
+    // Private browsing with storage denied: the name still applies this session.
+  }
+}
 type UploadItem = { name: string; pct: number; done: boolean; error: boolean }
 const uploads = ref<UploadItem[]>([])
 const dragover = ref(false)
@@ -77,6 +104,9 @@ function canPreview(name: string): boolean {
 // A shared whiteboard is joined live: the visitor draws alongside everyone else
 // who has it open, so the share's own permission decides read-only or not.
 const boardShare = computed(() => !!data.value && !data.value.is_dir && data.value.boards && isBoard(data.value.name))
+const boardWrap = ref<HTMLElement | null>(null)
+const { active: isFullscreen, supported: canFullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrap)
+
 const boardSocket = computed(() =>
   viewer.value
     ? api.shareBoardSocketUrl(
@@ -405,7 +435,14 @@ async function download() {
               </label>
               <label v-if="boardShare" class="sv-field">
                 <span class="sv-field-lbl">{{ t('shareView.yourName') }}</span>
-                <input v-model="contributor" class="input" type="text" :placeholder="t('shareView.yourNamePlaceholder')" />
+                <input
+                  class="input"
+                  type="text"
+                  maxlength="32"
+                  :value="contributor"
+                  :placeholder="t('shareView.yourNamePlaceholder')"
+                  @change="setGuestName(($event.target as HTMLInputElement).value)"
+                />
               </label>
               <p v-if="error" class="sv-error">{{ error }}</p>
               <div class="sv-actions">
@@ -431,16 +468,38 @@ async function download() {
     </div>
 
     <!-- In-page inline viewer overlay -->
-    <div v-if="viewer" class="share-viewer" @click.self="viewer = null">
+    <div v-if="viewer" class="share-viewer" :class="{ bare: viewerKind === 'board' }" @click.self="viewer = null">
       <button class="icon-btn share-viewer-close" :title="t('common.close')" @click="viewer = null">
         <X :size="18" />
       </button>
-      <BoardEditor v-if="viewerKind === 'board'" :url="boardSocket" class="share-viewer-board" />
+      <div v-if="viewerKind === 'board'" ref="boardWrap" class="share-viewer-board">
+        <div class="share-board-bar">
+          <input
+            class="input share-board-name"
+            type="text"
+            maxlength="32"
+            :value="contributor"
+            :placeholder="t('shareView.yourNamePlaceholder')"
+            :title="t('shareView.yourName')"
+            @change="setGuestName(($event.target as HTMLInputElement).value)"
+          />
+          <button
+            v-if="canFullscreen"
+            class="icon-btn"
+            :title="isFullscreen ? t('board.exitFullscreen') : t('board.fullscreen')"
+            @click="toggleFullscreen()"
+          >
+            <component :is="isFullscreen ? Minimize2 : Maximize2" :size="16" />
+          </button>
+        </div>
+        <BoardEditor :url="boardSocket" class="share-board-canvas" />
+      </div>
       <img v-else-if="viewerKind === 'image'" :src="viewerSrc" :alt="viewer.name" class="share-viewer-media" />
       <video v-else-if="viewerKind === 'video'" :src="viewerSrc" controls autoplay class="share-viewer-media" />
       <audio v-else-if="viewerKind === 'audio'" :src="viewerSrc" controls autoplay />
       <iframe v-else-if="viewerKind === 'pdf' || viewerKind === 'text'" :src="viewerSrc" class="share-viewer-frame" />
       <a
+        v-if="viewerKind !== 'board'"
         class="btn btn-secondary share-viewer-dl"
         :href="api.shareContentUrl(token, viewer.path || undefined, password || undefined)"
       >
@@ -796,12 +855,39 @@ async function download() {
   border-radius: 8px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
+.share-viewer.bare {
+  padding: 0;
+  gap: 0;
+  background: var(--bg-0);
+  backdrop-filter: none;
+}
+/* A whiteboard is worked in, not glanced at: it takes the whole browser view
+   instead of sitting in a centred panel. */
 .share-viewer-board {
-  width: min(1600px, 96vw);
-  height: 92vh;
-  border-radius: var(--radius-lg, 14px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: var(--bg-1);
+}
+.share-board-canvas {
+  flex: 1;
+  min-height: 0;
+}
+.share-board-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  /* Room on the right for the overlay's own fixed close button. */
+  padding: var(--s-2) 3rem var(--s-2) var(--s-2);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-1);
+}
+.share-board-name {
+  width: 200px;
+  max-width: 45%;
 }
 .share-viewer-frame {
   width: min(92vw, 900px);
