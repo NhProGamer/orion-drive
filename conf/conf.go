@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/ini.v1"
 )
@@ -26,6 +27,45 @@ type Config struct {
 	Archive   Archive
 	Security  Security
 	Thumbnail Thumbnail
+	Board     Board
+}
+
+// Board tunes the collaborative whiteboard (.excalidraw) relay. A zero value
+// uses the built-in default. Sizes are in mebibytes for readability.
+type Board struct {
+	// Disable turns off live collaboration entirely: whiteboards then open
+	// read-only, with no WebSocket endpoint exposed.
+	Disable bool `ini:"Disable"`
+	// MaxSceneMB caps a whiteboard's document, and with it a single inbound
+	// WebSocket frame. Pasted images are embedded in the document, so this is
+	// what bounds how much an editor can push into one board. Default 32.
+	MaxSceneMB int64 `ini:"MaxSceneMB"`
+	// MaxElements caps how many shapes one whiteboard holds. Default 20000.
+	MaxElements int `ini:"MaxElements"`
+	// MaxPeers caps concurrent editors per whiteboard. Default 30.
+	MaxPeers int `ini:"MaxPeers"`
+	// SaveIntervalSeconds is the shortest delay between two snapshots of a board
+	// being actively drawn on. Default 5.
+	SaveIntervalSeconds int `ini:"SaveIntervalSeconds"`
+}
+
+// Enabled reports whether live whiteboard collaboration is available.
+func (b Board) Enabled() bool { return !b.Disable }
+
+// MaxSceneBytes resolves the effective per-board document ceiling.
+func (b Board) MaxSceneBytes() int64 {
+	if b.MaxSceneMB <= 0 {
+		return 32 << 20
+	}
+	return b.MaxSceneMB << 20
+}
+
+// SaveInterval resolves the effective snapshot interval.
+func (b Board) SaveInterval() time.Duration {
+	if b.SaveIntervalSeconds <= 0 {
+		return 5 * time.Second
+	}
+	return time.Duration(b.SaveIntervalSeconds) * time.Second
 }
 
 // Thumbnail tunes preview generation. All generators are enabled by default when

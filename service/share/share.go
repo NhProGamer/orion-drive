@@ -200,6 +200,7 @@ type PublicView struct {
 	Size        int64  `json:"size"`
 	Permission  string `json:"permission"`
 	Wopi        bool   `json:"wopi"`        // set by the controller: online Office editing available
+	Boards      bool   `json:"boards"`      // set by the controller: live whiteboard collaboration available
 	Previewable bool   `json:"previewable"` // a visual thumbnail can be rendered for this file
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
@@ -726,11 +727,23 @@ func (s *Service) tagProvenance(ctx context.Context, file *model.File, token, co
 }
 
 // OfficeTarget authorizes a share and resolves an Office file within it for
-// online editing. Read shares grant view-only editing, write shares grant full
-// editing, and deposit (blind) shares are refused. It returns the file id, the
-// owner's id (the WOPI token is minted against the owner), the write permission
-// and the file name.
+// online editing. It returns the file id, the owner's id (the WOPI token is
+// minted against the owner), the write permission and the file name.
 func (s *Service) OfficeTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
+	return s.editTarget(ctx, token, subPath, password)
+}
+
+// BoardTarget authorizes a share and resolves a collaborative whiteboard within
+// it. It returns the file id, the owner's id (snapshots are written as the
+// owner), the write permission and the file name.
+func (s *Service) BoardTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
+	return s.editTarget(ctx, token, subPath, password)
+}
+
+// editTarget resolves a file within a share for in-browser editing. Read shares
+// grant view-only access, write shares grant editing, and deposit (blind) shares
+// are refused — they exist to receive files, not to expose them.
+func (s *Service) editTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
 	share, err := s.authorize(ctx, token, password)
 	if err != nil {
 		return 0, 0, false, "", err
@@ -748,14 +761,14 @@ func (s *Service) OfficeTarget(ctx context.Context, token, subPath, password str
 	return target.ID, share.UserID, share.CanModify(), target.Name, nil
 }
 
-// WOPIStillValid revalidates a share-originated WOPI session on each host call so
-// revocation takes effect within the token lifetime. It returns whether the
-// share is still usable (exists, not expired, still grants view/edit) and the
-// currently effective write permission (a downgraded share drops to read-only).
-// The password is not re-checked — the document server does not carry it — so a
-// changed password does not end an in-flight session, only deletion/expiry/
-// permission changes do.
-func (s *Service) WOPIStillValid(ctx context.Context, token string) (canWrite, ok bool) {
+// StillValid revalidates a share-originated editing session (WOPI or whiteboard)
+// so revocation takes effect while the session is open rather than only at the
+// next launch. It returns whether the share is still usable (exists, not
+// expired, still grants view/edit) and the currently effective write permission
+// (a downgraded share drops to read-only). The password is not re-checked — an
+// in-flight session does not carry it — so a changed password does not end one,
+// only deletion, expiry and permission changes do.
+func (s *Service) StillValid(ctx context.Context, token string) (canWrite, ok bool) {
 	share, err := s.repo.Share.GetByToken(ctx, token)
 	if err != nil || share.Expired() {
 		return false, false

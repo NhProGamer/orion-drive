@@ -135,6 +135,7 @@ func (ctl *Controller) ShareView(c *gin.Context) {
 	// Advertise online Office editing when the server has it configured, so the
 	// public page can offer an "open in editor" action for Office documents.
 	view.Wopi = ctl.dep.Config.WOPI.Enabled()
+	view.Boards = ctl.dep.Boards != nil
 	respond(c, serializer.OK(view))
 }
 

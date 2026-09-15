@@ -201,3 +201,23 @@ LibRawPath =
 Server =
 Password =
 DB = 0
+
+[Board]
+; Collaborative whiteboards (.excalidraw). Several people open the same board —
+; signed-in users and share-link visitors alike — and draw together in real
+; time over a WebSocket; the server merges their edits and snapshots the scene
+; back into the file. One drawing session leaves one entry in the file's version
+; history, not one per autosave. Any value left at 0 uses the built-in default.
+; Disable             : turn collaboration off; boards then open read-only.
+; MaxSceneMB          : ceiling on a board's document, and on a single inbound
+;                       frame. Pasted images are embedded in the document, so
+;                       this bounds how much one editor can push (default 32).
+; MaxElements         : max shapes per board (default 20000).
+; MaxPeers            : max concurrent editors per board (default 30).
+; SaveIntervalSeconds : shortest delay between two snapshots of a board being
+;                       actively drawn on (default 5).
+Disable = false
+MaxSceneMB = 0
+MaxElements = 0
+MaxPeers = 0
+SaveIntervalSeconds = 0

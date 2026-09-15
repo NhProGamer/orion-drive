@@ -15,6 +15,7 @@ import (
 	"github.com/NhProGamer/orion-drive/conf"
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/auth"
+	"github.com/NhProGamer/orion-drive/pkg/board"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local"  // register the local storage backend
@@ -43,6 +44,7 @@ type Dependency struct {
 	Signer   *auth.Signer
 	WOPI     *wopi.Token
 	WOPIDisc *wopi.Discovery
+	Boards   *board.Hub
 }
 
 // Init opens the database and assembles the dependency container. It does not
@@ -132,6 +134,15 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		Signer:   auth.NewSigner(cfg.System.SessionSecret),
 		WOPI:     wopi.NewToken(cfg.WOPI.TokenSecret(cfg.System.SessionSecret)),
 		WOPIDisc: wopi.NewDiscovery(cfg.WOPI.Discovery(), time.Hour),
+	}
+
+	if cfg.Board.Enabled() {
+		dep.Boards = board.NewHub(files.BoardStore(), board.Options{
+			MaxSceneBytes: cfg.Board.MaxSceneBytes(),
+			MaxElements:   cfg.Board.MaxElements,
+			MaxPeers:      cfg.Board.MaxPeers,
+			SaveInterval:  cfg.Board.SaveInterval(),
+		}, logger)
 	}
 
 	// Render document thumbnails via the configured WOPI document server when

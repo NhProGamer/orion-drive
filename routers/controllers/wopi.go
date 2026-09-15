@@ -50,7 +50,7 @@ func (ctl *Controller) wopiFile(c *gin.Context) (userID, fileID uint, canWrite b
 	// (the token alone is otherwise a self-contained 10h capability). A write
 	// grant is downgraded to read-only if the share lost write permission.
 	if ts != "" {
-		cw, valid := ctl.dep.Shares.WOPIStillValid(c.Request.Context(), ts)
+		cw, valid := ctl.dep.Shares.StillValid(c.Request.Context(), ts)
 		if !valid {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return 0, 0, false, "", "", false

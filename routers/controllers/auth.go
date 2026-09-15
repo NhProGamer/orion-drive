@@ -106,6 +106,7 @@ func (ctl *Controller) Me(c *gin.Context) {
 		"oidc_enabled": ctl.dep.Auth.Enabled(),
 		"can_share":    canShare,
 		"wopi":         ctl.dep.Config.WOPI.Enabled(),
+		"boards":       ctl.dep.Boards != nil,
 		"admin":        middleware.IsAdmin(u, ctl.dep.Config.System.AdminEmailSet(), ctl.dep.Config.System.AdminGroupSet()),
 	}))
 }

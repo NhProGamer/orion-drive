@@ -166,6 +166,11 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.GET("/file/office/:id", ctl.OfficeLaunch)
 	f.POST("/file/office/new", ctl.OfficeNew)
 
+	// Collaborative whiteboard: the relay socket for one of the user's own
+	// boards, plus blank-board creation.
+	f.GET("/file/board/:id/ws", ctl.BoardSocket)
+	f.POST("/file/board/new", ctl.NewBoard)
+
 	f.GET("/file/versions/:id", ctl.ListVersions)
 	f.POST("/file/version/restore", ctl.RestoreVersion)
 	f.POST("/file/version/delete", ctl.DeleteVersion)
@@ -276,4 +281,9 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	api.POST("/share/:token/move", rl, ctl.ShareMove)
 	api.POST("/share/:token/delete", rl, ctl.ShareDelete)
 	api.GET("/share/:token/office", rl, ctl.OfficeLaunchShare)
+
+	// Public: join a shared whiteboard's live session. Rate-limited like the
+	// other public endpoints — it resolves a token and checks a password, so it
+	// must not become a brute-force oracle.
+	api.GET("/share/:token/board/ws", rl, ctl.BoardSocketShare)
 }
