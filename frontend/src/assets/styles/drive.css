@@ -3147,3 +3147,64 @@ from {
     transform: translateY(0);
   }
 }
+
+/* Collaborative whiteboard (Excalidraw canvas + relay status).
+   These rules are global on purpose: the canvas is rendered by React, outside
+   the scope Vue's scoped styles reach. */
+.ov-panel-wide {
+  width: min(1600px, 98vw);
+  height: 94vh;
+}
+.ov-board,
+.ov-board-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.board-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+/* Excalidraw sizes itself from its container, which must therefore be sized. */
+.board-host .excalidraw-wrapper,
+.board-host .excalidraw {
+  width: 100%;
+  height: 100%;
+}
+.board-bar {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--bg-1) 88%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  color: var(--fg-2);
+  pointer-events: none;
+}
+.board-chip {
+  padding: 1px 8px;
+  border-radius: var(--r-full);
+  background: var(--bg-3);
+  color: var(--fg-1);
+}
+.board-chip-ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.board-chip-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.board-peers {
+  white-space: nowrap;
+}

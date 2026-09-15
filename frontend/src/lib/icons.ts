@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Disc,
   Pencil,
+  PenTool,
   File,
   type LucideIcon,
 } from 'lucide-vue-next'
@@ -38,6 +39,7 @@ const kindMeta: Record<string, KindMeta> = {
   config: { icon: SlidersHorizontal, label: 'kinds.config', tint: 'neutral' },
   disc: { icon: Disc, label: 'kinds.disc', tint: 'neutral' },
   design: { icon: Pencil, label: 'kinds.design', tint: 'neutral' },
+  board: { icon: PenTool, label: 'kinds.board', tint: 'media' },
   file: { icon: File, label: 'kinds.file', tint: 'neutral' },
 }
 

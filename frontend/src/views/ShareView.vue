@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -7,11 +7,15 @@ import {
   FolderArchive, FolderOpen, Upload, FolderPlus, Pencil, Trash2, UploadCloud, Check, Eye, X,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
-import { kindFromName, fmtSize, previewKind, canThumbnail } from '@/lib/format'
+import { kindFromName, fmtSize, previewKind, canThumbnail, isBoard } from '@/lib/format'
 import { uploadInChunks } from '@/lib/upload'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
 import { bannerFor } from '@/lib/branding'
+
+// React + Excalidraw stay out of the public share bundle until a visitor opens
+// an actual whiteboard.
+const BoardEditor = defineAsyncComponent(() => import('@/components/drive/BoardEditor.vue'))
 
 const route = useRoute()
 const { t } = useI18n()
@@ -65,8 +69,24 @@ const viewerSrc = computed(() =>
   viewer.value ? api.shareInlineUrl(token, viewer.value.path || undefined, password.value || undefined) : ''
 )
 function canPreview(name: string): boolean {
-  return ['image', 'video', 'audio', 'pdf', 'text'].includes(previewKind(name))
+  const kind = previewKind(name)
+  if (kind === 'board') return !!data.value?.boards
+  return ['image', 'video', 'audio', 'pdf', 'text'].includes(kind)
 }
+
+// A shared whiteboard is joined live: the visitor draws alongside everyone else
+// who has it open, so the share's own permission decides read-only or not.
+const boardShare = computed(() => !!data.value && !data.value.is_dir && data.value.boards && isBoard(data.value.name))
+const boardSocket = computed(() =>
+  viewer.value
+    ? api.shareBoardSocketUrl(
+        token,
+        viewer.value.path || undefined,
+        password.value || undefined,
+        contributor.value.trim() || undefined,
+      )
+    : ''
+)
 function openPreview(path: string, name: string) {
   viewer.value = { path, name }
 }
@@ -383,6 +403,10 @@ async function download() {
                 <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')"
                   @keyup.enter="data.is_dir ? openList('') : download()" />
               </label>
+              <label v-if="boardShare" class="sv-field">
+                <span class="sv-field-lbl">{{ t('shareView.yourName') }}</span>
+                <input v-model="contributor" class="input" type="text" :placeholder="t('shareView.yourNamePlaceholder')" />
+              </label>
               <p v-if="error" class="sv-error">{{ error }}</p>
               <div class="sv-actions">
                 <button class="btn btn-primary sv-btn" @click="data.is_dir ? openList('') : download()">
@@ -390,7 +414,7 @@ async function download() {
                   {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}
                 </button>
                 <button v-if="!data.is_dir && canPreview(data.name)" class="btn btn-secondary sv-btn" @click="openPreview('', data.name)">
-                  <Eye :size="16" />{{ t('shareView.preview') }}
+                  <Eye :size="16" />{{ boardShare ? t('shareView.openBoard') : t('shareView.preview') }}
                 </button>
                 <button v-if="!data.is_dir && ui.canViewOffice(data.name)" class="btn btn-secondary sv-btn" @click="openOffice()">
                   <FileText :size="16" />{{ officeLabel(data.name) }}
@@ -411,7 +435,8 @@ async function download() {
       <button class="icon-btn share-viewer-close" :title="t('common.close')" @click="viewer = null">
         <X :size="18" />
       </button>
-      <img v-if="viewerKind === 'image'" :src="viewerSrc" :alt="viewer.name" class="share-viewer-media" />
+      <BoardEditor v-if="viewerKind === 'board'" :url="boardSocket" class="share-viewer-board" />
+      <img v-else-if="viewerKind === 'image'" :src="viewerSrc" :alt="viewer.name" class="share-viewer-media" />
       <video v-else-if="viewerKind === 'video'" :src="viewerSrc" controls autoplay class="share-viewer-media" />
       <audio v-else-if="viewerKind === 'audio'" :src="viewerSrc" controls autoplay />
       <iframe v-else-if="viewerKind === 'pdf' || viewerKind === 'text'" :src="viewerSrc" class="share-viewer-frame" />
@@ -770,6 +795,13 @@ async function download() {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.share-viewer-board {
+  width: min(1600px, 96vw);
+  height: 92vh;
+  border-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  background: var(--bg-1);
 }
 .share-viewer-frame {
   width: min(92vw, 900px);

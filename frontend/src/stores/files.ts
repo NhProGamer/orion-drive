@@ -392,6 +392,14 @@ export const useFilesStore = defineStore('files', {
       return node
     },
 
+    // Create a blank whiteboard in the current folder and return it, so the
+    // caller can open it straight away.
+    async createBoard(name: string) {
+      const node = await api.newBoard(this.currentParentParam, name)
+      await this.load()
+      return node
+    },
+
     async rename(id: number, name: string) {
       await api.rename(id, name)
       await this.load()

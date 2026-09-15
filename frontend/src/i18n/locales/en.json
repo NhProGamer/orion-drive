@@ -146,7 +146,8 @@
     "config": "Configuration",
     "disc": "Disc image",
     "design": "Design file",
-    "file": "File"
+    "file": "File",
+    "board": "Whiteboard"
   },
   "preview": {
     "versionRestored": "Version restored",
@@ -173,6 +174,16 @@
     "editImage": "Edit image",
     "noPreview": "No preview available for this file type.",
     "editWithOffice": "Edit with Office"
+  },
+  "board": {
+    "connecting": "Connecting…",
+    "reconnecting": "Reconnecting…",
+    "offline": "Offline",
+    "saved": "Saved",
+    "readOnly": "Read-only",
+    "alone": "Just you",
+    "peers": "{count} other(s) here",
+    "loadFailed": "The whiteboard editor could not be loaded."
   },
   "shareDialog": {
     "title": "Share “{name}”",
@@ -237,7 +248,8 @@
     "editOffice": "Edit in Office",
     "viewOffice": "Open in Office",
     "preview": "Preview",
-    "tooManyRequests": "Too many requests, try again shortly"
+    "tooManyRequests": "Too many requests, try again shortly",
+    "openBoard": "Open whiteboard"
   },
   "shares": {
     "linkToast": "Link: {url}",
@@ -276,6 +288,7 @@
     "mainNav": "Main navigation",
     "new": "New",
     "newFolder": "New folder",
+    "newBoard": "Whiteboard",
     "importFiles": "Import files",
     "importFolder": "Import a folder",
     "searchPlaceholder": "Search in OrionDrive",
@@ -338,7 +351,9 @@
     "untitledSpreadsheet": "Untitled spreadsheet",
     "untitledPresentation": "Untitled presentation",
     "apiTokens": "API tokens",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "newBoardTitle": "New whiteboard",
+    "untitledBoard": "Untitled board"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

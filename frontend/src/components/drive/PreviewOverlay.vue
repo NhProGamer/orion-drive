@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, Download, Save, Eye, Pencil, FileQuestion, Crop } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
@@ -10,6 +10,10 @@ import { useUiStore } from '@/stores/ui'
 import EpubViewer from './EpubViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
 import ImageEditor from './ImageEditor.vue'
+
+// The whiteboard drags in React and Excalidraw, so it stays in its own chunk:
+// only a user who actually opens a board downloads them.
+const BoardEditor = defineAsyncComponent(() => import('./BoardEditor.vue'))
 
 const props = defineProps<{ node: FileNode }>()
 const emit = defineEmits<{ close: [] }>()
@@ -64,7 +68,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="ov-backdrop" @click.self="!dirty && emit('close')">
-    <div class="ov-panel">
+    <div class="ov-panel" :class="{ 'ov-panel-wide': kind === 'board' }">
       <header class="ov-head">
         <span class="ov-title">{{ node.name }}</span>
         <div class="ov-actions">
@@ -91,6 +95,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <video v-else-if="kind === 'video'" :src="src" controls class="ov-media"></video>
         <audio v-else-if="kind === 'audio'" :src="src" controls class="ov-audio"></audio>
         <iframe v-else-if="kind === 'pdf'" :src="src" class="ov-frame" title="PDF"></iframe>
+        <BoardEditor v-else-if="kind === 'board'" :url="api.boardSocketUrl(node.id)" :key="node.id" />
         <EpubViewer v-else-if="kind === 'epub'" :url="src" :name="node.name" :key="node.id" />
         <ArchiveViewer v-else-if="kind === 'archive'" :node="node" :key="node.id" />
 

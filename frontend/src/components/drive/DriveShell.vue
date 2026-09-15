@@ -6,7 +6,7 @@ import {
   Search, Grid3x3, List, Sun, Moon, ChevronRight, X, Folder, Eye, SlidersHorizontal,
   Download, Pencil, Star, RotateCcw, Info, Share2, Lock, Unlock,
   Link as LinkIcon, FileArchive, FolderInput, FileText, Server, FolderUp, LogOut, Check,
-  Sheet, Presentation, Bell, KeyRound, AppWindow,
+  Sheet, Presentation, Bell, KeyRound, AppWindow, PenTool,
 } from 'lucide-vue-next'
 import { notifIcon } from '@/lib/notifIcons'
 import { useFilesStore, type View } from '@/stores/files'
@@ -50,6 +50,7 @@ type Dialog =
   | { type: 'rename'; id: number; value: string }
   | { type: 'folder'; value: string }
   | { type: 'office'; value: string; ext: string }
+  | { type: 'board'; value: string }
   | { type: 'purge'; ids: number[] }
   | { type: 'emptytrash' }
   | null
@@ -209,6 +210,7 @@ function bgCtx(ev: MouseEvent) {
     items: [
       { header: t('shell.secCreate') },
       { id: 'newfolder', label: t('shell.newFolder'), icon: FolderPlus },
+      ...(auth.boardsEnabled ? [{ id: 'newboard', label: t('shell.newBoard'), icon: PenTool }] : []),
       ...officeCreateItems.value.map(
         (it): MenuItem => ({ id: `office:${it.ext}`, label: t(it.labelKey), icon: it.icon }),
       ),
@@ -311,6 +313,7 @@ function menuAction(id: string) {
     case 'restore': files.restore([...files.sel]); break
     case 'purge': dialog.value = { type: 'purge', ids: [...files.sel] }; break
     case 'newfolder': openNewFolder(); break
+    case 'newboard': openNewBoard(); break
     case 'import': triggerUpload(); break
     case 'importfolder': triggerFolderUpload(); break
   }
@@ -346,6 +349,12 @@ const officeCreateItems = computed(() =>
     return ext ? { ...typ, ext } : null
   }).filter((x): x is NonNullable<typeof x> => x !== null),
 )
+function openNewBoard() {
+  closeMenus()
+  sidebarOpen.value = false
+  dialog.value = { type: 'board', value: `${t('shell.untitledBoard')}.excalidraw` }
+  focusDialog()
+}
 function newOffice(item: { ext: string; nameKey: string }) {
   closeMenus()
   sidebarOpen.value = false
@@ -366,6 +375,12 @@ async function confirmDialog() {
     if (v) await files.rename(d.id, v)
   } else if (d.type === 'folder') {
     await files.createFolder(d.value.trim() || t('shell.newFolder'))
+  } else if (d.type === 'board') {
+    const name = d.value.trim()
+    if (name) {
+      const node = await files.createBoard(name)
+      if (node) files.openNode(node)
+    }
   } else if (d.type === 'office') {
     const name = d.value.trim()
     if (name) {
@@ -576,6 +591,7 @@ onUnmounted(() => {
         <div v-if="newMenuOpen" class="menu new-menu" @click.stop>
           <div class="menu-header">{{ t('shell.secCreate') }}</div>
           <button class="menu-item" @click="openNewFolder"><FolderPlus :size="16" />{{ t('shell.newFolder') }}</button>
+          <button v-if="auth.boardsEnabled" class="menu-item" @click="openNewBoard"><PenTool :size="16" />{{ t('shell.newBoard') }}</button>
           <button v-for="it in officeCreateItems" :key="it.ext" class="menu-item" @click="newOffice(it)">
             <component :is="it.icon" :size="16" />{{ t(it.labelKey) }}
           </button>
@@ -837,6 +853,14 @@ onUnmounted(() => {
         <template v-else-if="dialog.type === 'folder'">
           <h2>{{ t('shell.newFolder') }}</h2>
           <input ref="dialogInput" v-model="dialog.value" class="input" type="text" :placeholder="t('shell.folderNamePlaceholder')" @keyup.enter="confirmDialog" />
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>
+          </div>
+        </template>
+        <template v-else-if="dialog.type === 'board'">
+          <h2>{{ t('shell.newBoardTitle') }}</h2>
+          <input ref="dialogInput" v-model="dialog.value" class="input" type="text" @keyup.enter="confirmDialog" />
           <div class="dialog-actions">
             <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
             <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>

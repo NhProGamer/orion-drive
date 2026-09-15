@@ -16,6 +16,7 @@ const EXT_KIND: Record<string, string> = {
   yml: 'config', yaml: 'config', toml: 'config', env: 'config', conf: 'config', ini: 'config', json: 'config',
   iso: 'disc', img: 'disc',
   fig: 'design', sketch: 'design', psd: 'design', psb: 'design', ai: 'design', eps: 'design', xcf: 'design',
+  excalidraw: 'board',
 }
 
 export function kindFromName(name: string): string {
@@ -33,10 +34,18 @@ export function isArchive(name: string): boolean {
   return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
 }
 
-export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'archive' | 'none'
+export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'archive' | 'board' | 'none'
+
+/** Whether the file is a collaborative whiteboard. */
+export function isBoard(name: string): boolean {
+  return /\.excalidraw$/i.test(String(name))
+}
 
 /** How a file can be previewed inline in the browser. */
 export function previewKind(name: string): PreviewKind {
+  // Whiteboards open in the Excalidraw canvas, live-shared with anyone else who
+  // has the file open.
+  if (isBoard(name)) return 'board'
   // foliate-js renders these e-book / comic formats through the same viewer.
   if (/\.(epub|mobi|azw3?|fb2|cbz)$/i.test(String(name))) return 'epub'
   // Archives are browsed as a tree (listed from their index, never extracted).

@@ -63,6 +63,7 @@ export interface Me {
   oidc_enabled: boolean
   can_share: boolean
   wopi: boolean
+  boards: boolean
   admin: boolean
 }
 
@@ -206,6 +207,15 @@ function shareUrl(token: string, action: string, params: Record<string, string |
   return `/api/v1/share/${token}/${action}` + (s ? `?${s}` : '')
 }
 
+/** Absolute ws:// or wss:// URL for a relay endpoint under the API prefix. */
+function socketUrl(path: string, params: Record<string, string | undefined> = {}) {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v) q.set(k, v)
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  const s = q.toString()
+  return `${scheme}://${window.location.host}/api/v1${path}` + (s ? `?${s}` : '')
+}
+
 export const api = {
   me: () => get<Me>('/user/me'),
   capacity: () => get<Capacity>('/user/capacity'),
@@ -249,6 +259,10 @@ export const api = {
   saveBlob: (id: number, blob: Blob) =>
     put<FileNode>(`/file/blob/${id}`, blob, { headers: { 'Content-Type': 'application/octet-stream' } }),
   officeUrl: (id: number) => `/api/v1/file/office/${id}`,
+
+  // Collaborative whiteboards
+  newBoard: (parent: string, name: string) => post<FileNode>('/file/board/new', { parent, name }),
+  boardSocketUrl: (id: number) => socketUrl(`/file/board/${id}/ws`),
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Archives (background tasks)
@@ -339,6 +353,8 @@ export const api = {
   shareOfficeUrl: (token: string, path?: string, password?: string, name?: string) =>
     shareUrl(token, 'office', { path, password, name }),
   shareThumbUrl: (token: string, path?: string) => shareUrl(token, 'thumb', { path }),
+  shareBoardSocketUrl: (token: string, path?: string, password?: string, name?: string) =>
+    socketUrl(`/share/${token}/board/ws`, { path, password, name }),
   shareInlineUrl: (token: string, path?: string, password?: string) =>
     shareUrl(token, 'content', { path, password, inline: '1' }),
 
@@ -401,6 +417,7 @@ export interface ShareView {
   size: number
   permission: SharePermission
   wopi: boolean
+  boards: boolean
   previewable: boolean
   has_password: boolean
   expired: boolean
