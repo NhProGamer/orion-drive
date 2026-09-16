@@ -8,7 +8,7 @@ import {
   Maximize2, Minimize2,
 } from 'lucide-vue-next'
 import { api, type ShareView as ShareViewData, type ShareEntry } from '@/lib/api'
-import { kindFromName, fmtSize, previewKind, canThumbnail, isBoard } from '@/lib/format'
+import { kindFromName, fmtSize, previewKind, canThumbnail, isBoard, isMarkdown } from '@/lib/format'
 import { uploadInChunks } from '@/lib/upload'
 import { metaFor } from '@/lib/icons'
 import { useUiStore } from '@/stores/ui'
@@ -18,6 +18,7 @@ import { useFullscreen } from '@/composables/useFullscreen'
 // React + Excalidraw stay out of the public share bundle until a visitor opens
 // an actual whiteboard.
 const BoardEditor = defineAsyncComponent(() => import('@/components/drive/BoardEditor.vue'))
+const MarkdownEditor = defineAsyncComponent(() => import('@/components/drive/MarkdownEditor.vue'))
 
 // Visitors are anonymous, so the name they pick is the only thing that tells
 // the other people on the board who is drawing. It is remembered locally so a
@@ -101,22 +102,38 @@ function canPreview(name: string): boolean {
   return ['image', 'video', 'audio', 'pdf', 'text'].includes(kind)
 }
 
-// A shared whiteboard is joined live: the visitor draws alongside everyone else
-// who has it open, so the share's own permission decides read-only or not.
+/** Label for the action that opens a file in place. */
+function previewLabel(name: string): string {
+  if (isBoard(name) && data.value?.boards) return t('shareView.openBoard')
+  if (isMarkdown(name) && data.value?.live_docs) return t('shareView.openDoc')
+  return t('shareView.preview')
+}
+
+// A shared whiteboard or Markdown file is joined live: the visitor works
+// alongside everyone else who has it open, and the share's own permission
+// decides whether they can edit or only watch.
 const boardShare = computed(() => !!data.value && !data.value.is_dir && data.value.boards && isBoard(data.value.name))
+const docShare = computed(() => !!data.value && !data.value.is_dir && data.value.live_docs && isMarkdown(data.value.name))
 const boardWrap = ref<HTMLElement | null>(null)
 const { active: isFullscreen, supported: canFullscreen, toggle: toggleFullscreen } = useFullscreen(boardWrap)
 
-const boardSocket = computed(() =>
-  viewer.value
-    ? api.shareBoardSocketUrl(
-        token,
-        viewer.value.path || undefined,
-        password.value || undefined,
-        contributor.value.trim() || undefined,
-      )
-    : ''
-)
+/** Which live editor the open file needs, if any. */
+const liveKind = computed<'board' | 'doc' | null>(() => {
+  if (!viewer.value) return null
+  if (isBoard(viewer.value.name) && data.value?.boards) return 'board'
+  if (isMarkdown(viewer.value.name) && data.value?.live_docs) return 'doc'
+  return null
+})
+const liveComponent = computed(() => (liveKind.value === 'board' ? BoardEditor : MarkdownEditor))
+const liveSocket = computed(() => {
+  if (!viewer.value) return ''
+  const path = viewer.value.path || undefined
+  const pass = password.value || undefined
+  const name = contributor.value.trim() || undefined
+  return liveKind.value === 'board'
+    ? api.shareBoardSocketUrl(token, path, pass, name)
+    : api.shareDocSocketUrl(token, path, pass, name)
+})
 function openPreview(path: string, name: string) {
   viewer.value = { path, name }
 }
@@ -433,7 +450,7 @@ async function download() {
                 <input v-model="password" class="input" type="password" :placeholder="t('shareView.required')"
                   @keyup.enter="data.is_dir ? openList('') : download()" />
               </label>
-              <label v-if="boardShare" class="sv-field">
+              <label v-if="boardShare || docShare" class="sv-field">
                 <span class="sv-field-lbl">{{ t('shareView.yourName') }}</span>
                 <input
                   class="input"
@@ -451,7 +468,7 @@ async function download() {
                   {{ data.is_dir ? t('shareView.openFolder') : t('common.download') }}
                 </button>
                 <button v-if="!data.is_dir && canPreview(data.name)" class="btn btn-secondary sv-btn" @click="openPreview('', data.name)">
-                  <Eye :size="16" />{{ boardShare ? t('shareView.openBoard') : t('shareView.preview') }}
+                  <Eye :size="16" />{{ previewLabel(data.name) }}
                 </button>
                 <button v-if="!data.is_dir && ui.canViewOffice(data.name)" class="btn btn-secondary sv-btn" @click="openOffice()">
                   <FileText :size="16" />{{ officeLabel(data.name) }}
@@ -468,11 +485,11 @@ async function download() {
     </div>
 
     <!-- In-page inline viewer overlay -->
-    <div v-if="viewer" class="share-viewer" :class="{ bare: viewerKind === 'board' }" @click.self="viewer = null">
+    <div v-if="viewer" class="share-viewer" :class="{ bare: !!liveKind }" @click.self="viewer = null">
       <button class="icon-btn share-viewer-close" :title="t('common.close')" @click="viewer = null">
         <X :size="18" />
       </button>
-      <div v-if="viewerKind === 'board'" ref="boardWrap" class="share-viewer-board">
+      <div v-if="liveKind" ref="boardWrap" class="share-viewer-board">
         <div class="share-board-bar">
           <input
             class="input share-board-name"
@@ -492,14 +509,14 @@ async function download() {
             <component :is="isFullscreen ? Minimize2 : Maximize2" :size="16" />
           </button>
         </div>
-        <BoardEditor :url="boardSocket" class="share-board-canvas" />
+        <component :is="liveComponent" :url="liveSocket" class="share-board-canvas" />
       </div>
       <img v-else-if="viewerKind === 'image'" :src="viewerSrc" :alt="viewer.name" class="share-viewer-media" />
       <video v-else-if="viewerKind === 'video'" :src="viewerSrc" controls autoplay class="share-viewer-media" />
       <audio v-else-if="viewerKind === 'audio'" :src="viewerSrc" controls autoplay />
       <iframe v-else-if="viewerKind === 'pdf' || viewerKind === 'text'" :src="viewerSrc" class="share-viewer-frame" />
       <a
-        v-if="viewerKind !== 'board'"
+        v-if="!liveKind"
         class="btn btn-secondary share-viewer-dl"
         :href="api.shareContentUrl(token, viewer.path || undefined, password || undefined)"
       >

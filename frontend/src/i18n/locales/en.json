@@ -187,6 +187,20 @@
     "peers": "{count} other(s) here",
     "loadFailed": "The whiteboard editor could not be loaded."
   },
+  "doc": {
+    "placeholder": "Start writing…",
+    "you": "You",
+    "connecting": "Connecting…",
+    "reconnecting": "Reconnecting…",
+    "offline": "Offline",
+    "saved": "Saved",
+    "readOnly": "Read-only",
+    "alone": "Just you",
+    "peers": "{count} other(s) here",
+    "source": "View Markdown source",
+    "wysiwyg": "Back to the editor",
+    "loadFailed": "The Markdown editor could not be loaded."
+  },
   "shareDialog": {
     "title": "Share “{name}”",
     "passwordLabel": "Password (optional)",
@@ -251,7 +265,8 @@
     "viewOffice": "Open in Office",
     "preview": "Preview",
     "tooManyRequests": "Too many requests, try again shortly",
-    "openBoard": "Open whiteboard"
+    "openBoard": "Open whiteboard",
+    "openDoc": "Open document"
   },
   "shares": {
     "linkToast": "Link: {url}",

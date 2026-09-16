@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Download, Save, Eye, Pencil, FileQuestion, Crop, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { X, Download, Save, Eye, Pencil, FileQuestion, Crop, Maximize2, Minimize2, Code2 } from 'lucide-vue-next'
 import { api, type FileNode } from '@/lib/api'
 import { previewKind, isMarkdown } from '@/lib/format'
 import { renderMarkdown } from '@/lib/markdown'
 import { useFilesStore } from '@/stores/files'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 import { useFullscreen } from '@/composables/useFullscreen'
 import EpubViewer from './EpubViewer.vue'
 import ArchiveViewer from './ArchiveViewer.vue'
@@ -16,6 +17,10 @@ import ImageEditor from './ImageEditor.vue'
 // only a user who actually opens a board downloads them.
 const BoardEditor = defineAsyncComponent(() => import('./BoardEditor.vue'))
 
+// Same for the Markdown editor: ProseMirror, CodeMirror and the CRDT bindings
+// only load once someone opens a Markdown file.
+const MarkdownEditor = defineAsyncComponent(() => import('./MarkdownEditor.vue'))
+
 const props = defineProps<{ node: FileNode }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -23,10 +28,19 @@ const { t } = useI18n()
 
 const files = useFilesStore()
 const ui = useUiStore()
+const auth = useAuthStore()
 const office = computed(() => ui.canEditOffice(props.node.name))
 const kind = computed(() => previewKind(props.node.name))
 const src = computed(() => api.inlineUrl(props.node.id))
 const markdown = computed(() => isMarkdown(props.node.name))
+// A Markdown file opens in the collaborative WYSIWYG when the server relays
+// live sessions; otherwise it falls back to the plain textarea below.
+const liveMarkdown = computed(() => markdown.value && auth.liveDocsEnabled)
+// The raw Markdown behind the WYSIWYG, for the source view. It comes from the
+// editor itself (the seed, then every autosave), so opening the source costs no
+// extra request.
+const docText = ref('')
+const sourceMode = ref(false)
 const editingImage = ref(false)
 
 // A whiteboard is the one preview worth handing the whole screen: it is a
@@ -42,7 +56,9 @@ const dirty = computed(() => text.value !== original.value)
 const rendered = computed(() => renderMarkdown(text.value))
 
 async function loadText() {
-  if (kind.value !== 'text') return
+  // A live document is seeded through its socket, so fetching it here would
+  // only duplicate the work.
+  if (kind.value !== 'text' || liveMarkdown.value) return
   loading.value = true
   try {
     const res = await fetch(src.value, { credentials: 'include' })
@@ -54,7 +70,12 @@ async function loadText() {
     loading.value = false
   }
 }
-watch(() => props.node.id, () => { editingImage.value = false; loadText() }, { immediate: true })
+watch(() => props.node.id, () => {
+  editingImage.value = false
+  sourceMode.value = false
+  docText.value = ''
+  loadText()
+}, { immediate: true })
 
 async function save() {
   await files.saveText(props.node.id, text.value)
@@ -92,7 +113,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <header class="ov-head">
         <span class="ov-title">{{ node.name }}</span>
         <div class="ov-actions">
-          <template v-if="kind === 'text'">
+          <button
+            v-if="liveMarkdown"
+            class="icon-btn"
+            :title="sourceMode ? t('doc.wysiwyg') : t('doc.source')"
+            @click="sourceMode = !sourceMode"
+          >
+            <component :is="sourceMode ? Pencil : Code2" :size="16" />
+          </button>
+          <template v-if="kind === 'text' && !liveMarkdown">
             <button v-if="markdown" class="icon-btn" :title="mode === 'edit' ? t('previewOverlay.preview') : t('common.edit')"
               @click="mode = mode === 'edit' ? 'rendered' : 'edit'">
               <component :is="mode === 'edit' ? Eye : Pencil" :size="16" />
@@ -126,6 +155,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <BoardEditor v-else-if="kind === 'board'" :url="api.boardSocketUrl(node.id)" :key="node.id" />
         <EpubViewer v-else-if="kind === 'epub'" :url="src" :name="node.name" :key="node.id" />
         <ArchiveViewer v-else-if="kind === 'archive'" :node="node" :key="node.id" />
+
+        <template v-else-if="liveMarkdown">
+          <!-- Kept mounted while the source is shown: unmounting would drop the
+               live session, and with it this peer's place in the document. -->
+          <pre v-show="sourceMode" class="ov-source">{{ docText }}</pre>
+          <MarkdownEditor
+            v-show="!sourceMode"
+            :url="api.docSocketUrl(node.id)"
+            :key="node.id"
+            @markdown="docText = $event"
+          />
+        </template>
 
         <template v-else-if="kind === 'text'">
           <div v-if="loading" class="ov-empty">{{ t('common.loading') }}</div>

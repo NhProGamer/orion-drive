@@ -187,6 +187,20 @@
     "peers": "{count} autre(s) participant(s)",
     "loadFailed": "Impossible de charger l'éditeur de tableau blanc."
   },
+  "doc": {
+    "placeholder": "Écrivez ici…",
+    "you": "Vous",
+    "connecting": "Connexion…",
+    "reconnecting": "Reconnexion…",
+    "offline": "Hors ligne",
+    "saved": "Enregistré",
+    "readOnly": "Lecture seule",
+    "alone": "Vous seul",
+    "peers": "{count} autre(s) participant(s)",
+    "source": "Voir la source Markdown",
+    "wysiwyg": "Revenir à l’éditeur",
+    "loadFailed": "Impossible de charger l’éditeur Markdown."
+  },
   "shareDialog": {
     "title": "Partager « {name} »",
     "passwordLabel": "Mot de passe (optionnel)",
@@ -251,7 +265,8 @@
     "viewOffice": "Ouvrir dans Office",
     "preview": "Aperçu",
     "tooManyRequests": "Trop de requêtes, réessayez dans un instant",
-    "openBoard": "Ouvrir le tableau"
+    "openBoard": "Ouvrir le tableau",
+    "openDoc": "Ouvrir le document"
   },
   "shares": {
     "linkToast": "Lien : {url}",

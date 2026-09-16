@@ -64,6 +64,7 @@ export interface Me {
   can_share: boolean
   wopi: boolean
   boards: boolean
+  live_docs: boolean
   admin: boolean
 }
 
@@ -263,6 +264,7 @@ export const api = {
   // Collaborative whiteboards
   newBoard: (parent: string, name: string) => post<FileNode>('/file/board/new', { parent, name }),
   boardSocketUrl: (id: number) => socketUrl(`/file/board/${id}/ws`),
+  docSocketUrl: (id: number) => socketUrl(`/file/doc/${id}/ws`),
   archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
 
   // Archives (background tasks)
@@ -355,6 +357,8 @@ export const api = {
   shareThumbUrl: (token: string, path?: string) => shareUrl(token, 'thumb', { path }),
   shareBoardSocketUrl: (token: string, path?: string, password?: string, name?: string) =>
     socketUrl(`/share/${token}/board/ws`, { path, password, name }),
+  shareDocSocketUrl: (token: string, path?: string, password?: string, name?: string) =>
+    socketUrl(`/share/${token}/doc/ws`, { path, password, name }),
   shareInlineUrl: (token: string, path?: string, password?: string) =>
     shareUrl(token, 'content', { path, password, inline: '1' }),
 
@@ -418,6 +422,7 @@ export interface ShareView {
   permission: SharePermission
   wopi: boolean
   boards: boolean
+  live_docs: boolean
   previewable: boolean
   has_password: boolean
   expired: boolean

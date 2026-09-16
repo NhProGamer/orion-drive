@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', {
     canShare: (s) => s.me?.can_share !== false,
     wopiEnabled: (s) => s.me?.wopi === true,
     boardsEnabled: (s) => s.me?.boards === true,
+    liveDocsEnabled: (s) => s.me?.live_docs === true,
     isAdmin: (s) => s.me?.admin === true,
     initials: (s) => {
       const name = s.me?.nick || s.me?.email || '?'
