@@ -29,14 +29,22 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      # Third-party actions use full github.com URLs because the Forgejo runner
+      # resolves bare `owner/repo` against data.forgejo.org, which only mirrors
+      # actions/*.
+      - uses: https://github.com/pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Type-check
-        run: npm run typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
       - name: Build
-        run: npm run build
+        run: pnpm build

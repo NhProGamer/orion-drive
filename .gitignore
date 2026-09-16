@@ -34,7 +34,9 @@ conf.ini
 
 # Tooling caches / stray lockfiles
 .serena/
-/frontend/pnpm-lock.yaml
+# pnpm is the package manager (see frontend/package.json "packageManager"), so
+# its lockfile is committed and npm's is the stray one.
+/frontend/package-lock.json
 
 # Design assets staged here (branding); not part of the build
 /tmp/

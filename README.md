@@ -76,7 +76,7 @@ cp conf.ini.example conf.ini      # configure OIDC (or use dev-login in debug mo
 go run . server
 
 # Frontend — Vite dev server with API proxy + hot reload
-cd frontend && npm install && npm run dev
+cd frontend && pnpm install && pnpm dev
 ```
 
 Useful CLI: `go run . migrate up`, `go run . group …`, `go run . policy add-s3|add-local`.
@@ -84,7 +84,7 @@ Useful CLI: `go run . migrate up`, `go run . group …`, `go run . policy add-s3
 ## Production build
 
 ```bash
-cd frontend && npm run build      # emits application/statics/dist (embedded by the binary)
+cd frontend && pnpm build         # emits application/statics/dist (embedded by the binary)
 cd .. && go build -o orion-drive .
 ./orion-drive server
 ```

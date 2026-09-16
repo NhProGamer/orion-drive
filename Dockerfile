@@ -3,12 +3,15 @@
 # ---- Stage 1: build the Vue frontend (output goes to application/statics/dist) ----
 FROM node:22-alpine AS frontend
 WORKDIR /src/frontend
+# corepack ships with the Node image and pins pnpm to the version package.json
+# declares, so the image build resolves the same tree as CI and development.
+RUN corepack enable
 # Install dependencies first for better layer caching.
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 # Vite writes the build to ../application/statics/dist (embedded by the Go binary).
-RUN npm run build
+RUN pnpm build
 
 # ---- Stage 2: build the single Go binary with the SPA embedded ----
 FROM golang:1.26-alpine AS build

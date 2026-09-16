@@ -9,7 +9,7 @@ before:
   hooks:
     - go mod tidy
     # Build the Vue SPA so it is embedded (application/statics/dist) into the binary.
-    - sh -c "cd frontend && npm ci && npm run build"
+    - sh -c "cd frontend && pnpm install --frozen-lockfile && pnpm build"
 
 builds:
   - id: orion-drive
