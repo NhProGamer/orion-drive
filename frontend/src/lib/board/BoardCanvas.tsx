@@ -4,7 +4,7 @@
  * mounts it through `mount.ts` and only passes plain data in.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Excalidraw, LiveCollaborationTrigger, reconcileElements, restoreElements, CaptureUpdateAction } from '@excalidraw/excalidraw'
+import { Excalidraw, reconcileElements, restoreElements, CaptureUpdateAction } from '@excalidraw/excalidraw'
 import { BoardCollab, type CollabStatus } from './collab'
 import type { WireElement, WireFile, WirePeer } from './protocol'
 
@@ -189,13 +189,11 @@ export default function BoardCanvas({ url, theme, viewOnly, labels }: BoardCanva
         viewModeEnabled={viewOnly || !canWrite}
         onChange={onChange as never}
         onPointerUpdate={onPointerUpdate as never}
+        // Excalidraw's own share button drives its hosted collaboration
+        // service, which this build does not use — sharing a board is the
+        // drive's job, through the same link as any other file. The participant
+        // count it would have shown lives in the status bar below instead.
         UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false, export: false } }}
-        renderTopRightUI={() => (
-          <LiveCollaborationTrigger
-            isCollaborating={others.length > 0}
-            onSelect={() => undefined}
-          />
-        )}
       />
       <div className="board-bar">
         {statusLabel && <span className={fatal ? 'board-chip board-chip-error' : 'board-chip'}>{statusLabel}</span>}
