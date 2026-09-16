@@ -201,6 +201,7 @@ type PublicView struct {
 	Permission  string `json:"permission"`
 	Wopi        bool   `json:"wopi"`        // set by the controller: online Office editing available
 	Boards      bool   `json:"boards"`      // set by the controller: live whiteboard collaboration available
+	LiveDocs    bool   `json:"live_docs"`   // set by the controller: live Markdown collaboration available
 	Previewable bool   `json:"previewable"` // a visual thumbnail can be rendered for this file
 	HasPassword bool   `json:"has_password"`
 	Expired     bool   `json:"expired"`
@@ -733,10 +734,11 @@ func (s *Service) OfficeTarget(ctx context.Context, token, subPath, password str
 	return s.editTarget(ctx, token, subPath, password)
 }
 
-// BoardTarget authorizes a share and resolves a collaborative whiteboard within
-// it. It returns the file id, the owner's id (snapshots are written as the
-// owner), the write permission and the file name.
-func (s *Service) BoardTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
+// LiveTarget authorizes a share and resolves a file within it for live
+// collaborative editing (whiteboard or Markdown). It returns the file id, the
+// owner's id (snapshots are written as the owner), the write permission and the
+// file name.
+func (s *Service) LiveTarget(ctx context.Context, token, subPath, password string) (fileID, ownerID uint, canWrite bool, name string, err error) {
 	return s.editTarget(ctx, token, subPath, password)
 }
 

@@ -64,7 +64,7 @@ func (ctl *Controller) BoardSocketShare(c *gin.Context) {
 	}
 	token := c.Param("token")
 	password := c.Query("password")
-	fileID, ownerID, canWrite, name, err := ctl.dep.Shares.BoardTarget(c.Request.Context(), token, c.Query("path"), password)
+	fileID, ownerID, canWrite, name, err := ctl.dep.Shares.LiveTarget(c.Request.Context(), token, c.Query("path"), password)
 	if err != nil {
 		failShare(c, err)
 		return

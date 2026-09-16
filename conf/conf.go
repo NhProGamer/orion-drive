@@ -28,6 +28,42 @@ type Config struct {
 	Security  Security
 	Thumbnail Thumbnail
 	Board     Board
+	LiveDoc   LiveDoc
+}
+
+// LiveDoc tunes collaborative Markdown editing. A zero value uses the built-in
+// default.
+type LiveDoc struct {
+	// Disable turns off live collaboration on Markdown files: they then open in
+	// the editor without a session, saved by whoever pressed save.
+	Disable bool `ini:"Disable"`
+	// MaxSizeMB caps a single inbound frame — a document update or a snapshot.
+	// Default 8.
+	MaxSizeMB int64 `ini:"MaxSizeMB"`
+	// MaxPeers caps concurrent editors per document. Default 30.
+	MaxPeers int `ini:"MaxPeers"`
+	// SaveIntervalSeconds is the shortest delay between two snapshots of a
+	// document being actively edited. Default 3.
+	SaveIntervalSeconds int `ini:"SaveIntervalSeconds"`
+}
+
+// Enabled reports whether live Markdown collaboration is available.
+func (d LiveDoc) Enabled() bool { return !d.Disable }
+
+// MaxFrameBytes resolves the effective per-frame ceiling.
+func (d LiveDoc) MaxFrameBytes() int64 {
+	if d.MaxSizeMB <= 0 {
+		return 8 << 20
+	}
+	return d.MaxSizeMB << 20
+}
+
+// SaveInterval resolves the effective snapshot interval.
+func (d LiveDoc) SaveInterval() time.Duration {
+	if d.SaveIntervalSeconds <= 0 {
+		return 3 * time.Second
+	}
+	return time.Duration(d.SaveIntervalSeconds) * time.Second
 }
 
 // Board tunes the collaborative whiteboard (.excalidraw) relay. A zero value

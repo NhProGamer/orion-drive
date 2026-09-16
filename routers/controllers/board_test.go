@@ -60,7 +60,7 @@ func boardEnv(t *testing.T) (*Controller, *filemanager.Manager, *model.User, *ht
 		Shares: share.New(repo, mgr),
 		Cache:  cache.NewMemory(),
 		// A short save interval keeps the snapshot assertions quick.
-		Boards: board.NewHub(mgr.BoardStore(), board.Options{SaveInterval: 20 * time.Millisecond}, quiet),
+		Boards: board.NewHub(mgr.Snapshots(), board.Options{SaveInterval: 20 * time.Millisecond}, quiet),
 	}
 	ctl := New(dep)
 
@@ -315,7 +315,7 @@ func TestBoardSnapshotsReuseTheSessionVersion(t *testing.T) {
 	ctl, mgr, user, _ := boardEnv(t)
 	dto := createBoard(t, ctl, user, "Session")
 	ctx := context.Background()
-	store := mgr.BoardStore()
+	store := mgr.Snapshots()
 
 	first, err := store.Save(ctx, user.ID, dto.ID, 0, []byte(`{"type":"excalidraw","elements":[]}`))
 	if err != nil {
@@ -371,7 +371,7 @@ func TestBoardSnapshotRefusesALockedFile(t *testing.T) {
 	if _, err := mgr.Lock(ctx, user, dto.ID); err != nil {
 		t.Fatalf("lock: %v", err)
 	}
-	if _, err := mgr.BoardStore().Save(ctx, user.ID, dto.ID, 0, board.EmptyScene()); err == nil {
+	if _, err := mgr.Snapshots().Save(ctx, user.ID, dto.ID, 0, board.EmptyScene()); err == nil {
 		t.Fatal("a locked file must not be overwritten by a snapshot")
 	}
 }

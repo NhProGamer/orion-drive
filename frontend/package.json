@@ -15,6 +15,10 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
+    "@milkdown/kit": "^7.22.1",
+    "@milkdown/plugin-collab": "^7.22.1",
+    "@milkdown/theme-nord": "^7.22.1",
+    "@milkdown/vue": "^7.22.1",
     "axios": "^1.7.9",
     "foliate-js": "^1.0.1",
     "lucide-vue-next": "^1.0.0",
@@ -23,7 +27,9 @@
     "react-dom": "^18.3.1",
     "vue": "^3.5.13",
     "vue-i18n": "^11.4.8",
-    "vue-router": "^5.2.0"
+    "vue-router": "^5.2.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
   },
   "devDependencies": {
     "@pinia/testing": "^2.0.1",

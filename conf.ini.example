@@ -221,3 +221,22 @@ MaxSceneMB = 0
 MaxElements = 0
 MaxPeers = 0
 SaveIntervalSeconds = 0
+
+[LiveDoc]
+; Collaborative Markdown editing. Several people open the same .md file and
+; type together; their browsers merge the text with a CRDT (character-level, so
+; two people in the same paragraph both keep their words) while the server only
+; relays their updates. One elected editor sends the resulting Markdown back,
+; snapshot-throttled, leaving one entry in the file's version history per
+; editing session. Any value left at 0 uses the built-in default.
+; Disable             : turn live collaboration off; Markdown files then open in
+;                       the editor without a session.
+; MaxSizeMB           : ceiling on a single inbound frame — a document update or
+;                       a snapshot (default 8).
+; MaxPeers            : max concurrent editors per document (default 30).
+; SaveIntervalSeconds : shortest delay between two snapshots of a document being
+;                       actively edited (default 3).
+Disable = false
+MaxSizeMB = 0
+MaxPeers = 0
+SaveIntervalSeconds = 0

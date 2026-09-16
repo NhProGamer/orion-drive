@@ -171,6 +171,10 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	f.GET("/file/board/:id/ws", ctl.BoardSocket)
 	f.POST("/file/board/new", ctl.NewBoard)
 
+	// Collaborative Markdown editing: the relay socket for one of the user's
+	// own documents.
+	f.GET("/file/doc/:id/ws", ctl.DocSocket)
+
 	f.GET("/file/versions/:id", ctl.ListVersions)
 	f.POST("/file/version/restore", ctl.RestoreVersion)
 	f.POST("/file/version/delete", ctl.DeleteVersion)
@@ -286,4 +290,7 @@ func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	// other public endpoints — it resolves a token and checks a password, so it
 	// must not become a brute-force oracle.
 	api.GET("/share/:token/board/ws", rl, ctl.BoardSocketShare)
+
+	// Public: join a shared Markdown document's live editing session.
+	api.GET("/share/:token/doc/ws", rl, ctl.DocSocketShare)
 }

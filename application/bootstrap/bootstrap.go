@@ -22,6 +22,7 @@ import (
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote" // register the remote (slave) storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/s3"     // register the S3 storage backend
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/encrypt"
+	"github.com/NhProGamer/orion-drive/pkg/livedoc"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
 	"github.com/NhProGamer/orion-drive/pkg/thumb"
 	"github.com/NhProGamer/orion-drive/pkg/wopi"
@@ -45,6 +46,7 @@ type Dependency struct {
 	WOPI     *wopi.Token
 	WOPIDisc *wopi.Discovery
 	Boards   *board.Hub
+	Docs     *livedoc.Hub
 }
 
 // Init opens the database and assembles the dependency container. It does not
@@ -136,8 +138,16 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		WOPIDisc: wopi.NewDiscovery(cfg.WOPI.Discovery(), time.Hour),
 	}
 
+	if cfg.LiveDoc.Enabled() {
+		dep.Docs = livedoc.NewHub(files.Snapshots(), livedoc.Options{
+			MaxFrameBytes: cfg.LiveDoc.MaxFrameBytes(),
+			MaxPeers:      cfg.LiveDoc.MaxPeers,
+			SaveInterval:  cfg.LiveDoc.SaveInterval(),
+		}, logger)
+	}
+
 	if cfg.Board.Enabled() {
-		dep.Boards = board.NewHub(files.BoardStore(), board.Options{
+		dep.Boards = board.NewHub(files.Snapshots(), board.Options{
 			MaxSceneBytes: cfg.Board.MaxSceneBytes(),
 			MaxElements:   cfg.Board.MaxElements,
 			MaxPeers:      cfg.Board.MaxPeers,
