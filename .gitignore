@@ -37,8 +37,9 @@ conf.ini
 # pnpm is the package manager (see frontend/package.json "packageManager"), so
 # its lockfile is committed and npm's is the stray one.
 /frontend/package-lock.json
-# pnpm drops its store here when it cannot use the one under $HOME; the
-# workflows point it at /tmp, and this keeps a stray one from dirtying the tree.
+# pnpm drops its store here when it cannot use the one under $HOME (different
+# filesystems, as on a containerised CI runner). Ignoring it keeps the tree
+# clean, which is what GoReleaser checks before releasing.
 /.pnpm-store/
 /frontend/.pnpm-store/
 
