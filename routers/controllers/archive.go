@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/NhProGamer/orion-drive/pkg/archive"
@@ -24,6 +25,7 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	level, _ := strconv.Atoi(c.Query("level"))
 	// Measured first: a streaming response cannot take its headers back, so an
 	// archive over the limits has to be refused before the download starts
 	// rather than abandoned halfway through it.
@@ -33,7 +35,7 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "orion-archive"+archive.Extension(format)))
 	c.Header("Content-Type", "application/octet-stream")
-	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer, format, nil); err != nil {
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer, format, level, nil); err != nil {
 		// Headers/stream may already be committed; surface the error for logs.
 		_ = c.Error(err)
 		c.Status(http.StatusInternalServerError)
@@ -47,6 +49,9 @@ func (ctl *Controller) CompressArchive(c *gin.Context) {
 		IDs    []uint `json:"ids"`
 		Name   string `json:"name"`
 		Format string `json:"format"`
+		// Level is the compression effort, 1 (fastest) to 9 (smallest); 0
+		// leaves the server's configured default.
+		Level int `json:"level"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
@@ -57,7 +62,7 @@ func (ctl *Controller) CompressArchive(c *gin.Context) {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
 		return
 	}
-	job, err := ctl.dep.Files.Compress(c.Request.Context(), ctl.user(c), parentID, req.IDs, req.Name, req.Format)
+	job, err := ctl.dep.Files.Compress(c.Request.Context(), ctl.user(c), parentID, req.IDs, req.Name, req.Format, req.Level)
 	if err != nil {
 		fail(c, err)
 		return
@@ -96,7 +101,11 @@ func (ctl *Controller) ArchiveFormats(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	respond(c, serializer.OK(gin.H{"formats": archive.Creatable, "default": format}))
+	respond(c, serializer.OK(gin.H{
+		"formats": archive.Creatable,
+		"default": format,
+		"level":   ctl.dep.Files.ArchiveLevel(0),
+	}))
 }
 
 // ArchiveEntries lists the contents of an archive file without extracting it.

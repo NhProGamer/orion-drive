@@ -63,6 +63,8 @@ export interface Task {
   unit?: string
   /** Seconds left, as estimated by the server. Absent when not estimable. */
   eta_seconds?: number
+  /** Whether the server will still stop this job. */
+  cancellable?: boolean
   error?: string
   result?: Record<string, any>
   created_at: string
@@ -281,18 +283,22 @@ export const api = {
   newBoard: (parent: string, name: string) => post<FileNode>('/file/board/new', { parent, name }),
   boardSocketUrl: (id: number) => socketUrl(`/file/board/${id}/ws`),
   docSocketUrl: (id: number) => socketUrl(`/file/doc/${id}/ws`),
-  archiveUrl: (ids: number[], format?: string) =>
-    `/api/v1/file/archive?ids=${ids.join(',')}` + (format ? `&format=${encodeURIComponent(format)}` : ''),
-  archiveFormats: () => get<{ formats: string[]; default: string }>('/file/archive/formats'),
+  archiveUrl: (ids: number[], format?: string, level?: number) =>
+    `/api/v1/file/archive?ids=${ids.join(',')}` +
+    (format ? `&format=${encodeURIComponent(format)}` : '') +
+    (level ? `&level=${level}` : ''),
+  archiveFormats: () =>
+    get<{ formats: string[]; default: string; level: number }>('/file/archive/formats'),
 
   // Archives (background tasks)
-  compress: (parent: string, ids: number[], name?: string, format?: string) =>
-    post<Task>('/file/archive/compress', { parent, ids, name, format }),
+  compress: (parent: string, ids: number[], name?: string, format?: string, level?: number) =>
+    post<Task>('/file/archive/compress', { parent, ids, name, format, level }),
   extract: (id: number, parent: string) => post<Task>('/file/archive/extract', { id, parent }),
   archiveEntries: (id: number) => get<ArchiveListing>(`/file/archive/entries/${id}`),
   taskStatus: (id: string) => get<Task>(`/task/${id}`),
   taskList: () => get<Task[]>('/task'),
   taskStreamUrl: () => socketUrl('/task/ws'),
+  cancelTask: (id: string) => http.delete(`/task/${id}`),
 
   // Locking
   lock: (id: number) => post<FileNode>('/file/lock', { id }),

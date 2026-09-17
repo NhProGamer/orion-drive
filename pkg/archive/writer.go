@@ -12,15 +12,22 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
+	"github.com/ulikunitz/xz/lzma"
 )
 
 // Creatable lists the formats OrionDrive can produce, in the order a chooser
-// should offer them.
+// should offer them: from the most widely readable to the most compact.
 //
-// Reading covers more than this: bzip2 and xz have no writer worth shipping —
-// the standard library cannot write bzip2 at all, and xz compression is slow
-// enough to be a poor default for a drive.
-var Creatable = []string{FormatZip, FormatTarGz, FormatTarZst}
+// 7-Zip is absent because no pure-Go writer for it exists — every Go library,
+// this package's reader included, only reads 7z. Producing one would mean
+// either cgo (this binary is built without it) or shelling out to the 7z tool,
+// which cannot build an archive from object storage without first staging the
+// whole tree on disk. tar.xz is the honest substitute: LZMA2 is the algorithm
+// 7-Zip compresses with by default, and it streams.
+//
+// bzip2 stays read-only: the standard library has no writer for it.
+var Creatable = []string{FormatZip, FormatTarGz, FormatTarZst, FormatTarXz}
 
 // CanCreate reports whether a format can be produced.
 func CanCreate(format string) bool {
@@ -41,6 +48,8 @@ func Extension(format string) string {
 		return ".tar.gz"
 	case FormatTarZst:
 		return ".tar.zst"
+	case FormatTarXz:
+		return ".tar.xz"
 	default:
 		return ""
 	}
@@ -106,6 +115,8 @@ func NewWriter(w io.Writer, format string, level int) (Writer, error) {
 		return newTarGzWriter(w, level)
 	case FormatTarZst:
 		return newTarZstWriter(w, level)
+	case FormatTarXz:
+		return newTarXzWriter(w, level)
 	default:
 		return nil, fmt.Errorf("archive: cannot create %q archives", format)
 	}
@@ -215,6 +226,35 @@ func newTarZstWriter(w io.Writer, level int) (Writer, error) {
 		return nil, err
 	}
 	return &tarWriter{tw: tar.NewWriter(zw), compressor: zw}, nil
+}
+
+func newTarXzWriter(w io.Writer, level int) (Writer, error) {
+	cfg := xz.WriterConfig{DictCap: xzDictCap(level)}
+	if level <= 3 && level > 0 {
+		// The hash-table matcher trades ratio for speed; the binary tree is
+		// what makes xz slow, and only worth it when compactness is the point.
+		cfg.Matcher = lzma.HashTable4
+	}
+	xw, err := cfg.NewWriter(w)
+	if err != nil {
+		return nil, err
+	}
+	return &tarWriter{tw: tar.NewWriter(xw), compressor: xw}, nil
+}
+
+// xzDictCap maps the 1-9 scale onto a dictionary size, which is what decides
+// both how well xz compresses and how much memory it needs.
+func xzDictCap(level int) int {
+	switch {
+	case level <= 0:
+		return 8 << 20 // the library's own default
+	case level <= 3:
+		return 1 << 20
+	case level <= 6:
+		return 8 << 20
+	default:
+		return 32 << 20
+	}
 }
 
 // zstdLevel maps the 1-9 scale onto zstd's four levels.

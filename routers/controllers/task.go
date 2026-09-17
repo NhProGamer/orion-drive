@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 )
@@ -20,6 +21,19 @@ const taskWriteTimeout = 10 * time.Second
 // running extraction reports per entry, which on a thousand small files would
 // otherwise be a thousand frames a second.
 const taskCoalesce = 150 * time.Millisecond
+
+// TaskCancel stops one of the user's running jobs. The task unwinds through
+// its context — an extraction rolls back what it had written — so cancelling
+// does not leave a half-finished tree behind.
+func (ctl *Controller) TaskCancel(c *gin.Context) {
+	if !ctl.dep.Tasks.Cancel(ctl.user(c).ID, c.Param("id")) {
+		// Nothing to stop: it finished, or never belonged to this user. Both
+		// look the same from outside on purpose.
+		respond(c, serializer.Err(serializer.CodeNotFound, "task not found"))
+		return
+	}
+	respond(c, serializer.OK(nil))
+}
 
 // TaskSocket streams the user's background jobs over a WebSocket: their state
 // on connect, then again whenever any of them changes.

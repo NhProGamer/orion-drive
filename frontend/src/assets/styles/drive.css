@@ -3326,3 +3326,10 @@ from {
 .dialog-field .input {
   flex: 1;
 }
+
+/* Stop button on a running background task. */
+.task-cancel {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}

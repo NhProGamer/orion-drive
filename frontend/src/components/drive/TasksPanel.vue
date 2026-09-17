@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { FileArchive } from 'lucide-vue-next'
+import { FileArchive, X } from 'lucide-vue-next'
 import type { BgTask } from '@/stores/files'
 import { fmtEta, fmtSize } from '@/lib/format'
+import { useFilesStore } from '@/stores/files'
 
 const { t } = useI18n()
 defineProps<{ tasks: BgTask[] }>()
+const files = useFilesStore()
 
 function label(tk: BgTask): string {
   return tk.type === 'extract' ? t('tasks.extracting') : t('tasks.compressing')
@@ -47,6 +49,14 @@ function remaining(tk: BgTask): string {
           </div>
         </div>
         <span class="upload-pct">{{ tk.progress >= 0 ? Math.round(tk.progress) + '%' : '…' }}</span>
+        <button
+          v-if="tk.cancellable"
+          class="icon-btn task-cancel"
+          :title="t('tasks.cancel')"
+          @click="files.cancelTask(tk.id)"
+        >
+          <X :size="14" />
+        </button>
       </div>
     </div>
   </div>

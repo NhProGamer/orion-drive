@@ -39,6 +39,9 @@ export const useUiStore = defineStore('ui', {
     // Archive formats this server can create, and the one it defaults to.
     archiveFormats: [] as string[],
     archiveDefault: 'zip',
+    // The server's configured compression effort, offered as the preselected
+    // choice; 0 means each format's own default.
+    archiveLevel: 0,
     archiveLoaded: false,
     // Notification history shown in the bell dropdown (newest first).
     notifications: [] as Notification[],
@@ -81,6 +84,7 @@ export const useUiStore = defineStore('ui', {
         const r = await api.archiveFormats()
         this.archiveFormats = r.formats || []
         this.archiveDefault = r.default || 'zip'
+        this.archiveLevel = r.level || 0
       } catch {
         this.archiveLoaded = false
       }

@@ -375,7 +375,12 @@
     "compress": "Compresser…",
     "compressTitle": "Créer une archive",
     "archiveFormat": "Format",
-    "archiveName": "archive"
+    "archiveName": "archive",
+    "archiveLevel": "Compression",
+    "levelDefault": "Par défaut",
+    "levelFast": "Rapide",
+    "levelBalanced": "Équilibrée",
+    "levelSmallest": "Maximale (plus lent)"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",
@@ -430,7 +435,8 @@
     "archiveExtracted": "Archive extraite",
     "uploadToRoot": "Importation dans la racine de Mon Drive",
     "folderFailed": "Échec du dossier « {dir} »",
-    "uploadFailed": "Échec de l'import de « {name} »"
+    "uploadFailed": "Échec de l'import de « {name} »",
+    "taskCancelled": "Tâche annulée"
   },
   "search": {
     "filters": "Filtres",
@@ -504,6 +510,7 @@
     "title": "Tâches en cours",
     "extracting": "Extraction",
     "compressing": "Compression",
-    "remaining": "il reste {time}"
+    "remaining": "il reste {time}",
+    "cancel": "Annuler la tâche"
   }
 }

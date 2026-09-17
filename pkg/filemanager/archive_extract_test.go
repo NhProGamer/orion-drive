@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"sort"
@@ -375,7 +376,7 @@ func TestWriteArchiveRoundTrips(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf, archive.FormatZip, nil); err != nil {
+	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf, archive.FormatZip, 0, nil); err != nil {
 		t.Fatalf("WriteArchive: %v", err)
 	}
 	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
@@ -449,10 +450,10 @@ func TestArchiveFormatIsValidated(t *testing.T) {
 
 	// An unknown format is a bad request, not a server error: the caller asked
 	// for something this build cannot produce.
-	if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &bytes.Buffer{}, "rar", nil); !errors.Is(err, filemanager.ErrArchiveFormat) {
+	if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &bytes.Buffer{}, "rar", 0, nil); !errors.Is(err, filemanager.ErrArchiveFormat) {
 		t.Fatalf("WriteArchive error = %v, want ErrArchiveFormat", err)
 	}
-	if _, err := e.mgr.Compress(context.Background(), e.user, nil, []uint{id}, "x", "rar"); !errors.Is(err, filemanager.ErrArchiveFormat) {
+	if _, err := e.mgr.Compress(context.Background(), e.user, nil, []uint{id}, "x", "rar", 0); !errors.Is(err, filemanager.ErrArchiveFormat) {
 		t.Fatalf("Compress error = %v, want ErrArchiveFormat", err)
 	}
 	// An empty request means the configured default.
@@ -470,7 +471,7 @@ func TestUniqueNameKeepsAMultiPartExtension(t *testing.T) {
 	// and must stay recognisable as an archive. path.Ext alone would have
 	// produced "backup.tar (2).gz", which no reader accepts.
 	for i := 0; i < 2; i++ {
-		job, err := e.mgr.Compress(ctx, e.user, nil, ids, "backup", archive.FormatTarGz)
+		job, err := e.mgr.Compress(ctx, e.user, nil, ids, "backup", archive.FormatTarGz, 0)
 		if err != nil {
 			t.Fatalf("compress %d: %v", i, err)
 		}
@@ -502,5 +503,88 @@ func TestUniqueNameKeepsAMultiPartExtension(t *testing.T) {
 		if archive.Format(n) != archive.FormatTarGz {
 			t.Errorf("%q is no longer recognised as a tar.gz", n)
 		}
+	}
+}
+
+func TestCancellingAnExtractionLeavesNothingBehind(t *testing.T) {
+	e := newEnv(t)
+	// Enough members that the job is still running when the cancel lands.
+	entries := make([][2]string, 0, 400)
+	body := string(bytes.Repeat([]byte("payload "), 4096)) // 32 KiB each
+	for i := 0; i < 400; i++ {
+		entries = append(entries, [2]string{fmt.Sprintf("pack/f%03d.txt", i), body})
+	}
+	f := e.upload(t, "cancel.zip", zipOf(t, entries))
+	before := e.storageUsed(t)
+
+	job, err := e.mgr.Extract(context.Background(), e.user, f.ID, nil)
+	if err != nil {
+		t.Fatalf("schedule: %v", err)
+	}
+	// Wait for it to be under way, then stop it.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if got, ok := e.queue.Get(e.user.ID, job.ID); ok && got.Status == queue.StatusRunning && got.Done > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !e.queue.Cancel(e.user.ID, job.ID) {
+		t.Skip("the extraction finished before it could be cancelled; nothing to assert")
+	}
+
+	var final queue.Job
+	for time.Now().Before(deadline) {
+		got, ok := e.queue.Get(e.user.ID, job.ID)
+		if ok && (got.Status == queue.StatusDone || got.Status == queue.StatusFailed) {
+			final = got
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if final.Status != queue.StatusFailed || final.Error != queue.ErrCancelled.Error() {
+		t.Fatalf("job ended as %s / %q, want failed / %q", final.Status, final.Error, queue.ErrCancelled)
+	}
+
+	// The whole point: stopping a job must not leave a partial tree.
+	for _, c := range e.children(t, nil) {
+		if c.Name != "cancel.zip" {
+			t.Fatalf("%q survived a cancelled extraction", c.Name)
+		}
+	}
+	if used := e.storageUsed(t); used != before {
+		t.Fatalf("quota is %d after the cancellation, want %d", used, before)
+	}
+}
+
+func TestCancelIgnoresOtherPeoplesJobs(t *testing.T) {
+	e := newEnv(t)
+	id := e.upload(t, "f.txt", []byte("x")).ID
+	job, err := e.mgr.Compress(context.Background(), e.user, nil, []uint{id}, "c", archive.FormatZip, 0)
+	if err != nil {
+		t.Fatalf("compress: %v", err)
+	}
+	if e.queue.Cancel(e.user.ID+1, job.ID) {
+		t.Fatal("a job was cancelled by someone who does not own it")
+	}
+}
+
+func TestCompressHonoursTheRequestedLevel(t *testing.T) {
+	e := newEnv(t)
+	// Text that compresses well, so the levels produce different sizes.
+	id := e.upload(t, "text.txt", bytes.Repeat([]byte("the quick brown fox "), 50000)).ID
+
+	sizes := map[int]int64{}
+	for _, level := range []int{1, 9} {
+		var buf bytes.Buffer
+		if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &buf,
+			archive.FormatTarGz, level, nil); err != nil {
+			t.Fatalf("level %d: %v", level, err)
+		}
+		sizes[level] = int64(buf.Len())
+	}
+	if sizes[9] >= sizes[1] {
+		t.Fatalf("level 9 produced %d bytes and level 1 %d; the level is being ignored",
+			sizes[9], sizes[1])
 	}
 }

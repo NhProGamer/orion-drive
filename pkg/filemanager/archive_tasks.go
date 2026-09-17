@@ -116,7 +116,7 @@ func (b *boundedReader) Read(p []byte) (int, error) {
 
 // Compress schedules a background job that zips the given files/folders and
 // stores the archive as a new file under parentID.
-func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint, ids []uint, name, format string) (*queue.Job, error) {
+func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint, ids []uint, name, format string, level int) (*queue.Job, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("nothing to compress")
 	}
@@ -158,7 +158,7 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		// Compression used to report twice — 10% then 70% — so a large tree sat
 		// at 10% for minutes. It now reports per member, in bytes read from the
 		// source, which is also what the estimate extrapolates from.
-		if err := m.WriteArchive(ctx, user, ids, tmp, format, func(entries int, done int64) {
+		if err := m.WriteArchive(ctx, user, ids, tmp, format, level, func(entries int, done int64) {
 			pct := queue.Indeterminate
 			if plan.Bytes > 0 {
 				// Capped at 95%: the archive still has to be stored afterwards.
@@ -349,7 +349,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 				return err
 			}
 			defer rc.Close()
-			file, written, err := m.ingestContent(ctx, user, parent, base, rc, e.Size, budget)
+			file, written, err := m.ingestContent(ctx, user, parent, base, &ctxReader{ctx: ctx, r: rc}, e.Size, budget)
 			if err != nil {
 				return err
 			}
@@ -526,6 +526,13 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 	}
 	written := bounded.n
 
+	// The object is on disk now, so the bookkeeping that accounts for it must
+	// complete even if the job is being cancelled — these writes are fast, and
+	// a context already cancelled would make them fail silently, leaving rows
+	// or a quota counter that disagree with what was stored. A rollback then
+	// frees storage that was never charged, and the quota drifts downwards.
+	rec := context.WithoutCancel(ctx)
+
 	entity := &model.Entity{
 		Type:            model.EntityTypeVersion,
 		Source:          source,
@@ -535,12 +542,12 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		CreatedByID:     user.ID,
 		Props:           props,
 	}
-	if err := m.repo.Entity.Create(ctx, entity); err != nil {
+	if err := m.repo.Entity.Create(rec, entity); err != nil {
 		return nil, 0, err
 	}
 
 	file := &model.File{
-		Name:            m.uniqueName(ctx, user, parentID, name),
+		Name:            m.uniqueName(rec, user, parentID, name),
 		Type:            model.FileTypeFile,
 		OwnerID:         user.ID,
 		ParentID:        parentID,
@@ -548,15 +555,15 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		Size:            written,
 		StoragePolicyID: policy.ID,
 	}
-	if err := m.repo.File.Create(ctx, file); err != nil {
+	if err := m.repo.File.Create(rec, file); err != nil {
 		return nil, 0, err
 	}
 	entity.FileID = &file.ID
-	if err := m.repo.Entity.Update(ctx, entity); err != nil {
+	if err := m.repo.Entity.Update(rec, entity); err != nil {
 		return nil, 0, err
 	}
 
-	m.addStorage(ctx, user, written)
+	m.addStorage(rec, user, written)
 	return file, written, nil
 }
 

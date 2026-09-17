@@ -26,6 +26,8 @@ export interface BgTask {
   type: string // 'extract' | 'compress'
   progress: number
   message: string
+  /** Whether the server will still stop this job. */
+  cancellable: boolean
   /** Work done and expected, in `unit` ("bytes" | "files"); 0 when unknown. */
   done: number
   total: number
@@ -528,7 +530,17 @@ export const useFilesStore = defineStore('files', {
     // so restoreTasks() can safely re-attach after a page refresh.
     trackTask(id: string, type: string, onDone: () => void) {
       if (this.tasks.some((t) => t.id === id)) return
-      this.tasks.push({ id, type, progress: 0, message: '', done: 0, total: 0, unit: '', eta: 0 })
+      this.tasks.push({
+        id,
+        type,
+        progress: 0,
+        message: '',
+        done: 0,
+        total: 0,
+        unit: '',
+        eta: 0,
+        cancellable: true,
+      })
       const remove = () => {
         this.tasks = this.tasks.filter((t) => t.id !== id)
       }
@@ -544,6 +556,7 @@ export const useFilesStore = defineStore('files', {
             cur.total = task.total ?? 0
             cur.unit = task.unit ?? ''
             cur.eta = task.eta_seconds ?? 0
+            cur.cancellable = task.cancellable === true
           }
           if (task.status === 'done') {
             remove()
@@ -562,6 +575,17 @@ export const useFilesStore = defineStore('files', {
         else remove()
       }
       setTimeout(tick, 300)
+    },
+
+    // Ask the server to stop a job. The task unwinds and rolls back what it had
+    // written, so this is not a way to end up with a half-extracted tree.
+    async cancelTask(id: string) {
+      try {
+        await api.cancelTask(id)
+      } catch {
+        // It finished on its own between the click and the request; the stream
+        // (or the next poll) drops it from the list either way.
+      }
     },
 
     // What to do once a job of this type finishes.
@@ -637,7 +661,12 @@ export const useFilesStore = defineStore('files', {
         if (settledTasks.size > 200) settledTasks.clear()
         settledTasks.add(j.id)
         if (j.status === 'failed') {
-          this.ui().toast(t('files.taskFailed') + (j.error ? ` : ${j.error}` : ''), 'x')
+          // A job the user stopped is not a failure to report as one.
+          if (j.error === 'cancelled') {
+            this.ui().toast(t('files.taskCancelled'), 'x')
+          } else {
+            this.ui().toast(t('files.taskFailed') + (j.error ? ` : ${j.error}` : ''), 'x')
+          }
         } else {
           void this.onTaskDone(j.type)()
         }
@@ -653,6 +682,7 @@ export const useFilesStore = defineStore('files', {
           total: j.total ?? 0,
           unit: j.unit ?? '',
           eta: j.eta_seconds ?? 0,
+          cancellable: j.cancellable === true,
         }))
     },
 
@@ -671,9 +701,9 @@ export const useFilesStore = defineStore('files', {
       }
     },
 
-    async compress(ids: number[], name?: string, format?: string) {
+    async compress(ids: number[], name?: string, format?: string, level?: number) {
       if (!ids.length) return
-      const task = await api.compress(this.currentParentParam, ids, name, format)
+      const task = await api.compress(this.currentParentParam, ids, name, format, level)
       this.ui().toast(t('files.compressing'), 'file-archive')
       this.trackTask(task.id, 'compress', async () => {
         await Promise.all([this.load(), this.loadCapacity()])

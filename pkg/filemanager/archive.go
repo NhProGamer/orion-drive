@@ -114,6 +114,23 @@ func (m *Manager) openSeekable(ctx context.Context, f *model.File) (driver.ReadS
 	return dec, nil
 }
 
+// ctxReader aborts a read once the context is done.
+//
+// Cancelling a job only takes effect where the work looks at its context, and
+// io.Copy over a multi-gigabyte member does not — so without this, stopping a
+// compression would wait for the current file to finish.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
+}
+
 // treeEntry is one member of an archive being produced: a file to write, or a
 // folder that holds nothing and needs an explicit entry of its own.
 type treeEntry struct {
@@ -213,8 +230,14 @@ func (m *Manager) ArchiveFormat(requested string) (string, error) {
 	return requested, nil
 }
 
-// ArchiveLevel is the effective compression effort.
-func (m *Manager) ArchiveLevel() int { return m.archive.Level }
+// ArchiveLevel resolves the compression effort: the requested one, or the
+// configured default when unset.
+func (m *Manager) ArchiveLevel(requested int) int {
+	if requested > 0 {
+		return requested
+	}
+	return m.archive.Level
+}
 
 // ArchiveProgress is called after each member is written, with the running
 // totals of members and bytes consumed from the source.
@@ -227,7 +250,7 @@ type ArchiveProgress func(entries int, bytes int64)
 // to, a failure can only abandon the stream. That is deliberate — the archive
 // then lacks its index, so the client sees a broken download rather than a file
 // that looks complete and is not.
-func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer, format string, onProgress ArchiveProgress) error {
+func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer, format string, level int, onProgress ArchiveProgress) error {
 	if len(ids) == 0 {
 		return errors.New("nothing to archive")
 	}
@@ -235,13 +258,18 @@ func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint
 	if err != nil {
 		return err
 	}
-	aw, err := archive.NewWriter(w, format, m.archive.Level)
+	aw, err := archive.NewWriter(w, format, m.ArchiveLevel(level))
 	if err != nil {
 		return err
 	}
 	var entries int
 	var written int64
 	err = m.walkTree(ctx, user, ids, func(e treeEntry) error {
+		// Checked per member as well as inside the read, so a cancelled job
+		// stops at the next boundary at the latest.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if e.isDir {
 			return aw.AddDir(e.name)
 		}
@@ -250,7 +278,7 @@ func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint
 			return fmt.Errorf("archive %q: %w", e.name, err)
 		}
 		defer rc.Close()
-		if err := aw.AddFile(e.name, e.file.Size, e.file.UpdatedAt, rc); err != nil {
+		if err := aw.AddFile(e.name, e.file.Size, e.file.UpdatedAt, &ctxReader{ctx: ctx, r: rc}); err != nil {
 			return err
 		}
 		entries++

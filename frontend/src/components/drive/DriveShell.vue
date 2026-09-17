@@ -52,7 +52,7 @@ type Dialog =
   | { type: 'office'; value: string; ext: string }
   | { type: 'board'; value: string }
   | { type: 'file'; value: string }
-  | { type: 'compress'; value: string; format: string; ids: number[] }
+  | { type: 'compress'; value: string; format: string; level: number; ids: number[] }
   | { type: 'purge'; ids: number[] }
   | { type: 'emptytrash' }
   | null
@@ -361,7 +361,7 @@ async function openCompress(ids: number[]) {
   await ui.loadArchiveFormats()
   const sel = files.selNodes
   const base = ids.length === 1 && sel[0] ? sel[0].name.replace(/\.[^.]+$/, '') : t('shell.archiveName')
-  dialog.value = { type: 'compress', value: base, format: ui.archiveDefault, ids }
+  dialog.value = { type: 'compress', value: base, format: ui.archiveDefault, level: ui.archiveLevel, ids }
   focusDialog()
 }
 
@@ -401,7 +401,7 @@ async function confirmDialog() {
   } else if (d.type === 'folder') {
     await files.createFolder(d.value.trim() || t('shell.newFolder'))
   } else if (d.type === 'compress') {
-    await files.compress(d.ids, d.value.trim() || t('shell.archiveName'), d.format)
+    await files.compress(d.ids, d.value.trim() || t('shell.archiveName'), d.format, d.level)
   } else if (d.type === 'file') {
     const name = d.value.trim()
     if (name) {
@@ -902,6 +902,15 @@ onUnmounted(() => {
             <span>{{ t('shell.archiveFormat') }}</span>
             <select v-model="dialog.format" class="input">
               <option v-for="f in ui.archiveFormats" :key="f" :value="f">{{ f }}</option>
+            </select>
+          </label>
+          <label class="dialog-field">
+            <span>{{ t('shell.archiveLevel') }}</span>
+            <select v-model.number="dialog.level" class="input">
+              <option :value="0">{{ t('shell.levelDefault') }}</option>
+              <option :value="1">{{ t('shell.levelFast') }}</option>
+              <option :value="5">{{ t('shell.levelBalanced') }}</option>
+              <option :value="9">{{ t('shell.levelSmallest') }}</option>
             </select>
           </label>
           <div class="dialog-actions">

@@ -198,6 +198,7 @@ func registerFileRoutes(api *gin.RouterGroup, ctl *controllers.Controller) {
 	// Live task progress. The two endpoints above remain: a proxy that refuses
 	// to upgrade leaves the browser polling them.
 	f.GET("/task/ws", ctl.TaskSocket)
+	f.DELETE("/task/:id", ctl.TaskCancel)
 
 	f.POST("/upload", ctl.InitUpload)
 	f.POST("/upload/:sid/chunk", ctl.PutChunk)

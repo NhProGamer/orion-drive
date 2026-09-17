@@ -156,11 +156,15 @@ HostKeyPath = data/ssh_host_ed25519_key
 ; TimeoutSeconds : per-extraction wall-clock cap (default 300).
 ;
 ; Creation settings. OrionDrive reads ZIP, TAR (plain, gzip, bzip2, xz, zstd)
-; and 7-Zip; it creates zip, tar.gz and tar.zst — bzip2 has no Go writer and xz
-; compresses too slowly to offer.
+; and 7-Zip; it creates zip, tar.gz, tar.zst and tar.xz. It cannot create 7z:
+; no pure-Go writer for it exists, and shelling out to the 7z tool would mean
+; staging the whole tree on local disk first. tar.xz is the equivalent choice —
+; LZMA2 is what 7-Zip compresses with by default. bzip2 stays read-only, the
+; standard library having no writer for it.
 ; DefaultFormat    : produced when a request names no format (default zip).
 ; CompressionLevel : effort from 1 (fastest) to 9 (smallest); 0 leaves each
-;                    format's own default.
+;                    format's own default. This is the default offered to
+;                    users, who can pick another for a given archive.
 MaxEntries = 0
 MaxSizeMB = 0
 MaxRatio = 0

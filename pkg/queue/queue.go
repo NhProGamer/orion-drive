@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -72,15 +73,28 @@ type Job struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 
+	// Cancellable reports whether the job can still be stopped, so a UI knows
+	// whether to offer it.
+	Cancellable bool `json:"cancellable,omitempty"`
+
 	// startedAt is when the worker picked the job up, the baseline for the
 	// estimate. Unexported: the estimate is published, its input is not.
 	startedAt time.Time
+	// cancel stops the job's own context. Set while it runs.
+	cancel context.CancelFunc
+	// cancelled records that the stop was asked for, so the job reports itself
+	// cancelled rather than failed — a user who stopped a job does not need to
+	// be told it went wrong.
+	cancelled bool
 }
 
 type task struct {
 	job *Job
 	fn  TaskFunc
 }
+
+// ErrCancelled is the error a cancelled job finishes with.
+var ErrCancelled = errors.New("cancelled")
 
 // Queue schedules and tracks background jobs.
 type Queue struct {
@@ -212,9 +226,15 @@ func (q *Queue) worker() {
 // in the task is recovered and recorded as a failure so a single bad job cannot
 // take down the worker goroutine (and with it the process).
 func (q *Queue) run(t task) {
+	// A context of the job's own, so one job can be stopped without touching
+	// the others or the queue.
+	ctx, cancel := context.WithCancel(q.ctx)
+	defer cancel()
 	q.set(t.job, func(j *Job) {
 		j.Status = StatusRunning
 		j.startedAt = time.Now()
+		j.cancel = cancel
+		j.Cancellable = true
 	})
 	report := func(p Progress) {
 		q.set(t.job, func(j *Job) {
@@ -241,18 +261,51 @@ func (q *Queue) run(t task) {
 			})
 		}
 	}()
-	result, err := t.fn(q.ctx, report)
+	result, err := t.fn(ctx, report)
 	q.set(t.job, func(j *Job) {
 		j.ETASeconds = 0
-		if err != nil {
+		j.Cancellable = false
+		j.cancel = nil
+		switch {
+		case j.cancelled:
+			// Whatever the task returned, the user asked for this.
+			j.Status = StatusFailed
+			j.Error = ErrCancelled.Error()
+		case err != nil:
 			j.Status = StatusFailed
 			j.Error = err.Error()
-		} else {
+		default:
 			j.Status = StatusDone
 			j.Progress = 100
 			j.Result = result
 		}
 	})
+}
+
+// Cancel stops one of the user's running jobs. It reports whether there was
+// such a job to stop; a job that already finished is not an error to cancel,
+// it is simply no longer there.
+//
+// The task is expected to notice its context and unwind — the archive jobs roll
+// back what they had written — so cancelling is not a way to leave half a tree
+// behind.
+func (q *Queue) Cancel(userID uint, id string) bool {
+	q.mu.Lock()
+	job, ok := q.jobs[id]
+	if !ok || job.UserID != userID || job.cancel == nil {
+		q.mu.Unlock()
+		return false
+	}
+	cancel := job.cancel
+	job.cancelled = true
+	job.Message = "Annulation…"
+	q.mu.Unlock()
+
+	cancel()
+	// Wake the watchers: the UI should show the cancellation immediately, not
+	// when the task next reports.
+	q.set(job, func(*Job) {})
+	return true
 }
 
 // estimate extrapolates the time left from how long the work so far took. It

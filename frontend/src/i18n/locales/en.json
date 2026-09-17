@@ -375,7 +375,12 @@
     "compress": "Compress…",
     "compressTitle": "Create an archive",
     "archiveFormat": "Format",
-    "archiveName": "archive"
+    "archiveName": "archive",
+    "archiveLevel": "Compression",
+    "levelDefault": "Default",
+    "levelFast": "Fast",
+    "levelBalanced": "Balanced",
+    "levelSmallest": "Smallest (slower)"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",
@@ -430,7 +435,8 @@
     "archiveExtracted": "Archive extracted",
     "uploadToRoot": "Uploading to the root of My Drive",
     "folderFailed": "Folder “{dir}” failed",
-    "uploadFailed": "Failed to upload “{name}”"
+    "uploadFailed": "Failed to upload “{name}”",
+    "taskCancelled": "Task cancelled"
   },
   "search": {
     "filters": "Filters",
@@ -504,6 +510,7 @@
     "title": "Background tasks",
     "extracting": "Extracting",
     "compressing": "Compressing",
-    "remaining": "{time} left"
+    "remaining": "{time} left",
+    "cancel": "Cancel task"
   }
 }
