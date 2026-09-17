@@ -247,9 +247,12 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		}
 
 		// Track what we create so a failure mid-extraction (timeout, a lying header,
-		// or a TAR that overruns) leaves no partial tree: everything is purged.
-		var created []uint
+		// or a TAR that overruns) leaves no partial tree: both the files and the
+		// folders we made are purged, and never a folder that was already there.
+		var createdFiles []uint
+		var createdDirs []uint
 		count := 0
+		skipped := 0
 		err = archive.Extract(tmpPath, func(e archive.Entry, open func() (io.ReadCloser, error)) error {
 			if err := ctx.Err(); err != nil {
 				return err // extraction timed out
@@ -257,18 +260,26 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 			if count >= lim.MaxEntries {
 				return ErrTooManyFiles
 			}
-			clean := strings.Trim(path.Clean("/"+e.Name), "/")
-			if clean == "" {
+			// A symlink, device or FIFO has no equivalent here; writing an empty
+			// file in its place would be a lie, so it is counted and skipped.
+			if e.Unsupported {
+				skipped++
+				return nil
+			}
+			clean, ok := archive.SanitizePath(e.Name)
+			if !ok {
+				// Nothing can be written under a name that is pure traversal.
+				skipped++
 				return nil
 			}
 			if e.IsDir {
-				_, err := m.mkdirs(ctx, user, destParentID, clean)
+				_, err := m.mkdirs(ctx, user, destParentID, clean, &createdDirs)
 				return err
 			}
 			dir, base := path.Split(clean)
 			parent := destParentID
 			if d := strings.Trim(dir, "/"); d != "" {
-				p, err := m.mkdirs(ctx, user, destParentID, d)
+				p, err := m.mkdirs(ctx, user, destParentID, d, &createdDirs)
 				if err != nil {
 					return err
 				}
@@ -283,7 +294,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 			if err != nil {
 				return err
 			}
-			created = append(created, file.ID)
+			createdFiles = append(createdFiles, file.ID)
 			budget -= written
 			count++
 			pct := -1 // indeterminate (streaming formats)
@@ -295,13 +306,19 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		})
 		if err != nil {
 			// Roll back partial output: purge removes the physical objects, the
-			// rows, and restores the quota counter (best-effort).
-			if len(created) > 0 {
-				_ = m.Purge(context.WithoutCancel(ctx), user, created)
+			// rows, and restores the quota counter (best-effort). Files first,
+			// then the folders we created, deepest last-created first — so a
+			// parent is never purged while a child still points at it.
+			purge := context.WithoutCancel(ctx)
+			if len(createdFiles) > 0 {
+				_ = m.Purge(purge, user, createdFiles)
+			}
+			for i := len(createdDirs) - 1; i >= 0; i-- {
+				_ = m.Purge(purge, user, []uint{createdDirs[i]})
 			}
 			return nil, err
 		}
-		return map[string]any{"count": count}, nil
+		return map[string]any{"count": count, "skipped": skipped}, nil
 	})
 	return job, nil
 }
@@ -351,8 +368,13 @@ func (m *Manager) bufferContent(ctx context.Context, f *model.File) (string, err
 // at rest when the policy requires it, and updates the user's used storage. The
 // extraction is bounded by budget (remaining quota): a declared size over budget
 // is rejected up front, and the decompressed stream is capped so a lying header
-// (zip bomb) cannot overrun. It returns the number of bytes counted against the
-// quota.
+// (zip bomb) cannot overrun.
+//
+// What lands in the file's size and in the quota is what was *read*, not what
+// the archive claimed: storage backends copy the stream and ignore the size
+// they are handed, so trusting a header that over-declares left a file whose
+// recorded size did not match its content and a quota counter drifting upwards.
+// It returns that byte count.
 func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID *uint, name string, r io.Reader, size, budget int64) (*model.File, int64, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
@@ -373,7 +395,10 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 	if limit == 0 {
 		limit = budget
 	}
-	r = &boundedReader{r: r, max: limit}
+	// Counted on the plaintext, before any encryption wrapper, so the number
+	// means the same thing as every other size in the drive.
+	bounded := &boundedReader{r: r, max: limit}
+	r = bounded
 
 	policy, err := m.policyForUser(ctx, user)
 	if err != nil {
@@ -404,11 +429,12 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 	if err := h.Put(ctx, source, r, size); err != nil {
 		return nil, 0, err
 	}
+	written := bounded.n
 
 	entity := &model.Entity{
 		Type:            model.EntityTypeVersion,
 		Source:          source,
-		Size:            size,
+		Size:            written,
 		ReferenceCount:  1,
 		StoragePolicyID: policy.ID,
 		CreatedByID:     user.ID,
@@ -424,7 +450,7 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		OwnerID:         user.ID,
 		ParentID:        parentID,
 		PrimaryEntityID: &entity.ID,
-		Size:            size,
+		Size:            written,
 		StoragePolicyID: policy.ID,
 	}
 	if err := m.repo.File.Create(ctx, file); err != nil {
@@ -435,21 +461,26 @@ func (m *Manager) ingestContent(ctx context.Context, user *model.User, parentID 
 		return nil, 0, err
 	}
 
-	m.addStorage(ctx, user, size)
-	return file, size, nil
+	m.addStorage(ctx, user, written)
+	return file, written, nil
 }
 
 // mkdirs resolves (creating as needed) a slash-separated directory path under
-// root and returns the id of the deepest folder.
-func (m *Manager) mkdirs(ctx context.Context, user *model.User, root *uint, dirPath string) (*uint, error) {
+// root and returns the id of the deepest folder. Folders it had to create are
+// appended to created, in creation order, so a caller rolling back can remove
+// exactly those and leave pre-existing ones alone.
+func (m *Manager) mkdirs(ctx context.Context, user *model.User, root *uint, dirPath string, created *[]uint) (*uint, error) {
 	parent := root
 	for _, part := range strings.Split(dirPath, "/") {
 		if part == "" || part == "." {
 			continue
 		}
-		id, err := m.getOrCreateFolder(ctx, user, parent, part)
+		id, made, err := m.getOrCreateFolder(ctx, user, parent, part)
 		if err != nil {
 			return nil, err
+		}
+		if made && created != nil {
+			*created = append(*created, *id)
 		}
 		parent = id
 	}
@@ -457,12 +488,12 @@ func (m *Manager) mkdirs(ctx context.Context, user *model.User, root *uint, dirP
 }
 
 // getOrCreateFolder returns the id of a child folder named name under parentID,
-// creating it if missing.
-func (m *Manager) getOrCreateFolder(ctx context.Context, user *model.User, parentID *uint, name string) (*uint, error) {
+// creating it if missing, and reports whether it was the one to create it.
+func (m *Manager) getOrCreateFolder(ctx context.Context, user *model.User, parentID *uint, name string) (id *uint, created bool, err error) {
 	if existing, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err == nil {
 		if existing.IsFolder() {
-			id := existing.ID
-			return &id, nil
+			found := existing.ID
+			return &found, false, nil
 		}
 	}
 	f := &model.File{
@@ -473,10 +504,10 @@ func (m *Manager) getOrCreateFolder(ctx context.Context, user *model.User, paren
 		StoragePolicyID: 0,
 	}
 	if err := m.repo.File.Create(ctx, f); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	id := f.ID
-	return &id, nil
+	made := f.ID
+	return &made, true, nil
 }
 
 // uniqueName appends " (n)" until the name is free under parentID.
