@@ -3,12 +3,29 @@ package archive
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// openFixture turns a fixture path into the reader the package takes, with its
+// size.
+func openFixture(t *testing.T, p string) (*os.File, int64) {
+	t.Helper()
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatalf("open %s: %v", p, err)
+	}
+	t.Cleanup(func() { f.Close() })
+	info, err := f.Stat()
+	if err != nil {
+		t.Fatalf("stat %s: %v", p, err)
+	}
+	return f, info.Size()
+}
 
 func writeZip(t *testing.T, dir string) string {
 	t.Helper()
@@ -44,10 +61,11 @@ func collect(t *testing.T, path string) (map[string]string, []Entry) {
 	t.Helper()
 	contents := map[string]string{}
 	var entries []Entry
-	err := Extract(path, func(e Entry, open func() (io.ReadCloser, error)) error {
+	src, size := openFixture(t, path)
+	err := Extract(src, size, path, func(e Entry, body func() (io.ReadCloser, error)) error {
 		entries = append(entries, e)
-		if open != nil {
-			rc, err := open()
+		if body != nil {
+			rc, err := body()
 			if err != nil {
 				return err
 			}
@@ -68,7 +86,8 @@ func TestZip(t *testing.T) {
 	if got := Format(p); got != FormatZip {
 		t.Fatalf("format = %s", got)
 	}
-	list, err := List(p)
+	src, size := openFixture(t, p)
+	list, err := List(src, size, p)
 	if err != nil || len(list) != 3 {
 		t.Fatalf("list = %v err=%v", list, err)
 	}
@@ -93,7 +112,7 @@ func TestUnsupported(t *testing.T) {
 	if Format("foo.rar") != "" {
 		t.Fatal("rar should be unsupported")
 	}
-	if _, err := List("foo.rar"); err == nil {
+	if _, err := List(bytes.NewReader(nil), 0, "foo.rar"); err == nil {
 		t.Fatal("expected error for unsupported format")
 	}
 }
@@ -157,11 +176,12 @@ func TestTarSkipsEntriesWithNoFileContent(t *testing.T) {
 	f.Close()
 
 	var opened, unsupported, dirs int
-	err = Extract(p, func(e Entry, open func() (io.ReadCloser, error)) error {
+	src, size := openFixture(t, p)
+	err = Extract(src, size, p, func(e Entry, body func() (io.ReadCloser, error)) error {
 		switch {
 		case e.Unsupported:
 			unsupported++
-			if open != nil {
+			if body != nil {
 				t.Errorf("%q is unsupported but was offered a reader", e.Name)
 			}
 		case e.IsDir:

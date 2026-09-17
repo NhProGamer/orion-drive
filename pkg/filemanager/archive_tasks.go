@@ -182,11 +182,11 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		defer cancel()
 
 		report(10, "Lecture de l’archive")
-		tmpPath, err := m.bufferContent(ctx, f)
+		src, err := m.openSeekable(ctx, f)
 		if err != nil {
 			return nil, err
 		}
-		defer os.Remove(tmpPath)
+		defer src.Close()
 
 		report(30, "Extraction")
 		// Budget the extraction against the user's remaining quota, then tighten it
@@ -229,7 +229,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		// stays 0 and progress is reported as indeterminate (a running file count).
 		fileTotal := 0
 		if fm := archive.Format(f.Name); fm == archive.FormatZip || fm == archive.Format7z {
-			entries, err := archive.List(tmpPath)
+			entries, err := archive.List(src, f.Size, f.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -259,7 +259,11 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		var createdDirs []uint
 		count := 0
 		skipped := 0
-		err = archive.Extract(tmpPath, func(e archive.Entry, open func() (io.ReadCloser, error)) error {
+		// The pre-flight above may have walked the index already, so rewind.
+		if _, err := src.Seek(0, io.SeekStart); err != nil {
+			return nil, err
+		}
+		err = archive.Extract(src, f.Size, f.Name, func(e archive.Entry, open func() (io.ReadCloser, error)) error {
 			if err := ctx.Err(); err != nil {
 				return err // extraction timed out
 			}
@@ -348,13 +352,13 @@ func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, file
 	if f.IsFolder() || !archive.IsArchive(f.Name) {
 		return nil, errors.New("not a supported archive")
 	}
-	tmpPath, err := m.bufferContent(ctx, f)
+	src, err := m.openSeekable(ctx, f)
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tmpPath)
+	defer src.Close()
 
-	entries, err := archive.List(tmpPath)
+	entries, err := archive.List(src, f.Size, f.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +369,10 @@ func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, file
 }
 
 // bufferContent writes a file's (decrypted) content to a temp file whose name
-// preserves the archive extension, and returns its path. The caller removes it.
+// preserves its extension, and returns its path. The caller removes it.
+//
+// Only the thumbnail generators need this: they shell out to tools that take a
+// path. Archive reading does not — it works off the object itself.
 func (m *Manager) bufferContent(ctx context.Context, f *model.File) (string, error) {
 	if err := os.MkdirAll(m.tmpDir, 0o755); err != nil {
 		return "", err
@@ -376,7 +383,7 @@ func (m *Manager) bufferContent(ctx context.Context, f *model.File) (string, err
 	}
 	defer rc.Close()
 
-	tmp, err := os.CreateTemp(m.tmpDir, "archive-*-"+sanitize(f.Name))
+	tmp, err := os.CreateTemp(m.tmpDir, "content-*-"+sanitize(f.Name))
 	if err != nil {
 		return "", err
 	}

@@ -1,7 +1,12 @@
 // Package archive reads archive files (ZIP, TAR, TAR.GZ and 7-Zip): it lists
 // their entries and extracts them. Creating archives is ZIP-only and lives in
-// the file manager. Everything operates on a local file path so large archives
-// stay off-heap.
+// the file manager.
+//
+// Everything operates on the caller's reader, never a local path: ZIP and 7z
+// need random access and get an io.ReaderAt, which over ranged storage means
+// only the bytes actually looked at are fetched; the TAR family is read as a
+// stream, once. Nothing is copied to disk — a 50 GiB archive used to be
+// downloaded in full just to list its index.
 package archive
 
 import (
@@ -10,9 +15,9 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/bodgit/sevenzip"
 )
@@ -85,44 +90,67 @@ func SanitizePath(name string) (string, bool) {
 	return clean, true
 }
 
-// List returns the entries of the archive at path.
-func List(path string) ([]Entry, error) {
+// Source is an archive's bytes. Seek is what the central-directory formats
+// need; the TAR family only ever reads forward.
+type Source interface {
+	io.ReadSeeker
+}
+
+// Visit is called for each member. For files, open() yields a reader the
+// callback must close; for directories and unsupported members open is nil.
+type Visit func(e Entry, open func() (io.ReadCloser, error)) error
+
+// List returns the entries of an archive named name, read from src.
+func List(src Source, size int64, name string) ([]Entry, error) {
 	var entries []Entry
-	err := walk(path, func(e Entry, _ func() (io.ReadCloser, error)) error {
+	err := Extract(src, size, name, func(e Entry, open func() (io.ReadCloser, error)) error {
 		entries = append(entries, e)
 		return nil
 	})
 	return entries, err
 }
 
-// Extract iterates the archive at path, invoking fn for each entry. For files,
-// open() yields a reader the callback must close; for directories open is nil.
-func Extract(path string, fn func(e Entry, open func() (io.ReadCloser, error)) error) error {
-	return walk(path, fn)
-}
-
-// walk dispatches on format and drives the per-entry callback.
-func walk(path string, fn func(e Entry, open func() (io.ReadCloser, error)) error) error {
-	switch Format(path) {
+// Extract iterates an archive named name (the name selects the format), read
+// from src. size is the archive's length, which the central-directory formats
+// need to locate their index.
+func Extract(src Source, size int64, name string, fn Visit) error {
+	switch Format(name) {
 	case FormatZip:
-		return walkZip(path, fn)
+		return walkZip(src, size, fn)
 	case FormatTar:
-		return walkTar(path, false, fn)
+		return walkTar(src, false, fn)
 	case FormatTarGz:
-		return walkTar(path, true, fn)
+		return walkTar(src, true, fn)
 	case Format7z:
-		return walk7z(path, fn)
+		return walk7z(src, size, fn)
 	default:
-		return fmt.Errorf("archive: unsupported format for %q", path)
+		return fmt.Errorf("archive: unsupported format for %q", name)
 	}
 }
 
-func walkZip(path string, fn func(Entry, func() (io.ReadCloser, error)) error) error {
-	r, err := zip.OpenReader(path)
+// readerAt adapts a Source to io.ReaderAt for the readers that need random
+// access. Seek-then-read rather than a real positional read, so it is not safe
+// for concurrent use — which matches how the readers use it: one entry at a
+// time.
+type readerAt struct {
+	src Source
+	mu  sync.Mutex
+}
+
+func (r *readerAt) ReadAt(p []byte, off int64) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, err := r.src.Seek(off, io.SeekStart); err != nil {
+		return 0, err
+	}
+	return io.ReadFull(r.src, p)
+}
+
+func walkZip(src Source, size int64, fn Visit) error {
+	r, err := zip.NewReader(&readerAt{src: src}, size)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 	for _, f := range r.File {
 		info := f.FileInfo()
 		// A ZIP written on a Unix system can carry symlinks and device nodes in
@@ -146,12 +174,11 @@ func walkZip(path string, fn func(Entry, func() (io.ReadCloser, error)) error) e
 	return nil
 }
 
-func walk7z(path string, fn func(Entry, func() (io.ReadCloser, error)) error) error {
-	r, err := sevenzip.OpenReader(path)
+func walk7z(src Source, size int64, fn Visit) error {
+	r, err := sevenzip.NewReader(&readerAt{src: src}, size)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 	for _, f := range r.File {
 		info := f.FileInfo()
 		if mode := info.Mode(); !info.IsDir() && !mode.IsRegular() {
@@ -172,24 +199,18 @@ func walk7z(path string, fn func(Entry, func() (io.ReadCloser, error)) error) er
 	return nil
 }
 
-func walkTar(path string, gz bool, fn func(Entry, func() (io.ReadCloser, error)) error) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	var src io.Reader = f
+func walkTar(src Source, gz bool, fn Visit) error {
+	var body io.Reader = src
 	if gz {
-		zr, err := gzip.NewReader(f)
+		zr, err := gzip.NewReader(src)
 		if err != nil {
 			return err
 		}
 		defer zr.Close()
-		src = zr
+		body = zr
 	}
 
-	tr := tar.NewReader(src)
+	tr := tar.NewReader(body)
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {

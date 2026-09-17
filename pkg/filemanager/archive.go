@@ -10,6 +10,7 @@ import (
 	"path"
 
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
 )
 
 // maxTreeDepth bounds how deep an archive walk follows folders. The drive's
@@ -60,6 +61,53 @@ func (m *Manager) openContent(ctx context.Context, f *model.File) (io.ReadCloser
 		return dec, nil
 	}
 	return rc, nil
+}
+
+// openSeekable returns a file's content as a seekable, decrypted reader.
+//
+// It exists next to openContent because that one degrades its result to an
+// io.ReadCloser, throwing away the seeking every backend actually provides —
+// and seeking is exactly what lets an archive reader fetch an index without
+// pulling the whole object.
+func (m *Manager) openSeekable(ctx context.Context, f *model.File) (driver.ReadSeekCloser, error) {
+	if f.PrimaryEntityID == nil {
+		return nil, errors.New("file has no content")
+	}
+	e, err := m.repo.Entity.GetByID(ctx, *f.PrimaryEntityID)
+	if err != nil {
+		return nil, err
+	}
+	policy, err := m.repo.Policy.GetByID(ctx, e.StoragePolicyID)
+	if err != nil {
+		return nil, err
+	}
+	h, err := m.driverForPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	rc, err := h.Open(ctx, e.Source)
+	if err != nil {
+		return nil, err
+	}
+	if !e.Encrypted() {
+		return rc, nil
+	}
+	if m.cipher == nil {
+		_ = rc.Close()
+		return nil, errors.New("cannot decrypt: no encryption key configured")
+	}
+	iv, err := base64.StdEncoding.DecodeString(e.DecodeProps().IV)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	// AES-CTR keeps random access, so an encrypted archive is read the same way.
+	dec, err := m.cipher.DecryptReadSeeker(rc, iv)
+	if err != nil {
+		_ = rc.Close()
+		return nil, err
+	}
+	return dec, nil
 }
 
 // treeEntry is one member of an archive being produced: a file to write, or a

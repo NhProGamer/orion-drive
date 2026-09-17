@@ -23,10 +23,11 @@ import (
 // env is a manager backed by a migrated sqlite database and isolated storage,
 // plus the pieces the extraction path needs (a queue to run its job on).
 type env struct {
-	mgr   *filemanager.Manager
-	repo  *repository.Repository
-	queue *queue.Queue
-	user  *model.User
+	mgr    *filemanager.Manager
+	repo   *repository.Repository
+	queue  *queue.Queue
+	user   *model.User
+	tmpDir string
 }
 
 func newEnv(t *testing.T) *env {
@@ -55,10 +56,11 @@ func newEnv(t *testing.T) *env {
 	q := queue.New(1)
 	t.Cleanup(q.Close)
 	return &env{
-		mgr:   filemanager.NewManager(repo, cache.NewMemory(), dir, nil, q),
-		repo:  repo,
-		queue: q,
-		user:  user,
+		mgr:    filemanager.NewManager(repo, cache.NewMemory(), dir, nil, q),
+		repo:   repo,
+		queue:  q,
+		user:   user,
+		tmpDir: dir,
 	}
 }
 
@@ -417,5 +419,24 @@ func TestListArchiveEntriesIsBounded(t *testing.T) {
 	}
 	if len(listing.Entries) != 2 || !listing.Truncated {
 		t.Fatalf("listing = %d entries truncated=%v, want 2/true", len(listing.Entries), listing.Truncated)
+	}
+}
+
+func TestListingAnArchiveStagesNothingOnDisk(t *testing.T) {
+	e := newEnv(t)
+	f := e.upload(t, "index.zip", zipOf(t, [][2]string{{"a.txt", "1"}, {"b/c.txt", "2"}}))
+
+	if _, err := e.mgr.ListArchiveEntries(context.Background(), e.user, f.ID); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	// Listing used to copy the whole object into the staging directory, every
+	// time the preview was opened. It now reads the index off the object, so
+	// nothing is staged at all.
+	staged, err := filepath.Glob(filepath.Join(e.tmpDir, "content-*"))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	if len(staged) != 0 {
+		t.Fatalf("listing staged %v on disk", staged)
 	}
 }
