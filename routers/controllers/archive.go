@@ -33,7 +33,7 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "orion-archive"+archive.Extension(format)))
 	c.Header("Content-Type", "application/octet-stream")
-	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer, format); err != nil {
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer, format, nil); err != nil {
 		// Headers/stream may already be committed; surface the error for logs.
 		_ = c.Error(err)
 		c.Status(http.StatusInternalServerError)

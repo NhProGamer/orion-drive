@@ -58,6 +58,28 @@ func EnsureExtension(name, format string) string {
 	return name + Extension(format)
 }
 
+// SplitExt splits a file name into its stem and extension, keeping multi-part
+// archive extensions whole: "backup.tar.gz" splits as "backup" + ".tar.gz",
+// not "backup.tar" + ".gz".
+//
+// It matters for anything that rebuilds a name around the extension. Naming a
+// copy with path.Ext turns "backup.tar.gz" into "backup.tar (2).gz", which is
+// no longer a name any archive reader recognises.
+func SplitExt(name string) (stem, ext string) {
+	lower := strings.ToLower(name)
+	for _, s := range suffixes {
+		if len(s.ext) > len(ext) && strings.HasSuffix(lower, s.ext) {
+			ext = s.ext
+		}
+	}
+	if ext == "" {
+		return name, ""
+	}
+	// Return the extension as it was actually spelled, not lower-cased.
+	cut := len(name) - len(ext)
+	return name[:cut], name[cut:]
+}
+
 // Writer builds an archive one member at a time.
 type Writer interface {
 	// AddFile writes a file member of the given size, read from r.

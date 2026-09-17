@@ -211,7 +211,7 @@ func (ctl *Controller) ShareArchive(c *gin.Context) {
 	filename := url.PathEscape(target.Name + archive.Extension(format))
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", filename))
 	c.Header("Content-Type", "application/octet-stream")
-	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), owner, []uint{target.ID}, c.Writer, format); err != nil {
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), owner, []uint{target.ID}, c.Writer, format, nil); err != nil {
 		_ = c.Error(err)
 	}
 }

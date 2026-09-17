@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -374,7 +375,7 @@ func TestWriteArchiveRoundTrips(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf, archive.FormatZip); err != nil {
+	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf, archive.FormatZip, nil); err != nil {
 		t.Fatalf("WriteArchive: %v", err)
 	}
 	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
@@ -448,7 +449,7 @@ func TestArchiveFormatIsValidated(t *testing.T) {
 
 	// An unknown format is a bad request, not a server error: the caller asked
 	// for something this build cannot produce.
-	if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &bytes.Buffer{}, "rar"); !errors.Is(err, filemanager.ErrArchiveFormat) {
+	if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &bytes.Buffer{}, "rar", nil); !errors.Is(err, filemanager.ErrArchiveFormat) {
 		t.Fatalf("WriteArchive error = %v, want ErrArchiveFormat", err)
 	}
 	if _, err := e.mgr.Compress(context.Background(), e.user, nil, []uint{id}, "x", "rar"); !errors.Is(err, filemanager.ErrArchiveFormat) {
@@ -457,5 +458,49 @@ func TestArchiveFormatIsValidated(t *testing.T) {
 	// An empty request means the configured default.
 	if got, err := e.mgr.ArchiveFormat(""); err != nil || got != archive.FormatZip {
 		t.Fatalf("ArchiveFormat(\"\") = (%q, %v), want zip", got, err)
+	}
+}
+
+func TestUniqueNameKeepsAMultiPartExtension(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	ids := []uint{e.upload(t, "f.txt", []byte("x")).ID}
+
+	// Two archives asked for under the same name: the second has to be renamed,
+	// and must stay recognisable as an archive. path.Ext alone would have
+	// produced "backup.tar (2).gz", which no reader accepts.
+	for i := 0; i < 2; i++ {
+		job, err := e.mgr.Compress(ctx, e.user, nil, ids, "backup", archive.FormatTarGz)
+		if err != nil {
+			t.Fatalf("compress %d: %v", i, err)
+		}
+		deadline := time.Now().Add(20 * time.Second)
+		for time.Now().Before(deadline) {
+			got, ok := e.queue.Get(e.user.ID, job.ID)
+			if ok && got.Status == queue.StatusDone {
+				break
+			}
+			if ok && got.Status == queue.StatusFailed {
+				t.Fatalf("compress %d failed: %s", i, got.Error)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+
+	var names []string
+	for _, c := range e.children(t, nil) {
+		if c.Name != "f.txt" {
+			names = append(names, c.Name)
+		}
+	}
+	sort.Strings(names)
+	want := []string{"backup (2).tar.gz", "backup.tar.gz"}
+	if len(names) != 2 || names[0] != want[0] || names[1] != want[1] {
+		t.Fatalf("archives = %v, want %v", names, want)
+	}
+	for _, n := range names {
+		if archive.Format(n) != archive.FormatTarGz {
+			t.Errorf("%q is no longer recognised as a tar.gz", n)
+		}
 	}
 }

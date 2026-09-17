@@ -84,6 +84,15 @@ func (l ArchiveLimits) withDefaults() ArchiveLimits {
 // would be larger than the server allows.
 var ErrArchiveTooLarge = errors.New("archive is too large (quota exceeded, decompression bomb, or over the size limit)")
 
+// Units the archive jobs report their progress in.
+const (
+	unitBytes = "bytes"
+	unitFiles = "files"
+)
+
+// ErrNotAnArchive is returned when a file is not in a format this build reads.
+var ErrNotAnArchive = errors.New("not a supported archive")
+
 // ErrTooManyFiles is returned when an archive holds — or would hold — more
 // entries than allowed.
 var ErrTooManyFiles = errors.New("archive has too many entries")
@@ -124,8 +133,10 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 	}
 
 	// Measured before the job is even scheduled, so an impossible request is
-	// refused while the caller is still listening.
-	if _, err := m.PlanArchive(ctx, user, ids); err != nil {
+	// refused while the caller is still listening — and the total gives the
+	// progress something to be a fraction of.
+	plan, err := m.PlanArchive(ctx, user, ids)
+	if err != nil {
 		return nil, err
 	}
 
@@ -136,7 +147,7 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		ctx, cancel := context.WithTimeout(ctx, lim.Timeout)
 		defer cancel()
 
-		report(10, "Création de l’archive")
+		report(queue.Progress{Percent: 0, Message: "Création de l’archive", Total: plan.Bytes, Unit: unitBytes})
 		tmp, err := os.CreateTemp(m.tmpDir, "compress-*"+archive.Extension(format))
 		if err != nil {
 			return nil, err
@@ -144,7 +155,23 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		defer os.Remove(tmp.Name())
 		defer tmp.Close()
 
-		if err := m.WriteArchive(ctx, user, ids, tmp, format); err != nil {
+		// Compression used to report twice — 10% then 70% — so a large tree sat
+		// at 10% for minutes. It now reports per member, in bytes read from the
+		// source, which is also what the estimate extrapolates from.
+		if err := m.WriteArchive(ctx, user, ids, tmp, format, func(entries int, done int64) {
+			pct := queue.Indeterminate
+			if plan.Bytes > 0 {
+				// Capped at 95%: the archive still has to be stored afterwards.
+				pct = min(int(done*95/plan.Bytes), 95)
+			}
+			report(queue.Progress{
+				Percent: pct,
+				Message: fmt.Sprintf("%d fichier(s) compressé(s)", entries),
+				Done:    done,
+				Total:   plan.Bytes,
+				Unit:    unitBytes,
+			})
+		}); err != nil {
 			return nil, err
 		}
 		size, err := tmp.Seek(0, io.SeekEnd)
@@ -155,7 +182,7 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 			return nil, err
 		}
 
-		report(70, "Enregistrement")
+		report(queue.Progress{Percent: 97, Message: "Enregistrement", Done: plan.Bytes, Total: plan.Bytes, Unit: unitBytes})
 		// The produced archive counts against the user's quota like any upload.
 		used, total, err := m.Capacity(ctx, user)
 		if err != nil {
@@ -184,7 +211,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		return nil, err
 	}
 	if f.IsFolder() || !archive.IsArchive(f.Name) {
-		return nil, errors.New("not a supported archive")
+		return nil, fmt.Errorf("%w: %q", ErrNotAnArchive, f.Name)
 	}
 	if err := m.ensureParent(ctx, user, destParentID); err != nil {
 		return nil, err
@@ -197,14 +224,14 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		ctx, cancel := context.WithTimeout(ctx, lim.Timeout)
 		defer cancel()
 
-		report(10, "Lecture de l’archive")
+		report(queue.Progress{Percent: queue.Indeterminate, Message: "Lecture de l’archive"})
 		src, err := m.openSeekable(ctx, f)
 		if err != nil {
 			return nil, err
 		}
 		defer src.Close()
 
-		report(30, "Extraction")
+		report(queue.Progress{Percent: queue.Indeterminate, Message: "Extraction"})
 		// Budget the extraction against the user's remaining quota, then tighten it
 		// with the compression-ratio cap: total uncompressed may not exceed MaxRatio
 		// times the compressed archive, but never less than RatioFloor so ordinary
@@ -243,7 +270,11 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		// total is the number of file entries, when known up front (central-directory
 		// formats), used to report a real extraction percentage. TAR streams, so it
 		// stays 0 and progress is reported as indeterminate (a running file count).
+		// Totals for the progress: entry count and declared bytes, both known
+		// only for the central-directory formats. A TAR reports what it has done
+		// so far and no percentage, having nothing to be a fraction of.
 		fileTotal := 0
+		var byteTotal int64
 		if fm := archive.Format(f.Name); fm == archive.FormatZip || fm == archive.Format7z {
 			entries, err := archive.List(src, f.Size, f.Name)
 			if err != nil {
@@ -265,6 +296,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 				if declared < 0 || declared > budget { // overflow or over budget
 					return nil, ErrArchiveTooLarge
 				}
+				byteTotal = declared
 			}
 		}
 
@@ -275,6 +307,7 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 		var createdDirs []uint
 		count := 0
 		skipped := 0
+		var extracted int64
 		// The pre-flight above may have walked the index already, so rewind.
 		if _, err := src.Seek(0, io.SeekStart); err != nil {
 			return nil, err
@@ -322,12 +355,27 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 			}
 			createdFiles = append(createdFiles, file.ID)
 			budget -= written
+			extracted += written
 			count++
-			pct := -1 // indeterminate (streaming formats)
-			if fileTotal > 0 {
+			pct := queue.Indeterminate // a streaming format has no total
+			unit := unitFiles
+			done, total := int64(count), int64(fileTotal)
+			if byteTotal > 0 {
+				// Bytes make a better fraction — and a far better estimate —
+				// than a file count over members of unequal size.
+				unit = unitBytes
+				done, total = extracted, byteTotal
+				pct = int(extracted * 100 / byteTotal)
+			} else if fileTotal > 0 {
 				pct = count * 100 / fileTotal
 			}
-			report(pct, fmt.Sprintf("%d fichier(s) extrait(s)", count))
+			report(queue.Progress{
+				Percent: pct,
+				Message: fmt.Sprintf("%d fichier(s) extrait(s)", count),
+				Done:    done,
+				Total:   total,
+				Unit:    unit,
+			})
 			return nil
 		})
 		if err != nil {
@@ -366,7 +414,7 @@ func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, file
 		return nil, err
 	}
 	if f.IsFolder() || !archive.IsArchive(f.Name) {
-		return nil, errors.New("not a supported archive")
+		return nil, fmt.Errorf("%w: %q", ErrNotAnArchive, f.Name)
 	}
 	src, err := m.openSeekable(ctx, f)
 	if err != nil {
@@ -562,8 +610,14 @@ func (m *Manager) uniqueName(ctx context.Context, user *model.User, parentID *ui
 	if _, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, name); err != nil {
 		return name
 	}
-	ext := path.Ext(name)
-	stem := strings.TrimSuffix(name, ext)
+	// Split so a multi-part archive extension survives: "backup.tar.gz" must
+	// become "backup (2).tar.gz", not "backup.tar (2).gz" — which nothing would
+	// recognise as an archive any more.
+	stem, ext := archive.SplitExt(name)
+	if ext == "" {
+		ext = path.Ext(name)
+		stem = strings.TrimSuffix(name, ext)
+	}
 	for i := 2; i < 10000; i++ {
 		candidate := fmt.Sprintf("%s (%d)%s", stem, i, ext)
 		if _, err := m.repo.File.FindChildByName(ctx, user.ID, parentID, candidate); err != nil {

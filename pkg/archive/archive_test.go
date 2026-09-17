@@ -344,3 +344,21 @@ func TestEnsureExtension(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitExtKeepsMultiPartExtensions(t *testing.T) {
+	cases := []struct{ name, stem, ext string }{
+		{"backup.tar.gz", "backup", ".tar.gz"},
+		{"backup.TAR.GZ", "backup", ".TAR.GZ"}, // spelling preserved
+		{"backup.tar.zst", "backup", ".tar.zst"},
+		{"backup.tgz", "backup", ".tgz"},
+		{"photos.zip", "photos", ".zip"},
+		{"notes.txt", "notes.txt", ""}, // not an archive: caller falls back
+		{"noext", "noext", ""},
+	}
+	for _, c := range cases {
+		stem, ext := SplitExt(c.name)
+		if stem != c.stem || ext != c.ext {
+			t.Errorf("SplitExt(%q) = (%q, %q), want (%q, %q)", c.name, stem, ext, c.stem, c.ext)
+		}
+	}
+}

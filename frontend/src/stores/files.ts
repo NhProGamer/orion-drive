@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { api, type FileNode, type ShareInfo } from '@/lib/api'
+import { api, type FileNode, type ShareInfo, type Task } from '@/lib/api'
 import { uploadInChunks } from '@/lib/upload'
 import { i18n } from '@/i18n'
 import { useUiStore } from './ui'
@@ -26,6 +26,12 @@ export interface BgTask {
   type: string // 'extract' | 'compress'
   progress: number
   message: string
+  /** Work done and expected, in `unit` ("bytes" | "files"); 0 when unknown. */
+  done: number
+  total: number
+  unit: string
+  /** Seconds left, estimated server-side; 0 when not estimable. */
+  eta: number
 }
 
 interface Crumb {
@@ -64,6 +70,11 @@ const VIEW_LABEL_KEY: Record<View, string> = {
 }
 
 let uploadSeq = 0
+
+// The task stream, and the jobs whose completion has already been acted on —
+// both outside the store state: neither belongs in something reactive.
+let taskSocket: WebSocket | null = null
+const settledTasks = new Set<string>()
 
 export const useFilesStore = defineStore('files', {
   state: () => ({
@@ -517,7 +528,7 @@ export const useFilesStore = defineStore('files', {
     // so restoreTasks() can safely re-attach after a page refresh.
     trackTask(id: string, type: string, onDone: () => void) {
       if (this.tasks.some((t) => t.id === id)) return
-      this.tasks.push({ id, type, progress: 0, message: '' })
+      this.tasks.push({ id, type, progress: 0, message: '', done: 0, total: 0, unit: '', eta: 0 })
       const remove = () => {
         this.tasks = this.tasks.filter((t) => t.id !== id)
       }
@@ -529,6 +540,10 @@ export const useFilesStore = defineStore('files', {
           if (cur) {
             cur.progress = task.progress
             cur.message = task.message
+            cur.done = task.done ?? 0
+            cur.total = task.total ?? 0
+            cur.unit = task.unit ?? ''
+            cur.eta = task.eta_seconds ?? 0
           }
           if (task.status === 'done') {
             remove()
@@ -549,24 +564,106 @@ export const useFilesStore = defineStore('files', {
       setTimeout(tick, 300)
     },
 
-    // Re-attach to the user's still-running background jobs after a page refresh,
-    // so their progress reappears (survives reload). Called on startup.
+    // What to do once a job of this type finishes.
+    onTaskDone(type: string) {
+      return async () => {
+        await Promise.all([this.load(), this.loadCapacity()])
+        this.ui().toast(
+          type === 'extract' ? t('files.archiveExtracted') : t('files.archiveCreated'),
+          'file-archive',
+        )
+      }
+    },
+
+    // Follow the user's background jobs over a WebSocket: the server pushes a
+    // frame whenever one of them moves, instead of the client asking every
+    // 500ms for a figure that usually had not changed.
+    //
+    // A proxy that refuses to upgrade the connection must not cost the user
+    // their progress display, so a failed or dropped socket falls back to
+    // polling the same endpoints as before.
+    watchTasks() {
+      if (taskSocket) return
+      let socket: WebSocket
+      try {
+        socket = new WebSocket(api.taskStreamUrl())
+      } catch {
+        this.restoreTasks()
+        return
+      }
+      taskSocket = socket
+
+      socket.onmessage = (event) => {
+        if (typeof event.data !== 'string') return
+        let frame: { t?: string; tasks?: Task[] }
+        try {
+          frame = JSON.parse(event.data)
+        } catch {
+          return
+        }
+        if (frame.t !== 'tasks') return
+        this.applyTasks(frame.tasks ?? [])
+      }
+      socket.onclose = () => {
+        if (taskSocket === socket) taskSocket = null
+        // Only fall back while the page lives on; a closed tab needs nothing.
+        if (!document.hidden || this.tasks.length) this.restoreTasks()
+      }
+      socket.onerror = () => {
+        // `onclose` follows and handles the fallback.
+      }
+    },
+
+    stopWatchingTasks() {
+      const socket = taskSocket
+      taskSocket = null
+      if (socket) {
+        socket.onclose = null
+        socket.onerror = null
+        socket.onmessage = null
+        socket.close()
+      }
+    },
+
+    // Reconcile a pushed snapshot with what is on screen, firing the
+    // completion side effects (reload, toast) exactly once per job.
+    applyTasks(jobs: Task[]) {
+      for (const j of jobs) {
+        if (j.status !== 'done' && j.status !== 'failed') continue
+        if (settledTasks.has(j.id)) continue
+        // The page can live for days; forget old ids rather than grow forever.
+        // The server prunes finished jobs after an hour, so a forgotten id
+        // cannot come back and fire its side effects twice.
+        if (settledTasks.size > 200) settledTasks.clear()
+        settledTasks.add(j.id)
+        if (j.status === 'failed') {
+          this.ui().toast(t('files.taskFailed') + (j.error ? ` : ${j.error}` : ''), 'x')
+        } else {
+          void this.onTaskDone(j.type)()
+        }
+      }
+      this.tasks = jobs
+        .filter((j) => j.status === 'running' || j.status === 'pending')
+        .map((j) => ({
+          id: j.id,
+          type: j.type,
+          progress: j.progress,
+          message: j.message,
+          done: j.done ?? 0,
+          total: j.total ?? 0,
+          unit: j.unit ?? '',
+          eta: j.eta_seconds ?? 0,
+        }))
+    },
+
+    // Re-attach to the user's still-running background jobs by polling. Used on
+    // startup when the stream is unavailable, and as its fallback.
     async restoreTasks() {
       try {
         const jobs = await api.taskList()
         for (const j of jobs) {
           if (j.status === 'running' || j.status === 'pending') {
-            const done =
-              j.type === 'extract'
-                ? async () => {
-                    await Promise.all([this.load(), this.loadCapacity()])
-                    this.ui().toast(t('files.archiveExtracted'), 'file-archive')
-                  }
-                : async () => {
-                    await Promise.all([this.load(), this.loadCapacity()])
-                    this.ui().toast(t('files.archiveCreated'), 'file-archive')
-                  }
-            this.trackTask(j.id, j.type, done)
+            this.trackTask(j.id, j.type, this.onTaskDone(j.type))
           }
         }
       } catch {

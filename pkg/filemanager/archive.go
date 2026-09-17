@@ -216,14 +216,18 @@ func (m *Manager) ArchiveFormat(requested string) (string, error) {
 // ArchiveLevel is the effective compression effort.
 func (m *Manager) ArchiveLevel() int { return m.archive.Level }
 
+// ArchiveProgress is called after each member is written, with the running
+// totals of members and bytes consumed from the source.
+type ArchiveProgress func(entries int, bytes int64)
+
 // WriteArchive streams an archive of the given files/folders (recursively) to w
-// in the given format.
+// in the given format. onProgress may be nil.
 //
 // Callers are expected to have run PlanArchive first: once w has been written
 // to, a failure can only abandon the stream. That is deliberate — the archive
 // then lacks its index, so the client sees a broken download rather than a file
 // that looks complete and is not.
-func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer, format string) error {
+func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer, format string, onProgress ArchiveProgress) error {
 	if len(ids) == 0 {
 		return errors.New("nothing to archive")
 	}
@@ -235,6 +239,8 @@ func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint
 	if err != nil {
 		return err
 	}
+	var entries int
+	var written int64
 	err = m.walkTree(ctx, user, ids, func(e treeEntry) error {
 		if e.isDir {
 			return aw.AddDir(e.name)
@@ -244,7 +250,15 @@ func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint
 			return fmt.Errorf("archive %q: %w", e.name, err)
 		}
 		defer rc.Close()
-		return aw.AddFile(e.name, e.file.Size, e.file.UpdatedAt, rc)
+		if err := aw.AddFile(e.name, e.file.Size, e.file.UpdatedAt, rc); err != nil {
+			return err
+		}
+		entries++
+		written += e.file.Size
+		if onProgress != nil {
+			onProgress(entries, written)
+		}
+		return nil
 	})
 	if err != nil {
 		return err

@@ -2,12 +2,27 @@
 import { useI18n } from 'vue-i18n'
 import { FileArchive } from 'lucide-vue-next'
 import type { BgTask } from '@/stores/files'
+import { fmtEta, fmtSize } from '@/lib/format'
 
 const { t } = useI18n()
 defineProps<{ tasks: BgTask[] }>()
 
 function label(tk: BgTask): string {
   return tk.type === 'extract' ? t('tasks.extracting') : t('tasks.compressing')
+}
+
+// What the task has got through, when it knows: bytes read as sizes, anything
+// else as a plain count.
+function amount(tk: BgTask): string {
+  if (!tk.total) return ''
+  if (tk.unit === 'bytes') return `${fmtSize(tk.done)} / ${fmtSize(tk.total)}`
+  return `${tk.done} / ${tk.total}`
+}
+
+// The estimate comes from the server, which is the only side that knows how
+// long the job has actually been running.
+function remaining(tk: BgTask): string {
+  return tk.eta > 0 ? t('tasks.remaining', { time: fmtEta(tk.eta) }) : ''
 }
 </script>
 
@@ -23,6 +38,8 @@ function label(tk: BgTask): string {
         <div class="upload-info">
           <span class="upload-name">
             {{ label(tk) }}<span v-if="tk.message" class="task-msg"> · {{ tk.message }}</span>
+            <span v-if="amount(tk)" class="task-msg"> · {{ amount(tk) }}</span>
+            <span v-if="remaining(tk)" class="task-msg"> · {{ remaining(tk) }}</span>
           </span>
           <div class="upload-track">
             <div v-if="tk.progress >= 0" class="upload-fill" :style="{ width: tk.progress + '%' }"></div>

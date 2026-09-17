@@ -503,6 +503,7 @@
   "tasks": {
     "title": "Background tasks",
     "extracting": "Extracting",
-    "compressing": "Compressing"
+    "compressing": "Compressing",
+    "remaining": "{time} left"
   }
 }

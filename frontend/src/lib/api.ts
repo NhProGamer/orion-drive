@@ -54,8 +54,15 @@ export interface Task {
   id: string
   type: string
   status: 'pending' | 'running' | 'done' | 'failed'
+  /** Percentage, or -1 when the task cannot know its size (streaming formats). */
   progress: number
   message: string
+  /** Work done and expected, in `unit`. Absent when the total is unknown. */
+  done?: number
+  total?: number
+  unit?: string
+  /** Seconds left, as estimated by the server. Absent when not estimable. */
+  eta_seconds?: number
   error?: string
   result?: Record<string, any>
   created_at: string
@@ -285,6 +292,7 @@ export const api = {
   archiveEntries: (id: number) => get<ArchiveListing>(`/file/archive/entries/${id}`),
   taskStatus: (id: string) => get<Task>(`/task/${id}`),
   taskList: () => get<Task[]>('/task'),
+  taskStreamUrl: () => socketUrl('/task/ws'),
 
   // Locking
   lock: (id: number) => post<FileNode>('/file/lock', { id }),

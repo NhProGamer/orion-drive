@@ -582,7 +582,9 @@ watch(() => route.query, applyRoute)
 onMounted(() => {
   files.loadCapacity()
   files.refreshTrashCount()
-  files.restoreTasks() // re-attach to background jobs still running (survives refresh)
+  // Follow background jobs live; falls back to polling if the socket cannot be
+  // established. Either way a job still running from before a refresh reappears.
+  files.watchTasks()
   // Initial navigation comes from the URL (folder/file), defaulting to root.
   const folder = route.query.folder ? Number(route.query.folder) : null
   const file = route.query.file ? Number(route.query.file) : null
@@ -595,6 +597,7 @@ onMounted(() => {
   document.addEventListener('click', onDocClick)
 })
 onUnmounted(() => {
+  files.stopWatchingTasks()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('click', onDocClick)
 })
