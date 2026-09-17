@@ -8,7 +8,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
 )
 
 // openFixture turns a fixture path into the reader the package takes, with its
@@ -198,5 +203,144 @@ func TestTarSkipsEntriesWithNoFileContent(t *testing.T) {
 	// reported as such rather than handed over as empty files.
 	if opened != 1 || unsupported != 2 || dirs != 1 {
 		t.Fatalf("files=%d unsupported=%d dirs=%d, want 1/2/1", opened, unsupported, dirs)
+	}
+}
+
+func TestFormatDetection(t *testing.T) {
+	cases := map[string]string{
+		"a.zip": FormatZip, "A.ZIP": FormatZip,
+		"a.tar":    FormatTar,
+		"a.tar.gz": FormatTarGz, "a.tgz": FormatTarGz,
+		"a.tar.bz2": FormatTarBz2, "a.tbz2": FormatTarBz2, "a.tbz": FormatTarBz2,
+		"a.tar.xz": FormatTarXz, "a.txz": FormatTarXz,
+		"a.tar.zst": FormatTarZst, "a.tzst": FormatTarZst,
+		"a.7z":  Format7z,
+		"a.rar": "", "a.gz": "", "a.txt": "",
+	}
+	for name, want := range cases {
+		if got := Format(name); got != want {
+			t.Errorf("Format(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// TestWriteThenReadEveryCreatableFormat round-trips each format we produce,
+// through the same reader path the drive uses.
+func TestWriteThenReadEveryCreatableFormat(t *testing.T) {
+	for _, format := range Creatable {
+		t.Run(format, func(t *testing.T) {
+			var buf bytes.Buffer
+			w, err := NewWriter(&buf, format, 5)
+			if err != nil {
+				t.Fatalf("writer: %v", err)
+			}
+			if err := w.AddFile("notes.txt", 5, time.Unix(0, 0), strings.NewReader("hello")); err != nil {
+				t.Fatalf("add file: %v", err)
+			}
+			if err := w.AddDir("hollow"); err != nil {
+				t.Fatalf("add dir: %v", err)
+			}
+			if err := w.Close(); err != nil {
+				t.Fatalf("close: %v", err)
+			}
+
+			name := "out" + Extension(format)
+			src := bytes.NewReader(buf.Bytes())
+			var files, dirs int
+			err = Extract(src, int64(buf.Len()), name, func(e Entry, body func() (io.ReadCloser, error)) error {
+				if e.IsDir {
+					dirs++
+					return nil
+				}
+				files++
+				rc, err := body()
+				if err != nil {
+					return err
+				}
+				defer rc.Close()
+				got, err := io.ReadAll(rc)
+				if err != nil {
+					return err
+				}
+				if string(got) != "hello" {
+					t.Errorf("%s: content = %q", format, got)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("read back: %v", err)
+			}
+			if files != 1 || dirs != 1 {
+				t.Fatalf("%s: files=%d dirs=%d, want 1/1", format, files, dirs)
+			}
+		})
+	}
+}
+
+// TestReadsCompressedTarVariants covers the formats we read but do not write.
+func TestReadsCompressedTarVariants(t *testing.T) {
+	// One TAR, compressed three ways by hand.
+	var plain bytes.Buffer
+	tw := tar.NewWriter(&plain)
+	body := []byte("compressed-body")
+	if err := tw.WriteHeader(&tar.Header{Name: "f.txt", Size: int64(len(body)), Mode: 0o644, Typeflag: tar.TypeReg}); err != nil {
+		t.Fatalf("header: %v", err)
+	}
+	tw.Write(body)
+	tw.Close()
+
+	cases := []struct {
+		name   string
+		encode func(io.Writer) io.WriteCloser
+	}{
+		{"out.tar.xz", func(w io.Writer) io.WriteCloser {
+			xw, err := xz.NewWriter(w)
+			if err != nil {
+				t.Fatalf("xz writer: %v", err)
+			}
+			return xw
+		}},
+		{"out.tar.zst", func(w io.Writer) io.WriteCloser {
+			zw, err := zstd.NewWriter(w)
+			if err != nil {
+				t.Fatalf("zstd writer: %v", err)
+			}
+			return zw
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			enc := c.encode(&buf)
+			if _, err := enc.Write(plain.Bytes()); err != nil {
+				t.Fatalf("compress: %v", err)
+			}
+			if err := enc.Close(); err != nil {
+				t.Fatalf("close compressor: %v", err)
+			}
+			entries, err := List(bytes.NewReader(buf.Bytes()), int64(buf.Len()), c.name)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Name != "f.txt" {
+				t.Fatalf("entries = %+v", entries)
+			}
+		})
+	}
+}
+
+func TestEnsureExtension(t *testing.T) {
+	cases := []struct{ name, format, want string }{
+		{"docs", FormatZip, "docs.zip"},
+		{"docs.zip", FormatZip, "docs.zip"},
+		{"docs", FormatTarGz, "docs.tar.gz"},
+		{"docs.tgz", FormatTarGz, "docs.tgz"}, // already an accepted spelling
+		{"docs.zip", FormatTarGz, "docs.zip.tar.gz"},
+		{"docs", FormatTarZst, "docs.tar.zst"},
+	}
+	for _, c := range cases {
+		if got := EnsureExtension(c.name, c.format); got != c.want {
+			t.Errorf("EnsureExtension(%q, %q) = %q, want %q", c.name, c.format, got, c.want)
+		}
 	}
 }

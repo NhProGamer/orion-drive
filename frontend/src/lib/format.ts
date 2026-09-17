@@ -11,7 +11,9 @@ const EXT_KIND: Record<string, string> = {
   mp4: 'video', mov: 'video', mkv: 'video', webm: 'video', m4v: 'video', avi: 'video',
   flv: 'video', wmv: 'video', mpg: 'video', mpeg: 'video', '3gp': 'video', ogv: 'video',
   mp3: 'audio', wav: 'audio', flac: 'audio', m4a: 'audio', aac: 'audio', ogg: 'audio', opus: 'audio', wma: 'audio', aiff: 'audio',
-  zip: 'archive', gz: 'archive', tar: 'archive', rar: 'archive', '7z': 'archive',
+  zip: 'archive', tar: 'archive', '7z': 'archive', gz: 'archive', bz2: 'archive',
+  xz: 'archive', zst: 'archive', tgz: 'archive', tbz: 'archive', tbz2: 'archive',
+  txz: 'archive', tzst: 'archive',
   js: 'code', ts: 'code', css: 'code', html: 'code', py: 'code', sh: 'code', go: 'code', rs: 'code',
   yml: 'config', yaml: 'config', toml: 'config', env: 'config', conf: 'config', ini: 'config', json: 'config',
   iso: 'disc', img: 'disc',
@@ -29,9 +31,13 @@ export function ext(name: string): string {
   return m ? m[1].toUpperCase() : ''
 }
 
-/** Whether the file name is a supported archive (zip, tar, tar.gz, tgz, 7z). */
+/**
+ * Whether the file name is an archive OrionDrive can open — the same list as
+ * pkg/archive.Format on the server, so the icon, the preview and the extract
+ * action never disagree.
+ */
 export function isArchive(name: string): boolean {
-  return /\.(zip|tar|tar\.gz|tgz|7z)$/i.test(String(name))
+  return /\.(zip|7z|tar|tar\.gz|tgz|tar\.bz2|tbz2?|tar\.xz|txz|tar\.zst|tzst)$/i.test(String(name))
 }
 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'epub' | 'archive' | 'board' | 'none'

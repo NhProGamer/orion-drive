@@ -12,6 +12,7 @@ package archive
 import (
 	"archive/tar"
 	"archive/zip"
+	"compress/bzip2"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -20,6 +21,8 @@ import (
 	"sync"
 
 	"github.com/bodgit/sevenzip"
+	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
 )
 
 // Entry describes one member of an archive.
@@ -36,27 +39,44 @@ type Entry struct {
 
 // Supported archive formats.
 const (
-	FormatZip   = "zip"
-	FormatTar   = "tar"
-	FormatTarGz = "tar.gz"
-	Format7z    = "7z"
+	FormatZip    = "zip"
+	FormatTar    = "tar"
+	FormatTarGz  = "tar.gz"
+	FormatTarBz2 = "tar.bz2"
+	FormatTarXz  = "tar.xz"
+	FormatTarZst = "tar.zst"
+	Format7z     = "7z"
 )
+
+// suffixes maps a file extension to its format, longest first so ".tar.gz" is
+// not mistaken for ".gz" of nothing.
+var suffixes = []struct {
+	ext    string
+	format string
+}{
+	{".tar.gz", FormatTarGz},
+	{".tgz", FormatTarGz},
+	{".tar.bz2", FormatTarBz2},
+	{".tbz2", FormatTarBz2},
+	{".tbz", FormatTarBz2},
+	{".tar.xz", FormatTarXz},
+	{".txz", FormatTarXz},
+	{".tar.zst", FormatTarZst},
+	{".tzst", FormatTarZst},
+	{".tar", FormatTar},
+	{".zip", FormatZip},
+	{".7z", Format7z},
+}
 
 // Format detects an archive format from a file name, or "" if unsupported.
 func Format(name string) string {
 	l := strings.ToLower(name)
-	switch {
-	case strings.HasSuffix(l, ".zip"):
-		return FormatZip
-	case strings.HasSuffix(l, ".tar.gz"), strings.HasSuffix(l, ".tgz"):
-		return FormatTarGz
-	case strings.HasSuffix(l, ".tar"):
-		return FormatTar
-	case strings.HasSuffix(l, ".7z"):
-		return Format7z
-	default:
-		return ""
+	for _, s := range suffixes {
+		if strings.HasSuffix(l, s.ext) {
+			return s.format
+		}
 	}
+	return ""
 }
 
 // IsArchive reports whether name looks like a supported archive.
@@ -114,13 +134,12 @@ func List(src Source, size int64, name string) ([]Entry, error) {
 // from src. size is the archive's length, which the central-directory formats
 // need to locate their index.
 func Extract(src Source, size int64, name string, fn Visit) error {
-	switch Format(name) {
+	format := Format(name)
+	switch format {
 	case FormatZip:
 		return walkZip(src, size, fn)
-	case FormatTar:
-		return walkTar(src, false, fn)
-	case FormatTarGz:
-		return walkTar(src, true, fn)
+	case FormatTar, FormatTarGz, FormatTarBz2, FormatTarXz, FormatTarZst:
+		return walkTar(src, format, fn)
 	case Format7z:
 		return walk7z(src, size, fn)
 	default:
@@ -199,15 +218,13 @@ func walk7z(src Source, size int64, fn Visit) error {
 	return nil
 }
 
-func walkTar(src Source, gz bool, fn Visit) error {
-	var body io.Reader = src
-	if gz {
-		zr, err := gzip.NewReader(src)
-		if err != nil {
-			return err
-		}
-		defer zr.Close()
-		body = zr
+func walkTar(src Source, format string, fn Visit) error {
+	body, closer, err := decompress(src, format)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
 	}
 
 	tr := tar.NewReader(body)
@@ -239,6 +256,39 @@ func walkTar(src Source, gz bool, fn Visit) error {
 		if err := fn(e, open); err != nil {
 			return err
 		}
+	}
+}
+
+// decompress wraps a TAR stream in the decompressor its format calls for. The
+// returned closer, when non-nil, must be closed by the caller.
+func decompress(src io.Reader, format string) (io.Reader, io.Closer, error) {
+	switch format {
+	case FormatTar:
+		return src, nil, nil
+	case FormatTarGz:
+		zr, err := gzip.NewReader(src)
+		if err != nil {
+			return nil, nil, err
+		}
+		return zr, zr, nil
+	case FormatTarBz2:
+		// The standard library reads bzip2 but cannot write it, which is why it
+		// is not offered as a creation format.
+		return bzip2.NewReader(src), nil, nil
+	case FormatTarXz:
+		xr, err := xz.NewReader(src)
+		if err != nil {
+			return nil, nil, err
+		}
+		return xr, nil, nil
+	case FormatTarZst:
+		zr, err := zstd.NewReader(src)
+		if err != nil {
+			return nil, nil, err
+		}
+		return zr.IOReadCloser(), zr.IOReadCloser(), nil
+	default:
+		return nil, nil, fmt.Errorf("archive: %q is not a TAR stream", format)
 	}
 }
 

@@ -1,7 +1,6 @@
 package filemanager
 
 import (
-	"archive/zip"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"path"
 
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/archive"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
 )
 
@@ -20,6 +20,10 @@ const maxTreeDepth = 64
 
 // ErrArchiveTooDeep is returned when a tree nests past maxTreeDepth.
 var ErrArchiveTooDeep = errors.New("folder tree is nested too deeply to archive")
+
+// ErrArchiveFormat is returned when a caller asks for a format OrionDrive
+// cannot produce.
+var ErrArchiveFormat = errors.New("unsupported archive format")
 
 // openContent returns a file's current content as a plain (decrypted) reader,
 // regardless of the backend. Callers must Close the reader.
@@ -196,40 +200,54 @@ func (m *Manager) PlanArchive(ctx context.Context, user *model.User, ids []uint)
 	return plan, nil
 }
 
-// WriteArchive streams a ZIP of the given files/folders (recursively) to w.
+// ArchiveFormat resolves the format to produce: the requested one, or the
+// configured default when empty. An unsupported request is an error rather than
+// a silent fallback.
+func (m *Manager) ArchiveFormat(requested string) (string, error) {
+	if requested == "" {
+		requested = m.archive.DefaultFormat
+	}
+	if !archive.CanCreate(requested) {
+		return "", fmt.Errorf("%w: %q", ErrArchiveFormat, requested)
+	}
+	return requested, nil
+}
+
+// ArchiveLevel is the effective compression effort.
+func (m *Manager) ArchiveLevel() int { return m.archive.Level }
+
+// WriteArchive streams an archive of the given files/folders (recursively) to w
+// in the given format.
 //
 // Callers are expected to have run PlanArchive first: once w has been written
 // to, a failure can only abandon the stream. That is deliberate — the archive
-// then lacks its central directory, so the client sees a broken download
-// rather than a file that looks complete and is not.
-func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer) error {
+// then lacks its index, so the client sees a broken download rather than a file
+// that looks complete and is not.
+func (m *Manager) WriteArchive(ctx context.Context, user *model.User, ids []uint, w io.Writer, format string) error {
 	if len(ids) == 0 {
 		return errors.New("nothing to archive")
 	}
-	zw := zip.NewWriter(w)
-	err := m.walkTree(ctx, user, ids, func(e treeEntry) error {
+	format, err := m.ArchiveFormat(format)
+	if err != nil {
+		return err
+	}
+	aw, err := archive.NewWriter(w, format, m.archive.Level)
+	if err != nil {
+		return err
+	}
+	err = m.walkTree(ctx, user, ids, func(e treeEntry) error {
 		if e.isDir {
-			_, err := zw.Create(e.name + "/")
-			return err
-		}
-		hdr := &zip.FileHeader{Name: e.name, Method: zip.Deflate, Modified: e.file.UpdatedAt}
-		// Without a mode, entries unpack with no permissions at all on some
-		// extractors.
-		hdr.SetMode(0o644)
-		wr, err := zw.CreateHeader(hdr)
-		if err != nil {
-			return err
+			return aw.AddDir(e.name)
 		}
 		rc, err := m.openContent(ctx, e.file)
 		if err != nil {
 			return fmt.Errorf("archive %q: %w", e.name, err)
 		}
 		defer rc.Close()
-		_, err = io.Copy(wr, rc)
-		return err
+		return aw.AddFile(e.name, e.file.Size, e.file.UpdatedAt, rc)
 	})
 	if err != nil {
 		return err
 	}
-	return zw.Close()
+	return aw.Close()
 }

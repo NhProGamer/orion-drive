@@ -52,6 +52,7 @@ type Dialog =
   | { type: 'office'; value: string; ext: string }
   | { type: 'board'; value: string }
   | { type: 'file'; value: string }
+  | { type: 'compress'; value: string; format: string; ids: number[] }
   | { type: 'purge'; ids: number[] }
   | { type: 'emptytrash' }
   | null
@@ -276,7 +277,7 @@ function ctxItems(): MenuItem[] {
       items.push({ id: 'lock', label: n.locked ? t('shell.unlock') : t('shell.lock'), icon: n.locked ? Unlock : Lock })
     }
     if (multi || n.type === 'folder') items.push({ id: 'archive', label: t('shell.downloadAsArchive'), icon: FileArchive })
-    items.push({ id: 'compress', label: t('shell.compressToZip'), icon: FileArchive })
+    items.push({ id: 'compress', label: t('shell.compress'), icon: FileArchive })
     if (!multi && n.type === 'file' && isArchive(n.name)) {
       items.push({ id: 'extract', label: t('shell.extractHere'), icon: FolderInput })
     }
@@ -306,7 +307,7 @@ function menuAction(id: string) {
     case 'share': if (sel[0]) shareNode.value = sel[0]; break
     case 'directlink': if (sel[0]) files.createDirectLink(sel[0]); break
     case 'archive': files.downloadArchive([...files.sel]); break
-    case 'compress': files.compress([...files.sel]); break
+    case 'compress': openCompress([...files.sel]); break
     case 'extract': if (sel[0]) files.extract(sel[0]); break
     case 'office': if (sel[0]) files.openOffice(sel[0]); break
     case 'lock': if (sel[0]) files.setLock(sel[0], !sel[0].locked); break
@@ -352,6 +353,18 @@ const officeCreateItems = computed(() =>
     return ext ? { ...typ, ext } : null
   }).filter((x): x is NonNullable<typeof x> => x !== null),
 )
+// Compressing asks for a name and a format rather than firing straight away:
+// the server decides which formats it can produce, so the list comes from it.
+async function openCompress(ids: number[]) {
+  if (!ids.length) return
+  closeMenus()
+  await ui.loadArchiveFormats()
+  const sel = files.selNodes
+  const base = ids.length === 1 && sel[0] ? sel[0].name.replace(/\.[^.]+$/, '') : t('shell.archiveName')
+  dialog.value = { type: 'compress', value: base, format: ui.archiveDefault, ids }
+  focusDialog()
+}
+
 function openNewFile() {
   closeMenus()
   sidebarOpen.value = false
@@ -387,6 +400,8 @@ async function confirmDialog() {
     if (v) await files.rename(d.id, v)
   } else if (d.type === 'folder') {
     await files.createFolder(d.value.trim() || t('shell.newFolder'))
+  } else if (d.type === 'compress') {
+    await files.compress(d.ids, d.value.trim() || t('shell.archiveName'), d.format)
   } else if (d.type === 'file') {
     const name = d.value.trim()
     if (name) {
@@ -875,6 +890,20 @@ onUnmounted(() => {
           <div class="dialog-actions">
             <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
             <button class="btn btn-primary" @click="confirmDialog">{{ t('common.create') }}</button>
+          </div>
+        </template>
+        <template v-else-if="dialog.type === 'compress'">
+          <h2>{{ t('shell.compressTitle') }}</h2>
+          <input ref="dialogInput" v-model="dialog.value" class="input" type="text" @keyup.enter="confirmDialog" />
+          <label class="dialog-field">
+            <span>{{ t('shell.archiveFormat') }}</span>
+            <select v-model="dialog.format" class="input">
+              <option v-for="f in ui.archiveFormats" :key="f" :value="f">{{ f }}</option>
+            </select>
+          </label>
+          <div class="dialog-actions">
+            <button class="btn btn-ghost" @click="dialog = null">{{ t('common.cancel') }}</button>
+            <button class="btn btn-primary" @click="confirmDialog">{{ t('shell.compress') }}</button>
           </div>
         </template>
         <template v-else-if="dialog.type === 'file'">

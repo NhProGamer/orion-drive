@@ -13,6 +13,7 @@ import (
 
 	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/application/statics"
+	"github.com/NhProGamer/orion-drive/pkg/archive"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/NhProGamer/orion-drive/service/share"
@@ -188,16 +189,29 @@ func (ctl *Controller) ShareDownload(c *gin.Context) {
 	serveContent(c, target.File.Name, target.File.UpdatedAt, target.Stream, inline)
 }
 
-// ShareArchive streams a ZIP of a shared folder (or subfolder), no auth.
+// ShareArchive streams an archive of a shared folder (or subfolder), no auth.
+// `format` picks what to produce; the default is the configured one.
 func (ctl *Controller) ShareArchive(c *gin.Context) {
 	owner, target, err := ctl.dep.Shares.ArchiveTarget(c.Request.Context(), c.Param("token"), c.Query("path"), c.Query("password"))
 	if err != nil {
 		failShare(c, err)
 		return
 	}
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.zip", url.PathEscape(target.Name)))
-	c.Header("Content-Type", "application/zip")
-	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), owner, []uint{target.ID}, c.Writer); err != nil {
+	format, err := ctl.dep.Files.ArchiveFormat(c.Query("format"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	// Same reason as the authenticated download: an oversized selection has to
+	// be refused before the response starts, not abandoned mid-body.
+	if _, err := ctl.dep.Files.PlanArchive(c.Request.Context(), owner, []uint{target.ID}); err != nil {
+		fail(c, err)
+		return
+	}
+	filename := url.PathEscape(target.Name + archive.Extension(format))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", filename))
+	c.Header("Content-Type", "application/octet-stream")
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), owner, []uint{target.ID}, c.Writer, format); err != nil {
 		_ = c.Error(err)
 	}
 }

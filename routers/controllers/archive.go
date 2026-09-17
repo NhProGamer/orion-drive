@@ -1,19 +1,27 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/NhProGamer/orion-drive/pkg/archive"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 
-// ArchiveDownload streams a ZIP of the requested files/folders. Ids are passed
-// as a comma-separated `ids` query param so the browser can open the URL.
+// ArchiveDownload streams an archive of the requested files/folders. Ids are
+// passed as a comma-separated `ids` query param so the browser can open the
+// URL, and `format` picks what to produce (default: the configured one).
 func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 	ids := parseIDList(c.Query("ids"))
 	if len(ids) == 0 {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "no ids"))
+		return
+	}
+	format, err := ctl.dep.Files.ArchiveFormat(c.Query("format"))
+	if err != nil {
+		fail(c, err)
 		return
 	}
 	// Measured first: a streaming response cannot take its headers back, so an
@@ -23,9 +31,9 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	c.Header("Content-Disposition", `attachment; filename="orion-archive.zip"`)
-	c.Header("Content-Type", "application/zip")
-	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer); err != nil {
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "orion-archive"+archive.Extension(format)))
+	c.Header("Content-Type", "application/octet-stream")
+	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer, format); err != nil {
 		// Headers/stream may already be committed; surface the error for logs.
 		_ = c.Error(err)
 		c.Status(http.StatusInternalServerError)
@@ -38,6 +46,7 @@ func (ctl *Controller) CompressArchive(c *gin.Context) {
 		Parent string `json:"parent"`
 		IDs    []uint `json:"ids"`
 		Name   string `json:"name"`
+		Format string `json:"format"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
@@ -48,7 +57,7 @@ func (ctl *Controller) CompressArchive(c *gin.Context) {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
 		return
 	}
-	job, err := ctl.dep.Files.Compress(c.Request.Context(), ctl.user(c), parentID, req.IDs, req.Name)
+	job, err := ctl.dep.Files.Compress(c.Request.Context(), ctl.user(c), parentID, req.IDs, req.Name, req.Format)
 	if err != nil {
 		fail(c, err)
 		return
@@ -77,6 +86,17 @@ func (ctl *Controller) ExtractArchive(c *gin.Context) {
 		return
 	}
 	respond(c, serializer.OK(job))
+}
+
+// ArchiveFormats lists the formats this server can create, for the UI's
+// chooser, with the one it defaults to.
+func (ctl *Controller) ArchiveFormats(c *gin.Context) {
+	format, err := ctl.dep.Files.ArchiveFormat("")
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"formats": archive.Creatable, "default": format}))
 }
 
 // ArchiveEntries lists the contents of an archive file without extracting it.

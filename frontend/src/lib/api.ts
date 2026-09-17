@@ -274,11 +274,13 @@ export const api = {
   newBoard: (parent: string, name: string) => post<FileNode>('/file/board/new', { parent, name }),
   boardSocketUrl: (id: number) => socketUrl(`/file/board/${id}/ws`),
   docSocketUrl: (id: number) => socketUrl(`/file/doc/${id}/ws`),
-  archiveUrl: (ids: number[]) => `/api/v1/file/archive?ids=${ids.join(',')}`,
+  archiveUrl: (ids: number[], format?: string) =>
+    `/api/v1/file/archive?ids=${ids.join(',')}` + (format ? `&format=${encodeURIComponent(format)}` : ''),
+  archiveFormats: () => get<{ formats: string[]; default: string }>('/file/archive/formats'),
 
   // Archives (background tasks)
-  compress: (parent: string, ids: number[], name?: string) =>
-    post<Task>('/file/archive/compress', { parent, ids, name }),
+  compress: (parent: string, ids: number[], name?: string, format?: string) =>
+    post<Task>('/file/archive/compress', { parent, ids, name, format }),
   extract: (id: number, parent: string) => post<Task>('/file/archive/extract', { id, parent }),
   archiveEntries: (id: number) => get<ArchiveListing>(`/file/archive/entries/${id}`),
   taskStatus: (id: string) => get<Task>(`/task/${id}`),

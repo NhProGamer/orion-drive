@@ -3314,3 +3314,15 @@ from {
   color: var(--warn);
   font-size: 12px;
 }
+
+/* A labelled control inside a dialog (archive format, ...). */
+.dialog-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.dialog-field .input {
+  flex: 1;
+}

@@ -111,6 +111,8 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		MaxRatio:        cfg.Archive.MaxRatio,
 		RatioFloor:      cfg.Archive.RatioFloorMB << 20,
 		Timeout:         time.Duration(cfg.Archive.TimeoutSeconds) * time.Second,
+		DefaultFormat:   cfg.Archive.DefaultFormat,
+		Level:           cfg.Archive.CompressionLevel,
 	})
 
 	// OIDC discovery is best-effort: if the provider is unreachable or

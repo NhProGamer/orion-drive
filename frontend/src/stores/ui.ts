@@ -36,6 +36,10 @@ export const useUiStore = defineStore('ui', {
     officeView: [] as string[],
     officeNew: [] as string[],
     officeLoaded: false,
+    // Archive formats this server can create, and the one it defaults to.
+    archiveFormats: [] as string[],
+    archiveDefault: 'zip',
+    archiveLoaded: false,
     // Notification history shown in the bell dropdown (newest first).
     notifications: [] as Notification[],
   }),
@@ -66,6 +70,19 @@ export const useUiStore = defineStore('ui', {
         this.officeNew = r.new || []
       } catch {
         this.officeLoaded = false
+      }
+    },
+    // Load the creatable archive formats once (best-effort): the server decides
+    // what it can produce, so the chooser must not hardcode a list.
+    async loadArchiveFormats() {
+      if (this.archiveLoaded) return
+      this.archiveLoaded = true
+      try {
+        const r = await api.archiveFormats()
+        this.archiveFormats = r.formats || []
+        this.archiveDefault = r.default || 'zip'
+      } catch {
+        this.archiveLoaded = false
       }
     },
     // Track pointer changes for hybrid devices (e.g. tablet + keyboard).

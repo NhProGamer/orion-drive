@@ -150,6 +150,12 @@ type Archive struct {
 	MaxRatio       int64 `ini:"MaxRatio"`       // max uncompressed:compressed ratio
 	RatioFloorMB   int64 `ini:"RatioFloorMB"`   // ratio is only enforced above this size
 	TimeoutSeconds int   `ini:"TimeoutSeconds"` // per-extraction wall-clock cap
+	// DefaultFormat is produced when a request does not name one: zip, tar.gz
+	// or tar.zst. Empty (or unknown) means zip.
+	DefaultFormat string `ini:"DefaultFormat"`
+	// CompressionLevel is the effort, 1 (fastest) to 9 (smallest). 0 leaves
+	// each format's own default.
+	CompressionLevel int `ini:"CompressionLevel"`
 }
 
 // System holds server-wide settings.

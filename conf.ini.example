@@ -154,11 +154,20 @@ HostKeyPath = data/ssh_host_ed25519_key
 ;                  RatioFloorMB, so small highly-compressible files still extract.
 ; RatioFloorMB   : size below which the ratio is not enforced (default 1024 = 1 GiB).
 ; TimeoutSeconds : per-extraction wall-clock cap (default 300).
+;
+; Creation settings. OrionDrive reads ZIP, TAR (plain, gzip, bzip2, xz, zstd)
+; and 7-Zip; it creates zip, tar.gz and tar.zst — bzip2 has no Go writer and xz
+; compresses too slowly to offer.
+; DefaultFormat    : produced when a request names no format (default zip).
+; CompressionLevel : effort from 1 (fastest) to 9 (smallest); 0 leaves each
+;                    format's own default.
 MaxEntries = 0
 MaxSizeMB = 0
 MaxRatio = 0
 RatioFloorMB = 0
 TimeoutSeconds = 0
+DefaultFormat = zip
+CompressionLevel = 0
 
 [Security]
 ; SharePublicRatePerMin caps requests per client IP per minute on the public

@@ -343,7 +343,6 @@
     "dropToUpload": "Dépose tes fichiers pour les importer",
     "preview": "Aperçu",
     "downloadAsArchive": "Télécharger en archive",
-    "compressToZip": "Compresser en .zip",
     "extractHere": "Extraire ici",
     "editWithOffice": "Éditer avec Office",
     "openWith": "Ouvrir avec",
@@ -372,7 +371,11 @@
     "loadMore": "Charger plus",
     "newBoardTitle": "Nouveau tableau blanc",
     "untitledBoard": "Tableau sans titre",
-    "newFileTitle": "Nouveau fichier"
+    "newFileTitle": "Nouveau fichier",
+    "compress": "Compresser…",
+    "compressTitle": "Créer une archive",
+    "archiveFormat": "Format",
+    "archiveName": "archive"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

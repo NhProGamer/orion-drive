@@ -17,10 +17,16 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/queue"
 )
 
-// ArchiveLimits are the safety limits applied when extracting archives (defence
-// against decompression bombs and quota abuse). Zero fields fall back to the
-// defaults below.
+// ArchiveLimits carries the archive settings: the safety limits applied when
+// extracting (defence against decompression bombs and quota abuse) and the
+// defaults used when creating. Zero fields fall back to the defaults below.
 type ArchiveLimits struct {
+	// DefaultFormat is produced when a caller does not name one.
+	DefaultFormat string
+	// Level is the compression effort, 1 (fastest) to 9 (smallest); 0 leaves
+	// each format's own default.
+	Level int
+
 	// MaxEntries caps how many members an archive may unpack to, guarding against
 	// archives with millions of tiny entries.
 	MaxEntries int
@@ -63,6 +69,12 @@ func (l ArchiveLimits) withDefaults() ArchiveLimits {
 	if l.Timeout <= 0 {
 		l.Timeout = defArchiveTimeout
 	}
+	if !archive.CanCreate(l.DefaultFormat) {
+		l.DefaultFormat = archive.FormatZip
+	}
+	if l.Level < 0 {
+		l.Level = 0
+	}
 	return l
 }
 
@@ -93,16 +105,18 @@ func (b *boundedReader) Read(p []byte) (int, error) {
 
 // Compress schedules a background job that zips the given files/folders and
 // stores the archive as a new file under parentID.
-func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint, ids []uint, name string) (*queue.Job, error) {
+func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint, ids []uint, name, format string) (*queue.Job, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("nothing to compress")
 	}
+	format, err := m.ArchiveFormat(format)
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(name) == "" {
-		name = "archive.zip"
+		name = "archive"
 	}
-	if !strings.HasSuffix(strings.ToLower(name), ".zip") {
-		name += ".zip"
-	}
+	name = archive.EnsureExtension(name, format)
 	if err := m.ensureParent(ctx, user, parentID); err != nil {
 		return nil, err
 	}
@@ -121,14 +135,14 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		defer cancel()
 
 		report(10, "Création de l’archive")
-		tmp, err := os.CreateTemp(m.tmpDir, "compress-*.zip")
+		tmp, err := os.CreateTemp(m.tmpDir, "compress-*"+archive.Extension(format))
 		if err != nil {
 			return nil, err
 		}
 		defer os.Remove(tmp.Name())
 		defer tmp.Close()
 
-		if err := m.WriteArchive(ctx, user, ids, tmp); err != nil {
+		if err := m.WriteArchive(ctx, user, ids, tmp, format); err != nil {
 			return nil, err
 		}
 		size, err := tmp.Seek(0, io.SeekEnd)
@@ -156,7 +170,7 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"file_id": f.ID, "name": f.Name, "size": size}, nil
+		return map[string]any{"file_id": f.ID, "name": f.Name, "size": size, "format": format}, nil
 	})
 	return job, nil
 }

@@ -54,10 +54,20 @@ describe('isArchive', () => {
     expect(isArchive('a.tgz')).toBe(true)
     expect(isArchive('a.7z')).toBe(true)
     expect(isArchive('A.ZIP')).toBe(true)
+    // Read-only formats the server also handles.
+    expect(isArchive('a.tar.bz2')).toBe(true)
+    expect(isArchive('a.tbz2')).toBe(true)
+    expect(isArchive('a.tar.xz')).toBe(true)
+    expect(isArchive('a.txz')).toBe(true)
+    expect(isArchive('a.tar.zst')).toBe(true)
+    expect(isArchive('a.tzst')).toBe(true)
   })
   it('rejects non-archives', () => {
     expect(isArchive('a.txt')).toBe(false)
-    expect(isArchive('a.rar')).toBe(false) // listed in kind map but not the isArchive set
+    // No Go implementation worth shipping, so the server cannot read it.
+    expect(isArchive('a.rar')).toBe(false)
+    // A bare compressed file is not an archive: there is nothing to list.
+    expect(isArchive('dump.sql.gz')).toBe(false)
     expect(isArchive('noext')).toBe(false)
   })
 })

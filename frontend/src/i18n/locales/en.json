@@ -343,7 +343,6 @@
     "dropToUpload": "Drop your files to upload them",
     "preview": "Preview",
     "downloadAsArchive": "Download as archive",
-    "compressToZip": "Compress to .zip",
     "extractHere": "Extract here",
     "editWithOffice": "Edit with Office",
     "openWith": "Open with",
@@ -372,7 +371,11 @@
     "loadMore": "Load more",
     "newBoardTitle": "New whiteboard",
     "untitledBoard": "Untitled board",
-    "newFileTitle": "New file"
+    "newFileTitle": "New file",
+    "compress": "Compress…",
+    "compressTitle": "Create an archive",
+    "archiveFormat": "Format",
+    "archiveName": "archive"
   },
   "move": {
     "header": "Move {n} item | Move {n} items",

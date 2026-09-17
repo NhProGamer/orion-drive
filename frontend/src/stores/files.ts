@@ -507,9 +507,9 @@ export const useFilesStore = defineStore('files', {
       window.open(api.contentUrl(node.id), '_blank')
     },
 
-    downloadArchive(ids: number[]) {
+    downloadArchive(ids: number[], format?: string) {
       if (!ids.length) return
-      window.open(api.archiveUrl(ids), '_blank')
+      window.open(api.archiveUrl(ids, format), '_blank')
     },
 
     // Track a background job in `tasks` (so its progress shows live), polling
@@ -574,9 +574,9 @@ export const useFilesStore = defineStore('files', {
       }
     },
 
-    async compress(ids: number[]) {
+    async compress(ids: number[], name?: string, format?: string) {
       if (!ids.length) return
-      const task = await api.compress(this.currentParentParam, ids)
+      const task = await api.compress(this.currentParentParam, ids, name, format)
       this.ui().toast(t('files.compressing'), 'file-archive')
       this.trackTask(task.id, 'compress', async () => {
         await Promise.all([this.load(), this.loadCapacity()])

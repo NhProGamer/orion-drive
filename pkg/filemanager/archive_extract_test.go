@@ -14,6 +14,7 @@ import (
 	"github.com/NhProGamer/orion-drive/application/bootstrap"
 	"github.com/NhProGamer/orion-drive/conf"
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/archive"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/queue"
@@ -373,7 +374,7 @@ func TestWriteArchiveRoundTrips(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf); err != nil {
+	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf, archive.FormatZip); err != nil {
 		t.Fatalf("WriteArchive: %v", err)
 	}
 	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
