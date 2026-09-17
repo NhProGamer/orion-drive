@@ -426,6 +426,35 @@ func (ctl *Controller) SaveText(c *gin.Context) {
 	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
 }
 
+// NewFile creates an empty file in one of the user's folders. The extension the
+// caller picks decides how it opens afterwards — a .md lands in the
+// collaborative Markdown editor, anything textual in the plain editor.
+func (ctl *Controller) NewFile(c *gin.Context) {
+	var req struct {
+		Parent string `json:"parent"`
+		Name   string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	parentID, err := parseParentID(req.Parent)
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid parent"))
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "a name is required"))
+		return
+	}
+	f, err := ctl.dep.Files.CreateFile(c.Request.Context(), ctl.user(c), parentID, req.Name, nil)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(toDTO(f, ctl.user(c).DisplayName())))
+}
+
 // Capacity returns the user's storage usage and quota.
 func (ctl *Controller) Capacity(c *gin.Context) {
 	used, total, err := ctl.dep.Files.Capacity(c.Request.Context(), ctl.user(c))

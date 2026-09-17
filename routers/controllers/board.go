@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"unicode/utf8"
@@ -109,8 +108,7 @@ func (ctl *Controller) NewBoard(c *gin.Context) {
 	if !IsBoard(name) {
 		name += BoardExt
 	}
-	scene := board.EmptyScene()
-	f, err := ctl.dep.Files.WriteFile(c.Request.Context(), ctl.user(c), parentID, name, bytes.NewReader(scene), int64(len(scene)))
+	f, err := ctl.dep.Files.CreateFile(c.Request.Context(), ctl.user(c), parentID, name, board.EmptyScene())
 	if err != nil {
 		fail(c, err)
 		return

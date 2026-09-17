@@ -375,3 +375,54 @@ func TestBoardSnapshotRefusesALockedFile(t *testing.T) {
 		t.Fatal("a locked file must not be overwritten by a snapshot")
 	}
 }
+
+func TestNewFileCreatesAnEmptyDocument(t *testing.T) {
+	ctl, mgr, user, _ := boardEnv(t)
+
+	c, w := authReq(user, "POST", "/api/v1/file/new", `{"parent":"root","name":"Notes.md"}`)
+	ctl.NewFile(c)
+	e := decode(t, w)
+	if e.Code != 0 {
+		t.Fatalf("NewFile: %s", w.Body.String())
+	}
+	dto := dtoOf(t, e)
+	if dto.Name != "Notes.md" || dto.Size != 0 {
+		t.Fatalf("created %+v, want an empty Notes.md", dto)
+	}
+	if got := readBoard(t, mgr, user, dto.ID); len(got) != 0 {
+		t.Fatalf("new file content = %q, want empty", got)
+	}
+}
+
+func TestNewFileRefusesAnEmptyName(t *testing.T) {
+	ctl, _, user, _ := boardEnv(t)
+
+	c, w := authReq(user, "POST", "/api/v1/file/new", `{"parent":"root","name":"  "}`)
+	ctl.NewFile(c)
+	if e := decode(t, w); e.Code == 0 {
+		t.Fatalf("a nameless file must be refused: %s", w.Body.String())
+	}
+}
+
+func TestCreatingDoesNotBlankAnExistingFile(t *testing.T) {
+	ctl, mgr, user, _ := boardEnv(t)
+	ctx := context.Background()
+
+	existing, err := mgr.WriteFile(ctx, user, nil, "Notes.md", strings.NewReader("# précieux"), 11)
+	if err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	c, w := authReq(user, "POST", "/api/v1/file/new", `{"parent":"root","name":"Notes.md"}`)
+	ctl.NewFile(c)
+	created := dtoOf(t, decode(t, w))
+	if created.ID == existing.ID {
+		t.Fatal("creating must not write into the file already there")
+	}
+	if created.Name != "Notes.md (2)" && created.Name != "Notes (2).md" {
+		t.Fatalf("created name = %q, want a suffixed variant", created.Name)
+	}
+	if got := readBoard(t, mgr, user, existing.ID); string(got) != "# précieux" {
+		t.Fatalf("the existing document was altered: %q", got)
+	}
+}

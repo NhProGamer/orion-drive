@@ -6,9 +6,28 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/NhProGamer/orion-drive/model"
 )
+
+// CreateFile makes a new file holding content under parentID.
+//
+// Unlike WriteFile it never writes into a file that is already there: a name
+// already taken gets the usual "name (2)" suffix. That is the difference
+// between creating a document and uploading one — a mistyped new document must
+// not blank the document of the same name sitting next to it.
+func (m *Manager) CreateFile(ctx context.Context, user *model.User, parentID *uint, name string, content []byte) (*model.File, error) {
+	name = strings.TrimSpace(name)
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	if err := m.ensureParent(ctx, user, parentID); err != nil {
+		return nil, err
+	}
+	unique := m.uniqueName(ctx, user, parentID, name)
+	return m.WriteFile(ctx, user, parentID, unique, bytes.NewReader(content), int64(len(content)))
+}
 
 // SaveVersion overwrites a file's content, keeping the previous content as a
 // version. Used by the in-browser text/Markdown editor.

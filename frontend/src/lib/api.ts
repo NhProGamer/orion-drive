@@ -243,6 +243,7 @@ export const api = {
   ancestors: (id: number) => get<{ id: number; name: string }[]>('/file/ancestors/' + id),
   createFolder: (parent: string, name: string) =>
     post<FileNode>('/file/folder', { parent, name }),
+  newFile: (parent: string, name: string) => post<FileNode>('/file/new', { parent, name }),
   ensureFolderPath: (parent: string, path: string) =>
     post<FileNode>('/file/folder-path', { parent, path }),
   rename: (id: number, name: string) => post<FileNode>('/file/rename', { id, name }),

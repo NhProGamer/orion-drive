@@ -305,6 +305,7 @@
     "mainNav": "Navigation principale",
     "new": "Nouveau",
     "newFolder": "Nouveau dossier",
+    "newFile": "Nouveau fichier",
     "newBoard": "Tableau blanc",
     "importFiles": "Importer des fichiers",
     "importFolder": "Importer un dossier",
@@ -370,7 +371,8 @@
     "apiTokens": "Jetons d'API",
     "loadMore": "Charger plus",
     "newBoardTitle": "Nouveau tableau blanc",
-    "untitledBoard": "Tableau sans titre"
+    "untitledBoard": "Tableau sans titre",
+    "newFileTitle": "Nouveau fichier"
   },
   "move": {
     "header": "Déplacer {n} élément | Déplacer {n} éléments",

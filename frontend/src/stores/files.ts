@@ -392,6 +392,14 @@ export const useFilesStore = defineStore('files', {
       return node
     },
 
+    // Create an empty file in the current folder and return it, so the caller
+    // can open it straight away. The extension decides which editor that is.
+    async createFile(name: string) {
+      const node = await api.newFile(this.currentParentParam, name)
+      await this.load()
+      return node
+    },
+
     // Create a blank whiteboard in the current folder and return it, so the
     // caller can open it straight away.
     async createBoard(name: string) {
