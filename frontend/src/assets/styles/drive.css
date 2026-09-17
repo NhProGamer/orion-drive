@@ -3304,3 +3304,13 @@ from {
   --crepe-font-default: var(--font-sans);
   --crepe-font-code: var(--font-mono);
 }
+
+/* Warning shown above an archive listing the server had to cut short. */
+.ov-arch-note {
+  margin: 0;
+  padding: var(--s-2) var(--s-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 12px;
+}

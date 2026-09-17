@@ -143,9 +143,12 @@ HostKeyPath = data/ssh_host_ed25519_key
 [Archive]
 ; Safety limits when extracting archives, guarding against decompression bombs
 ; and quota abuse. Any value left at 0 uses the built-in default.
-; MaxEntries     : max members an archive may unpack to (default 100000).
+; MaxEntries     : max members an archive may unpack to (default 100000). Also
+;                  caps how many entries one archive may be built from, and how
+;                  many a preview lists at once.
 ; MaxSizeMB      : ceiling on total uncompressed output when the user's quota is
-;                  unlimited (default 51200 = 50 GiB).
+;                  unlimited (default 51200 = 50 GiB). Also caps the size of an
+;                  archive OrionDrive builds, whether downloaded or stored.
 ; MaxRatio       : max uncompressed:compressed ratio; above it the archive is a
 ;                  decompression bomb (default 1000). Only enforced above
 ;                  RatioFloorMB, so small highly-compressible files still extract.

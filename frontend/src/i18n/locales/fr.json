@@ -493,7 +493,9 @@
   "archive": {
     "title": "Contenu de l'archive",
     "empty": "Dossier vide",
-    "error": "Impossible de lire l'archive"
+    "error": "Impossible de lire l'archive",
+    "truncated": "Archive très volumineuse : seuls les premiers éléments sont listés.",
+    "unsupported": "non extractible"
   },
   "tasks": {
     "title": "Tâches en cours",

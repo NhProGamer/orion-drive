@@ -107,6 +107,12 @@ func (m *Manager) Compress(ctx context.Context, user *model.User, parentID *uint
 		return nil, err
 	}
 
+	// Measured before the job is even scheduled, so an impossible request is
+	// refused while the caller is still listening.
+	if _, err := m.PlanArchive(ctx, user, ids); err != nil {
+		return nil, err
+	}
+
 	lim := m.archive
 	job := m.queue.Enqueue(user.ID, "compress", func(ctx context.Context, report queue.Report) (map[string]any, error) {
 		// Bound compression time too: zipping a very large tree should not run
@@ -323,8 +329,18 @@ func (m *Manager) Extract(ctx context.Context, user *model.User, fileID uint, de
 	return job, nil
 }
 
-// ListArchiveEntries returns the entries of an archive file without extracting it.
-func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, fileID uint) ([]archive.Entry, error) {
+// ArchiveListing is an archive's index, with a flag for when it was cut short.
+type ArchiveListing struct {
+	Entries []archive.Entry `json:"entries"`
+	// Truncated reports that the archive holds more entries than the limit
+	// allows, so what is listed is only the beginning.
+	Truncated bool `json:"truncated"`
+}
+
+// ListArchiveEntries returns the entries of an archive file without extracting
+// it, up to the configured entry limit — an archive with millions of members
+// must not turn its preview into a multi-megabyte response.
+func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, fileID uint) (*ArchiveListing, error) {
 	f, err := m.repo.File.GetByID(ctx, user.ID, fileID)
 	if err != nil {
 		return nil, err
@@ -337,7 +353,15 @@ func (m *Manager) ListArchiveEntries(ctx context.Context, user *model.User, file
 		return nil, err
 	}
 	defer os.Remove(tmpPath)
-	return archive.List(tmpPath)
+
+	entries, err := archive.List(tmpPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) > m.archive.MaxEntries {
+		return &ArchiveListing{Entries: entries[:m.archive.MaxEntries], Truncated: true}, nil
+	}
+	return &ArchiveListing{Entries: entries}, nil
 }
 
 // bufferContent writes a file's (decrypted) content to a temp file whose name

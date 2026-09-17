@@ -43,7 +43,7 @@ async function loadEntries() {
   entries.value = []
   if (!archive.value) return
   try {
-    entries.value = await api.archiveEntries(props.node.id)
+    entries.value = (await api.archiveEntries(props.node.id)).entries ?? []
   } catch {
     entries.value = []
   }

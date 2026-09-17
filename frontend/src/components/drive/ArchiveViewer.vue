@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Folder, FileText, ChevronRight, FileArchive, House } from 'lucide-vue-next'
+import { Folder, FileText, ChevronRight, FileArchive, House, Link2Off } from 'lucide-vue-next'
 import { api, type FileNode, type ArchiveEntry } from '@/lib/api'
 import { fmtSize } from '@/lib/format'
 
@@ -9,6 +9,7 @@ const { t } = useI18n()
 const props = defineProps<{ node: FileNode }>()
 
 const entries = ref<ArchiveEntry[]>([])
+const truncated = ref(false)
 const loading = ref(false)
 const error = ref(false)
 // Current location inside the archive, as path segments.
@@ -20,11 +21,14 @@ watch(
   () => props.node.id,
   async () => {
     entries.value = []
+    truncated.value = false
     cwd.value = []
     error.value = false
     loading.value = true
     try {
-      entries.value = await api.archiveEntries(props.node.id)
+      const listing = await api.archiveEntries(props.node.id)
+      entries.value = listing.entries ?? []
+      truncated.value = listing.truncated
     } catch {
       error.value = true
     } finally {
@@ -39,7 +43,7 @@ watch(
 const level = computed(() => {
   const prefix = cwd.value.length ? cwd.value.join('/') + '/' : ''
   const folders = new Set<string>()
-  const files: { name: string; size: number }[] = []
+  const files: { name: string; size: number; unsupported: boolean }[] = []
   for (const e of entries.value) {
     const path = e.name.replace(/\/+$/, '')
     if (!path.startsWith(prefix)) continue
@@ -48,7 +52,7 @@ const level = computed(() => {
     const slash = rest.indexOf('/')
     if (slash >= 0) folders.add(rest.slice(0, slash))
     else if (e.is_dir) folders.add(rest)
-    else files.push({ name: rest, size: e.size })
+    else files.push({ name: rest, size: e.size, unsupported: !!e.unsupported })
   }
   return {
     folders: [...folders].sort((a, b) => a.localeCompare(b)),
@@ -79,6 +83,8 @@ function goTo(index: number) {
       </template>
     </nav>
 
+    <p v-if="truncated" class="ov-arch-note">{{ t('archive.truncated') }}</p>
+
     <div class="ov-arch-body">
       <div v-if="loading" class="ov-empty">{{ t('common.loading') }}</div>
       <div v-else-if="error" class="ov-empty">
@@ -101,9 +107,10 @@ function goTo(index: number) {
           <ChevronRight :size="15" class="ov-arch-go" />
         </button>
         <div v-for="f in level.files" :key="'f/' + f.name" class="ov-arch-row is-file">
-          <FileText :size="16" class="tint-neutral" />
+          <component :is="f.unsupported ? Link2Off : FileText" :size="16" class="tint-neutral" />
           <span class="ov-arch-name">{{ f.name }}</span>
-          <span class="mono ov-arch-size">{{ fmtSize(f.size) }}</span>
+          <span v-if="f.unsupported" class="ov-arch-size">{{ t('archive.unsupported') }}</span>
+          <span v-else class="mono ov-arch-size">{{ fmtSize(f.size) }}</span>
         </div>
       </div>
     </div>

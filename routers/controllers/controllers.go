@@ -41,6 +41,13 @@ func fail(c *gin.Context, err error) {
 		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
 	case errors.Is(err, filemanager.ErrLocked):
 		respond(c, serializer.Err(serializer.CodeConflict, err.Error()))
+	// Archive limits: the request is legitimate but larger than the server
+	// allows, so say which limit it hit instead of returning a bare 500.
+	case errors.Is(err, filemanager.ErrArchiveTooLarge),
+		errors.Is(err, filemanager.ErrTooManyFiles):
+		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
+	case errors.Is(err, filemanager.ErrArchiveTooDeep):
+		respond(c, serializer.Err(serializer.CodeBadRequest, err.Error()))
 	default:
 		// Log the real error server-side but return a generic message: raw
 		// internal errors leak DB/driver/filesystem detail to the client.

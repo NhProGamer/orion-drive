@@ -40,6 +40,14 @@ export interface ArchiveEntry {
   name: string
   size: number
   is_dir: boolean
+  /** A member with no equivalent in the drive (symlink, device): not extracted. */
+  unsupported?: boolean
+}
+
+export interface ArchiveListing {
+  entries: ArchiveEntry[]
+  /** The archive holds more members than the server lists at once. */
+  truncated: boolean
 }
 
 export interface Task {
@@ -272,7 +280,7 @@ export const api = {
   compress: (parent: string, ids: number[], name?: string) =>
     post<Task>('/file/archive/compress', { parent, ids, name }),
   extract: (id: number, parent: string) => post<Task>('/file/archive/extract', { id, parent }),
-  archiveEntries: (id: number) => get<ArchiveEntry[]>(`/file/archive/entries/${id}`),
+  archiveEntries: (id: number) => get<ArchiveListing>(`/file/archive/entries/${id}`),
   taskStatus: (id: string) => get<Task>(`/task/${id}`),
   taskList: () => get<Task[]>('/task'),
 

@@ -5,6 +5,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -317,5 +319,103 @@ func TestExtractRollsBackFilesAndFolders(t *testing.T) {
 	}
 	if used := e.storageUsed(t); used != before {
 		t.Fatalf("quota is %d after the rollback, want %d", used, before)
+	}
+}
+
+// --- limits -----------------------------------------------------------------
+
+func TestPlanArchiveRefusesTooManyEntries(t *testing.T) {
+	e := newEnv(t)
+	e.mgr.SetArchiveLimits(filemanager.ArchiveLimits{MaxEntries: 2})
+
+	var ids []uint
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		ids = append(ids, e.upload(t, name, []byte("x")).ID)
+	}
+
+	if _, err := e.mgr.PlanArchive(context.Background(), e.user, ids); !errors.Is(err, filemanager.ErrTooManyFiles) {
+		t.Fatalf("PlanArchive error = %v, want ErrTooManyFiles", err)
+	}
+	// Within the limit it measures what the archive would hold.
+	plan, err := e.mgr.PlanArchive(context.Background(), e.user, ids[:2])
+	if err != nil {
+		t.Fatalf("PlanArchive: %v", err)
+	}
+	if plan.Entries != 2 || plan.Bytes != 2 {
+		t.Fatalf("plan = %+v, want 2 entries / 2 bytes", plan)
+	}
+}
+
+func TestPlanArchiveRefusesTooManyBytes(t *testing.T) {
+	e := newEnv(t)
+	e.mgr.SetArchiveLimits(filemanager.ArchiveLimits{MaxUncompressed: 8})
+	id := e.upload(t, "big.bin", bytes.Repeat([]byte("x"), 32)).ID
+
+	if _, err := e.mgr.PlanArchive(context.Background(), e.user, []uint{id}); !errors.Is(err, filemanager.ErrArchiveTooLarge) {
+		t.Fatalf("PlanArchive error = %v, want ErrArchiveTooLarge", err)
+	}
+}
+
+func TestWriteArchiveRoundTrips(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	folder, err := e.mgr.CreateFolder(ctx, e.user, nil, "pack")
+	if err != nil {
+		t.Fatalf("folder: %v", err)
+	}
+	if _, err := e.mgr.WriteFile(ctx, e.user, &folder.ID, "inner.txt", bytes.NewReader([]byte("nested")), 6); err != nil {
+		t.Fatalf("inner: %v", err)
+	}
+	if _, err := e.mgr.CreateFolder(ctx, e.user, &folder.ID, "hollow"); err != nil {
+		t.Fatalf("empty folder: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := e.mgr.WriteArchive(ctx, e.user, []uint{folder.ID}, &buf); err != nil {
+		t.Fatalf("WriteArchive: %v", err)
+	}
+	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	found := map[string]string{}
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			found[f.Name] = ""
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open %s: %v", f.Name, err)
+		}
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		found[f.Name] = string(b)
+		// An entry with no mode unpacks unreadable on some extractors.
+		if f.Mode().Perm() == 0 {
+			t.Errorf("%s carries no file mode", f.Name)
+		}
+	}
+	if found["pack/inner.txt"] != "nested" {
+		t.Fatalf("archive = %v, want pack/inner.txt with its content", found)
+	}
+	if _, ok := found["pack/hollow/"]; !ok {
+		t.Fatalf("archive = %v, want the empty folder to survive as an entry", found)
+	}
+}
+
+func TestListArchiveEntriesIsBounded(t *testing.T) {
+	e := newEnv(t)
+	e.mgr.SetArchiveLimits(filemanager.ArchiveLimits{MaxEntries: 2})
+
+	f := e.upload(t, "many.zip", zipOf(t, [][2]string{
+		{"a.txt", "1"}, {"b.txt", "2"}, {"c.txt", "3"}, {"d.txt", "4"},
+	}))
+	listing, err := e.mgr.ListArchiveEntries(context.Background(), e.user, f.ID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(listing.Entries) != 2 || !listing.Truncated {
+		t.Fatalf("listing = %d entries truncated=%v, want 2/true", len(listing.Entries), listing.Truncated)
 	}
 }

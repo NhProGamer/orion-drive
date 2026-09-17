@@ -493,7 +493,9 @@
   "archive": {
     "title": "Archive contents",
     "empty": "Empty folder",
-    "error": "Could not read the archive"
+    "error": "Could not read the archive",
+    "truncated": "Very large archive: only the first entries are listed.",
+    "unsupported": "not extractable"
   },
   "tasks": {
     "title": "Background tasks",

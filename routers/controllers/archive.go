@@ -16,6 +16,13 @@ func (ctl *Controller) ArchiveDownload(c *gin.Context) {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "no ids"))
 		return
 	}
+	// Measured first: a streaming response cannot take its headers back, so an
+	// archive over the limits has to be refused before the download starts
+	// rather than abandoned halfway through it.
+	if _, err := ctl.dep.Files.PlanArchive(c.Request.Context(), ctl.user(c), ids); err != nil {
+		fail(c, err)
+		return
+	}
 	c.Header("Content-Disposition", `attachment; filename="orion-archive.zip"`)
 	c.Header("Content-Type", "application/zip")
 	if err := ctl.dep.Files.WriteArchive(c.Request.Context(), ctl.user(c), ids, c.Writer); err != nil {
