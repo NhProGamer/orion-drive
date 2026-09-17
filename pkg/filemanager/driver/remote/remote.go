@@ -8,12 +8,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -120,30 +122,63 @@ func (d *Driver) Source(ctx context.Context, src string, opts driver.SourceOptio
 	return d.signedURL(http.MethodGet, EndpointDownload, q, ttl), nil
 }
 
-// Open fetches the object and buffers it into a seekable reader. Downloads use
-// Source (signed URLs); this is a fallback for internal consumers.
+// Open returns a seekable reader over the object, fetched by ranges. Downloads
+// normally use Source (signed URLs); this serves the internal consumers that
+// need the bytes themselves — decryption, thumbnails, archive readers.
+//
+// The slave serves content through http.ServeContent, so it answers Range
+// requests: a caller reading start to finish costs one request, and a caller
+// that seeks costs one request per jump rather than the whole object in memory.
 func (d *Driver) Open(ctx context.Context, src string) (driver.ReadSeekCloser, error) {
-	q := url.Values{}
-	q.Set(ParamPath, d.key(src))
-	u := d.signedURL(http.MethodGet, EndpointContent, q, time.Hour)
+	return driver.NewRangeReader(ctx, func(ctx context.Context, off int64) (io.ReadCloser, int64, error) {
+		q := url.Values{}
+		q.Set(ParamPath, d.key(src))
+		u := d.signedURL(http.MethodGet, EndpointContent, q, time.Hour)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, 0, err
+		}
+		if off > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", off))
+		}
+		resp, err := d.client.Do(req)
+		if err != nil {
+			return nil, 0, fmt.Errorf("remote: open %q: %w", src, err)
+		}
+		if resp.StatusCode/100 != 2 {
+			defer resp.Body.Close()
+			return nil, 0, fmt.Errorf("remote: open %q: %s", src, statusError(resp))
+		}
+		total, err := responseSize(resp, off)
+		if err != nil {
+			defer resp.Body.Close()
+			return nil, 0, fmt.Errorf("remote: open %q: %w", src, err)
+		}
+		return resp.Body, total, nil
+	})
+}
+
+// responseSize reads the object's full length out of a content response: from
+// the Content-Range of a 206, or from the body length of a 200.
+func responseSize(resp *http.Response, off int64) (int64, error) {
+	if off > 0 {
+		// A slave that ignored the Range header would restart from zero and
+		// silently corrupt what the caller reads from here on.
+		if resp.StatusCode != http.StatusPartialContent {
+			return 0, errors.New("slave ignored the range request")
+		}
+		cr := resp.Header.Get("Content-Range")
+		i := strings.LastIndex(cr, "/")
+		if i < 0 {
+			return 0, errors.New("ranged response carried no Content-Range")
+		}
+		return strconv.ParseInt(cr[i+1:], 10, 64)
 	}
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("remote: open %q: %w", src, err)
+	if resp.ContentLength < 0 {
+		return 0, errors.New("slave did not report a length")
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("remote: open %q: %s", src, statusError(resp))
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return nopCloser{bytes.NewReader(data)}, nil
+	return resp.ContentLength, nil
 }
 
 // Delete removes objects on the slave, returning the keys it failed to delete.
@@ -209,8 +244,3 @@ func statusError(resp *http.Response) string {
 	}
 	return resp.Status
 }
-
-// nopCloser adds a no-op Close to a *bytes.Reader.
-type nopCloser struct{ *bytes.Reader }
-
-func (nopCloser) Close() error { return nil }

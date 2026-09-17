@@ -4,11 +4,12 @@
 package s3
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -122,19 +123,48 @@ func (d *Driver) Source(ctx context.Context, src string, opts driver.SourceOptio
 // Open fetches the object and buffers it into a seekable reader. Downloads use
 // Source (presigned URLs) so this is a fallback for internal consumers.
 func (d *Driver) Open(ctx context.Context, src string) (driver.ReadSeekCloser, error) {
-	out, err := d.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(d.bucket),
-		Key:    aws.String(d.key(src)),
+	key := d.key(src)
+	// Fetched by ranges rather than read whole: a caller that streams the file
+	// gets one request, and a caller that seeks (an archive reader) pays one
+	// request per jump instead of the object's full size in memory.
+	return driver.NewRangeReader(ctx, func(ctx context.Context, off int64) (io.ReadCloser, int64, error) {
+		in := &s3.GetObjectInput{Bucket: aws.String(d.bucket), Key: aws.String(key)}
+		if off > 0 {
+			in.Range = aws.String(fmt.Sprintf("bytes=%d-", off))
+		}
+		out, err := d.client.GetObject(ctx, in)
+		if err != nil {
+			return nil, 0, fmt.Errorf("s3: get %q at %d: %w", src, off, err)
+		}
+		total, err := objectSize(out, off)
+		if err != nil {
+			_ = out.Body.Close()
+			return nil, 0, fmt.Errorf("s3: get %q at %d: %w", src, off, err)
+		}
+		return out.Body, total, nil
 	})
-	if err != nil {
-		return nil, fmt.Errorf("s3: get %q: %w", src, err)
+}
+
+// objectSize reads the object's full length out of a GetObject response: from
+// the Content-Range of a partial answer, or from the length of a whole one.
+func objectSize(out *s3.GetObjectOutput, off int64) (int64, error) {
+	if out.ContentRange != nil {
+		// "bytes 100-999/1000" — the part after the slash is what we want.
+		if i := strings.LastIndex(*out.ContentRange, "/"); i >= 0 {
+			total, err := strconv.ParseInt((*out.ContentRange)[i+1:], 10, 64)
+			if err == nil {
+				return total, nil
+			}
+		}
 	}
-	defer out.Body.Close()
-	data, err := io.ReadAll(out.Body)
-	if err != nil {
-		return nil, err
+	length := aws.ToInt64(out.ContentLength)
+	if off > 0 {
+		// A provider that answered a ranged request without Content-Range gave
+		// us no way to know the total; guessing would corrupt what the caller
+		// reads past this point.
+		return 0, errors.New("ranged response carried no Content-Range")
 	}
-	return nopCloser{bytes.NewReader(data)}, nil
+	return length, nil
 }
 
 // Delete removes objects in a single batch request.
@@ -164,11 +194,6 @@ func (d *Driver) Delete(ctx context.Context, srcs ...string) ([]string, error) {
 	}
 	return nil, nil
 }
-
-// nopCloser adds a no-op Close to a *bytes.Reader.
-type nopCloser struct{ *bytes.Reader }
-
-func (nopCloser) Close() error { return nil }
 
 // urlEscape percent-encodes a filename for a Content-Disposition header.
 func urlEscape(s string) string {
