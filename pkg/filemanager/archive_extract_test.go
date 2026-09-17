@@ -441,3 +441,21 @@ func TestListingAnArchiveStagesNothingOnDisk(t *testing.T) {
 		t.Fatalf("listing staged %v on disk", staged)
 	}
 }
+
+func TestArchiveFormatIsValidated(t *testing.T) {
+	e := newEnv(t)
+	id := e.upload(t, "f.txt", []byte("x")).ID
+
+	// An unknown format is a bad request, not a server error: the caller asked
+	// for something this build cannot produce.
+	if err := e.mgr.WriteArchive(context.Background(), e.user, []uint{id}, &bytes.Buffer{}, "rar"); !errors.Is(err, filemanager.ErrArchiveFormat) {
+		t.Fatalf("WriteArchive error = %v, want ErrArchiveFormat", err)
+	}
+	if _, err := e.mgr.Compress(context.Background(), e.user, nil, []uint{id}, "x", "rar"); !errors.Is(err, filemanager.ErrArchiveFormat) {
+		t.Fatalf("Compress error = %v, want ErrArchiveFormat", err)
+	}
+	// An empty request means the configured default.
+	if got, err := e.mgr.ArchiveFormat(""); err != nil || got != archive.FormatZip {
+		t.Fatalf("ArchiveFormat(\"\") = (%q, %v), want zip", got, err)
+	}
+}

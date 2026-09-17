@@ -78,13 +78,15 @@ func (l ArchiveLimits) withDefaults() ArchiveLimits {
 	return l
 }
 
-// ErrArchiveTooLarge is returned when extracting an archive would exceed the
-// user's storage quota, hit the unlimited-quota safety cap, or when an entry's
-// decompressed stream runs past its declared size (a zip bomb).
-var ErrArchiveTooLarge = errors.New("archive is too large to extract (quota exceeded or decompression bomb)")
+// ErrArchiveTooLarge is returned when an archive would exceed the user's
+// storage quota or the unlimited-quota safety cap, when an entry's decompressed
+// stream runs past its declared size (a zip bomb), or when a requested archive
+// would be larger than the server allows.
+var ErrArchiveTooLarge = errors.New("archive is too large (quota exceeded, decompression bomb, or over the size limit)")
 
-// ErrTooManyFiles is returned when an archive holds more entries than allowed.
-var ErrTooManyFiles = errors.New("archive has too many entries to extract")
+// ErrTooManyFiles is returned when an archive holds — or would hold — more
+// entries than allowed.
+var ErrTooManyFiles = errors.New("archive has too many entries")
 
 // boundedReader fails once more than max bytes have been read, so a lying entry
 // header whose decompressed stream keeps producing data cannot overrun.

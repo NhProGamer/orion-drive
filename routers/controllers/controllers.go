@@ -46,7 +46,8 @@ func fail(c *gin.Context, err error) {
 	case errors.Is(err, filemanager.ErrArchiveTooLarge),
 		errors.Is(err, filemanager.ErrTooManyFiles):
 		respond(c, serializer.Err(serializer.CodeForbidden, err.Error()))
-	case errors.Is(err, filemanager.ErrArchiveTooDeep):
+	case errors.Is(err, filemanager.ErrArchiveTooDeep),
+		errors.Is(err, filemanager.ErrArchiveFormat):
 		respond(c, serializer.Err(serializer.CodeBadRequest, err.Error()))
 	default:
 		// Log the real error server-side but return a generic message: raw
