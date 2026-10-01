@@ -56,12 +56,39 @@ export interface SearchFilters {
   maxSize: number // bytes; 0 = none
 }
 
-const emptyFilters = (): SearchFilters => ({
+export const emptyFilters = (): SearchFilters => ({
   type: '', kind: '', starred: false, since: '', after: '', before: '', minSize: 0, maxSize: 0,
 })
 
 // Map a "modified since" preset to an ISO timestamp cutoff.
 const SINCE_DAYS: Record<Exclude<SearchSince, ''>, number> = { '1d': 1, '7d': 7, '30d': 30, '365d': 365 }
+
+// filtersActive reports whether any search filter narrows the results.
+export function filtersActive(f: SearchFilters): boolean {
+  return !!(f.type || f.kind || f.starred || f.since || f.after || f.before || f.minSize || f.maxSize)
+}
+
+// buildSearchParams turns a query and filters into the search API's params at a
+// given row offset. Shared by the results page and the omnibar's live preview.
+export function buildSearchParams(q: string, f: SearchFilters, offset = 0): Record<string, string> {
+  const params: Record<string, string> = {}
+  if (q.trim()) params.q = q.trim()
+  if (f.type) params.type = f.type
+  if (f.kind) params.kind = f.kind
+  if (f.starred) params.starred = '1'
+  if (f.since) {
+    const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
+    params.after = cutoff.toISOString()
+  } else {
+    // Custom date range (only when no relative preset is active).
+    if (f.after) params.after = new Date(f.after + 'T00:00:00').toISOString()
+    if (f.before) params.before = new Date(f.before + 'T23:59:59').toISOString()
+  }
+  if (f.minSize > 0) params.min_size = String(f.minSize)
+  if (f.maxSize > 0) params.max_size = String(f.maxSize)
+  if (offset > 0) params.offset = String(offset)
+  return params
+}
 
 // Breadcrumb/view labels reuse the sidebar (shell.*) translations.
 const VIEW_LABEL_KEY: Record<View, string> = {
@@ -106,10 +133,7 @@ export const useFilesStore = defineStore('files', {
 
   getters: {
     viewLabel: (s) => t(VIEW_LABEL_KEY[s.view]),
-    hasFilters: (s) => {
-      const f = s.filters
-      return !!(f.type || f.kind || f.starred || f.since || f.after || f.before || f.minSize || f.maxSize)
-    },
+    hasFilters: (s) => filtersActive(s.filters),
     searching(): boolean {
       return this.q.trim().length > 0 || this.hasFilters
     },
@@ -191,24 +215,7 @@ export const useFilesStore = defineStore('files', {
 
     // searchParams builds the query for the active search at a given row offset.
     searchParams(offset: number): Record<string, string> {
-      const params: Record<string, string> = {}
-      if (this.q.trim()) params.q = this.q.trim()
-      const f = this.filters
-      if (f.type) params.type = f.type
-      if (f.kind) params.kind = f.kind
-      if (f.starred) params.starred = '1'
-      if (f.since) {
-        const cutoff = new Date(Date.now() - SINCE_DAYS[f.since] * 86400000)
-        params.after = cutoff.toISOString()
-      } else {
-        // Custom date range (only when no relative preset is active).
-        if (f.after) params.after = new Date(f.after + 'T00:00:00').toISOString()
-        if (f.before) params.before = new Date(f.before + 'T23:59:59').toISOString()
-      }
-      if (f.minSize > 0) params.min_size = String(f.minSize)
-      if (f.maxSize > 0) params.max_size = String(f.maxSize)
-      if (offset > 0) params.offset = String(offset)
-      return params
+      return buildSearchParams(this.q, this.filters, offset)
     },
 
     // loadMoreSearch appends the next page of search results in place.
@@ -325,6 +332,14 @@ export const useFilesStore = defineStore('files', {
     },
     clearFilters() {
       this.filters = emptyFilters()
+      this.clearSel()
+      this.load()
+    },
+    // Run a search from the omnibar: set the text and merge filters in one go so
+    // the results page loads once.
+    commitSearch(q: string, patch: Partial<SearchFilters>) {
+      this.q = q
+      this.filters = { ...this.filters, ...patch }
       this.clearSel()
       this.load()
     },

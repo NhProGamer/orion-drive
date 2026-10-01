@@ -299,6 +299,278 @@ html[data-halo='off'] body::before {
   border-radius: var(--r-xs);
   padding: 1px 5px;
 }
+/* Omnibar: the search box plus its live dropdown (hits, quick filter tokens,
+   recent searches). */
+.omni {
+  position: relative;
+  display: flex;
+  flex: 1;
+  max-width: 560px;
+  min-width: 0;
+}
+.omni .searchbox {
+  max-width: none;
+}
+.omni .searchbox input {
+  min-width: 60px;
+}
+.omni-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 2px 0 8px;
+  border-radius: var(--r-xs);
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.omni-token.small {
+  height: 20px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.omni-token button,
+.omni-clear,
+.omni-forget {
+  display: inline-flex;
+  padding: 3px;
+  border: none;
+  border-radius: var(--r-xs);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.omni-clear,
+.omni-forget {
+  color: var(--fg-3);
+}
+.omni-clear:hover,
+.omni-forget:hover {
+  color: var(--fg-0);
+  background: var(--bg-3);
+}
+.omni-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  min-width: min(560px, calc(100vw - 16px));
+  z-index: 60;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: fade-in var(--t-fast) both;
+}
+.omni-sec {
+  padding: var(--s-3) var(--s-4) var(--s-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.omni-sep {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--s-1);
+}
+.omni-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 var(--s-4) var(--s-3);
+}
+.omni-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  background: var(--bg-2);
+  color: var(--fg-1);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.omni-chip:hover {
+  border-color: var(--border-strong);
+}
+.omni-chip[aria-pressed='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.omni-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 var(--s-1);
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+}
+.omni-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 44px;
+  padding: 4px var(--s-4);
+  color: var(--fg-0);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.omni-row.active {
+  background: var(--accent-bg);
+}
+.omni-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--bg-3);
+  flex-shrink: 0;
+}
+.omni-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.omni-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.omni-name mark {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+.omni-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.omni-meta {
+  font-size: 12px;
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+.omni-all {
+  color: var(--accent-hi);
+  font-weight: 500;
+}
+.omni-empty {
+  padding: var(--s-2) var(--s-4);
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.omni-token-edit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+.omni-token-key {
+  opacity: 0.7;
+}
+.omni-syntax {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-hi);
+  min-width: 140px;
+}
+.omni-desc {
+  font-size: 12.5px;
+  color: var(--fg-2);
+}
+.omni-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--s-4) var(--s-2) 44px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.omni-bad {
+  font-family: var(--font-sans);
+  color: var(--warn);
+}
+.omni-ops,
+.omni-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.omni-op {
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xs);
+  background: var(--bg-2);
+  color: var(--fg-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.omni-op:hover {
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+.omni-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-2) var(--s-4);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-inset);
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+.omni-panel kbd {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+}
+.btn-filters.active {
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+@media (max-width: 640px) {
+  /* The topbar is the containing block (backdrop-filter), so this spans it. */
+  .omni-panel {
+    position: fixed;
+    top: var(--topbar-h);
+    left: var(--s-2);
+    right: var(--s-2);
+    width: auto;
+    min-width: 0;
+  }
+  .omni-keys {
+    display: none;
+  }
+}
 .topbar-right {
   display: flex;
   align-items: center;

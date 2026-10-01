@@ -17,6 +17,7 @@ import { fmtSize, isArchive } from '@/lib/format'
 import { bannerFor } from '@/lib/branding'
 import LanguageMenu from '@/components/LanguageMenu.vue'
 import SearchFiltersBar from './SearchFiltersBar.vue'
+import SearchOmnibar from './SearchOmnibar.vue'
 import FolderChip from './FolderChip.vue'
 import FileCard from './FileCard.vue'
 import FileRow from './FileRow.vue'
@@ -41,7 +42,7 @@ const files = useFilesStore()
 const ui = useUiStore()
 const auth = useAuthStore()
 
-const searchInput = ref<HTMLInputElement>()
+const omnibar = ref<InstanceType<typeof SearchOmnibar>>()
 const fileInput = ref<HTMLInputElement>()
 const dirInput = ref<HTMLInputElement>()
 const dialogInput = ref<HTMLInputElement>()
@@ -68,18 +69,9 @@ const tokensOpen = ref(false)
 const moveNodes = ref<FileNode[] | null>(null)
 // Off-canvas sidebar drawer (mobile only; ignored on wide layouts via CSS).
 const sidebarOpen = ref(false)
-// Search filter panel toggle (lets users filter without typing a query). It is
-// user-dismissable: reveal it automatically when a search starts, but never
-// force it open, so it can always be closed even while a filter is active.
+// Advanced filter panel on the results page, opened on demand from its header.
 const filtersOpen = ref(false)
-watch(() => files.searching, (on) => { if (on) filtersOpen.value = true })
-
-const searchTerm = ref('')
-let searchTimer: number | undefined
-watch(searchTerm, (v) => {
-  clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => files.setQuery(v), 200)
-})
+watch(() => files.searching, (on) => { if (!on) filtersOpen.value = false })
 
 const locationOf = (n: FileNode) => {
   if (n.parent_id == null) return t('shell.myDrive')
@@ -89,7 +81,6 @@ const locationOf = (n: FileNode) => {
 
 /* Navigation */
 function gotoView(v: View) {
-  searchTerm.value = ''
   files.gotoView(v)
   closeMenus()
   sidebarOpen.value = false
@@ -522,7 +513,7 @@ function onKey(e: KeyboardEvent) {
     else if (!files.readOnly) files.trash([...files.sel])
   } else if (e.key === '/' && !isTyping(e)) {
     e.preventDefault()
-    searchInput.value?.focus()
+    omnibar.value?.focus()
   }
 }
 
@@ -661,20 +652,8 @@ onUnmounted(() => {
         <button class="icon-btn topbar-burger" :aria-label="t('shell.mainNav')" @click.stop="sidebarOpen = !sidebarOpen">
           <Menu :size="18" />
         </button>
-        <label class="searchbox">
-          <Search :size="16" />
-          <input ref="searchInput" v-model="searchTerm" type="search" :placeholder="t('shell.searchPlaceholder')" :aria-label="t('common.search')" />
-          <kbd>/</kbd>
-        </label>
+        <SearchOmnibar ref="omnibar" />
         <div class="topbar-right">
-          <button
-            class="icon-btn"
-            :class="{ active: filtersOpen || files.hasFilters }"
-            :title="t('search.filters')"
-            @click="filtersOpen = !filtersOpen"
-          >
-            <SlidersHorizontal :size="16" />
-          </button>
           <div class="segmented" role="group" :aria-label="t('shell.displayMode')">
             <button class="icon-btn" :class="{ active: ui.mode === 'grid' }" :title="t('shell.gridView')" @click="ui.setMode('grid')"><Grid3x3 :size="16" /></button>
             <button class="icon-btn" :class="{ active: ui.mode === 'list' }" :title="t('shell.listView')" @click="ui.setMode('list')"><List :size="16" /></button>
@@ -758,6 +737,15 @@ onUnmounted(() => {
               </div>
               <span v-if="files.view !== 'storage' && files.view !== 'shares'" class="head-count">{{ t('shell.itemCount', files.nodes.length) }}</span>
               <button
+                v-if="files.searching && files.view === 'drive'"
+                class="btn btn-secondary btn-filters"
+                :class="{ active: filtersOpen || files.hasFilters }"
+                :aria-expanded="filtersOpen"
+                @click="filtersOpen = !filtersOpen"
+              >
+                <SlidersHorizontal :size="15" />{{ t('search.filters') }}
+              </button>
+              <button
                 v-if="files.view === 'trash' && files.nodes.length"
                 class="btn btn-secondary"
                 style="margin-left: auto"
@@ -769,7 +757,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Search filters -->
-          <SearchFiltersBar v-if="filtersOpen && files.view === 'drive'" @close="filtersOpen = false" />
+          <SearchFiltersBar v-if="filtersOpen && files.searching && files.view === 'drive'" @close="filtersOpen = false" />
 
           <!-- Storage view -->
           <StoragePanel v-if="files.view === 'storage'" :files="files.storageFiles" :total="files.quota.total" @open="files.previewId = $event.id" />

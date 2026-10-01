@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useFilesStore } from '@/stores/files'
+import { buildSearchParams, emptyFilters, filtersActive, useFilesStore } from '@/stores/files'
 import type { FileNode } from '@/lib/api'
 
 // Minimal FileNode factory for state-only getter tests (no network).
@@ -159,5 +159,25 @@ describe('files store getters', () => {
       s.quota = { used: 500, total: 200 }
       expect(s.quotaPct).toBe(100) // clamped
     })
+  })
+})
+
+describe('search params', () => {
+  it('maps the query and filters to API params', () => {
+    const f = { ...emptyFilters(), kind: 'images' as const, starred: true, minSize: 1000 }
+    expect(buildSearchParams('  plan  ', f, 40)).toEqual({
+      q: 'plan', kind: 'images', starred: '1', min_size: '1000', offset: '40',
+    })
+  })
+  it('turns a since preset into an after cutoff and ignores the custom range', () => {
+    const f = { ...emptyFilters(), since: '7d' as const, before: '2020-01-01' }
+    const p = buildSearchParams('', f)
+    expect(Object.keys(p)).toEqual(['after'])
+    const days = (Date.now() - Date.parse(p.after)) / 86400000
+    expect(Math.round(days)).toBe(7)
+  })
+  it('reports whether any filter is active', () => {
+    expect(filtersActive(emptyFilters())).toBe(false)
+    expect(filtersActive({ ...emptyFilters(), type: 'folder' })).toBe(true)
   })
 })
