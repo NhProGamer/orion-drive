@@ -1,12 +1,12 @@
 /* OrionDrive — Nebula design tokens (ported from the OrionDrive design system).
    Direction A "Nebula" (violet), dark + light. */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Young+Serif&display=swap');
 
 :root {
   --font-sans: 'Inter', -apple-system, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-display: 'Instrument Serif', serif;
+  --font-display: 'Young Serif', serif;
 
   --s-1: 4px;
   --s-2: 8px;

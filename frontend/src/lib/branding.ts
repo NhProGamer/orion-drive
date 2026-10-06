@@ -1,7 +1,7 @@
 // Brand assets, with light/dark variants. The "-dark" files are designed for a
 // dark background (light ink), so they are used with the dark theme.
-import bannerLight from '@/assets/branding/banner-light.webp'
-import bannerDark from '@/assets/branding/banner-dark.webp'
+import bannerLight from '@/assets/branding/banner-light.svg'
+import bannerDark from '@/assets/branding/banner-dark.svg'
 
 type Theme = 'dark' | 'light'
 
