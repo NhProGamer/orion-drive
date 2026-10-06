@@ -130,7 +130,14 @@ func (ctl *Controller) SiteAsset(c *gin.Context) {
 	}
 	etag := `"` + a.ETag + `"`
 	c.Header("ETag", etag)
-	c.Header("Cache-Control", "no-cache")
+	// SiteBranding hands out URLs carrying the content hash (?v=): such a URL
+	// always means these bytes, so the browser may keep it forever and never
+	// ask again. Any other URL (none or a stale hash) must revalidate.
+	if c.Query("v") == a.ETag {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		c.Header("Cache-Control", "no-cache")
+	}
 	c.Header("Content-Security-Policy", siteAssetCSP)
 	if c.GetHeader("If-None-Match") == etag {
 		c.Status(http.StatusNotModified)
