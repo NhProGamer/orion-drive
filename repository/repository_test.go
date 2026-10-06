@@ -203,3 +203,30 @@ func TestSettingUpsert(t *testing.T) {
 		}
 	}
 }
+
+// TestSiteAssetPutListDelete checks an upload replaces in place, List skips
+// the image data, and Delete restores "not set".
+func TestSiteAssetPutListDelete(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	for _, etag := range []string{"aaa", "bbb"} {
+		a := &model.SiteAsset{Name: "favicon", ContentType: "image/png", ETag: etag, Data: []byte(etag)}
+		if err := repo.SiteAsset.Put(ctx, a); err != nil {
+			t.Fatalf("put: %v", err)
+		}
+	}
+	got, err := repo.SiteAsset.Get(ctx, "favicon")
+	if err != nil || got.ETag != "bbb" || string(got.Data) != "bbb" {
+		t.Fatalf("get = %+v, %v; want the second upload", got, err)
+	}
+	list, err := repo.SiteAsset.List(ctx)
+	if err != nil || len(list) != 1 || list[0].Data != nil {
+		t.Fatalf("list = %+v, %v; want one entry without data", list, err)
+	}
+	if err := repo.SiteAsset.Delete(ctx, "favicon"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := repo.SiteAsset.Get(ctx, "favicon"); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("get after delete = %v; want ErrNotFound", err)
+	}
+}

@@ -1,13 +1,21 @@
 package controllers
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io"
 	"net/http"
+	"strings"
+	"time"
 	"unicode/utf8"
 
+	"github.com/NhProGamer/orion-drive/application/constants"
 	"github.com/NhProGamer/orion-drive/middleware"
+	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
+	"github.com/NhProGamer/orion-drive/repository"
 	"github.com/gin-gonic/gin"
 )
 
@@ -80,4 +88,115 @@ func (ctl *Controller) AdminUpdateAppearance(c *gin.Context) {
 	// Restyling every page (shares included) is a sensitive change: keep a trail.
 	ctl.dep.Logger.Info("custom CSS updated", "admin", middleware.UserFrom(c).Email, "bytes", len(req.CustomCSS))
 	respond(c, serializer.OK(nil))
+}
+
+// maxSiteAssetBytes caps an uploaded branding image.
+const maxSiteAssetBytes = 512 << 10
+
+// siteAssetNames are the branding images an admin may replace.
+var siteAssetNames = map[string]bool{"favicon": true, "banner-light": true, "banner-dark": true}
+
+// siteAssetCSP is sent with every branding image. An <img> never runs an SVG's
+// scripts, but opening the asset URL directly would, on our origin: the
+// sandbox makes that navigation script-less and origin-less.
+const siteAssetCSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+
+// SiteBranding lists the custom branding images, as name → URL. The URL
+// carries the content hash, so an upload changes it and busts caches. Missing
+// names mean "use the built-in image". Public: share pages show the banner.
+func (ctl *Controller) SiteBranding(c *gin.Context) {
+	assets, err := ctl.dep.Repo.SiteAsset.List(c.Request.Context())
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	out := gin.H{}
+	for _, a := range assets {
+		out[a.Name] = constants.APIPrefix + "/site/asset/" + a.Name + "?v=" + a.ETag
+	}
+	respond(c, serializer.OK(out))
+}
+
+// SiteAsset serves one custom branding image.
+func (ctl *Controller) SiteAsset(c *gin.Context) {
+	a, err := ctl.dep.Repo.SiteAsset.Get(c.Request.Context(), c.Param("name"))
+	if errors.Is(err, repository.ErrNotFound) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	etag := `"` + a.ETag + `"`
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Content-Security-Policy", siteAssetCSP)
+	if c.GetHeader("If-None-Match") == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+	c.Data(http.StatusOK, a.ContentType, a.Data)
+}
+
+// AdminPutSiteAsset replaces a branding image with the raw request body. The
+// type is sniffed from the bytes, never taken from the client.
+func (ctl *Controller) AdminPutSiteAsset(c *gin.Context) {
+	name := c.Param("name")
+	if !siteAssetNames[name] {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "unknown asset"))
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(c.Request.Body, maxSiteAssetBytes+1))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
+		return
+	}
+	if len(data) > maxSiteAssetBytes {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "image too large (512 KB max)"))
+		return
+	}
+	ct, ok := sniffImageType(data)
+	if !ok {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "unsupported image type (PNG, JPEG, WebP, ICO or SVG)"))
+		return
+	}
+	sum := sha256.Sum256(data)
+	a := &model.SiteAsset{Name: name, ContentType: ct, ETag: hex.EncodeToString(sum[:8]), Data: data, UpdatedAt: time.Now()}
+	if err := ctl.dep.Repo.SiteAsset.Put(c.Request.Context(), a); err != nil {
+		fail(c, err)
+		return
+	}
+	ctl.dep.Logger.Info("branding image updated", "admin", middleware.UserFrom(c).Email, "name", name, "type", ct, "bytes", len(data))
+	respond(c, serializer.OK(nil))
+}
+
+// AdminDeleteSiteAsset restores the built-in image for a branding slot.
+func (ctl *Controller) AdminDeleteSiteAsset(c *gin.Context) {
+	name := c.Param("name")
+	if !siteAssetNames[name] {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "unknown asset"))
+		return
+	}
+	if err := ctl.dep.Repo.SiteAsset.Delete(c.Request.Context(), name); err != nil {
+		fail(c, err)
+		return
+	}
+	ctl.dep.Logger.Info("branding image reset", "admin", middleware.UserFrom(c).Email, "name", name)
+	respond(c, serializer.OK(nil))
+}
+
+// sniffImageType returns the content type of an accepted image format.
+func sniffImageType(data []byte) (string, bool) {
+	ct := http.DetectContentType(data)
+	switch ct {
+	case "image/png", "image/jpeg", "image/webp", "image/x-icon":
+		return ct, true
+	}
+	// SVG is text to the sniffer (text/xml or text/plain): accept it only when
+	// it actually holds an <svg> root.
+	if strings.HasPrefix(ct, "text/") && bytes.Contains(bytes.ToLower(data), []byte("<svg")) {
+		return "image/svg+xml", true
+	}
+	return "", false
 }

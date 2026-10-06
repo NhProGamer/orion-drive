@@ -111,7 +111,18 @@
     "cssSaveFailed": "Échec de l'enregistrement",
     "cssTooLarge": "CSS trop volumineuse (64 Ko max)",
     "confirmResetCss": "Supprimer la CSS personnalisée de l'instance ?",
-    "cssSafeMode": "Si une CSS rend l'interface inutilisable, ajoutez ?safe=1 à l'URL pour la désactiver le temps de la session."
+    "cssSafeMode": "Si une CSS rend l'interface inutilisable, ajoutez ?safe=1 à l'URL pour la désactiver le temps de la session.",
+    "brandTitle": "Logo et bannière",
+    "brandHint": "Remplace le favicon et la bannière (barre latérale, connexion, pages de partage). PNG, JPEG, WebP, ICO ou SVG, 512 Ko max. Une seule bannière fournie sert pour les deux thèmes.",
+    "brandFavicon": "Favicon",
+    "brandBannerLight": "Bannière (thème clair)",
+    "brandBannerDark": "Bannière (thème sombre)",
+    "brandDefault": "Par défaut",
+    "brandUpload": "Importer",
+    "brandSaved": "Image enregistrée",
+    "brandFailed": "Échec de l'enregistrement de l'image",
+    "brandTooLarge": "Image trop volumineuse (512 Ko max)",
+    "cssTitle": "CSS personnalisée"
   },
   "webdav": {
     "loadError": "Chargement des accès WebDAV impossible",

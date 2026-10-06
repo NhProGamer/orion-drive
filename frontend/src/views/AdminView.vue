@@ -2,14 +2,16 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench, Palette, Eye, EyeOff } from 'lucide-vue-next'
+import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench, Palette, Eye, EyeOff, Upload, RotateCcw } from 'lucide-vue-next'
 import {
   api,
   type AdminStats,
   type AdminUser,
   type AdminGroup,
   type AdminPolicy,
+  type SiteBranding,
 } from '@/lib/api'
+import { loadBranding } from '@/lib/branding'
 import { fmtSize } from '@/lib/format'
 import { reloadCustomCss } from '@/lib/customCss'
 import { useAuthStore } from '@/stores/auth'
@@ -47,12 +49,13 @@ async function runMaintenance() {
 
 async function loadAll() {
   let appearance: { custom_css: string }
-  ;[stats.value, users.value, groups.value, policies.value, appearance] = await Promise.all([
+  ;[stats.value, users.value, groups.value, policies.value, appearance, branding.value] = await Promise.all([
     api.adminStats(),
     api.adminUsers(),
     api.adminGroups(),
     api.adminPolicies(),
     api.adminAppearance(),
+    api.siteBranding(),
   ])
   customCss.value = appearance.custom_css
 }
@@ -191,6 +194,55 @@ async function resetCustomCss() {
 }
 onUnmounted(() => setPreview(false))
 
+/* Branding images */
+// Must match maxSiteAssetBytes on the server.
+const BRANDING_MAX_BYTES = 512 * 1024
+type BrandSlot = keyof SiteBranding
+const BRAND_SLOTS: { id: BrandSlot; label: string; dark: boolean }[] = [
+  { id: 'favicon', label: t('admin.brandFavicon'), dark: false },
+  { id: 'banner-light', label: t('admin.brandBannerLight'), dark: false },
+  { id: 'banner-dark', label: t('admin.brandBannerDark'), dark: true },
+]
+const branding = ref<SiteBranding>({})
+const brandBusy = ref<BrandSlot | null>(null)
+
+// Refresh both the admin preview and the live banner/favicon across the app.
+async function refreshBranding() {
+  branding.value = await api.siteBranding()
+  await loadBranding()
+}
+async function uploadBrand(slot: BrandSlot, e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // so picking the same file again still fires change
+  if (!file) return
+  if (file.size > BRANDING_MAX_BYTES) {
+    ui.toast(t('admin.brandTooLarge'), 'x')
+    return
+  }
+  brandBusy.value = slot
+  try {
+    await api.adminPutBranding(slot, file)
+    await refreshBranding()
+    ui.toast(t('admin.brandSaved'), 'check')
+  } catch (err: any) {
+    ui.toast(t('admin.brandFailed') + (err?.message ? ` : ${err.message}` : ''), 'x')
+  } finally {
+    brandBusy.value = null
+  }
+}
+async function resetBrand(slot: BrandSlot) {
+  brandBusy.value = slot
+  try {
+    await api.adminDeleteBranding(slot)
+    await refreshBranding()
+  } catch (err: any) {
+    ui.toast(t('admin.brandFailed') + (err?.message ? ` : ${err.message}` : ''), 'x')
+  } finally {
+    brandBusy.value = null
+  }
+}
+
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'dashboard', label: t('admin.tabDashboard'), icon: LayoutDashboard },
   { id: 'users', label: t('admin.tabUsers'), icon: Users },
@@ -301,6 +353,26 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
 
     <!-- Appearance -->
     <section v-else-if="tab === 'appearance'" class="admin-appearance">
+      <h2 class="admin-subtitle">{{ t('admin.brandTitle') }}</h2>
+      <p class="stat-label">{{ t('admin.brandHint') }}</p>
+      <div class="brand-slots">
+        <div v-for="s in BRAND_SLOTS" :key="s.id" class="brand-slot">
+          <span class="brand-slot-label">{{ s.label }}</span>
+          <div class="brand-preview" :class="{ dark: s.dark, icon: s.id === 'favicon' }">
+            <img v-if="branding[s.id]" :src="branding[s.id]" alt="" />
+            <span v-else class="stat-label">{{ t('admin.brandDefault') }}</span>
+          </div>
+          <div class="brand-slot-actions">
+            <label class="btn btn-secondary" :class="{ disabled: brandBusy }">
+              <Upload :size="15" />{{ t('admin.brandUpload') }}
+              <input type="file" hidden accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon,.ico,.svg" :disabled="!!brandBusy" @change="uploadBrand(s.id, $event)" />
+            </label>
+            <button v-if="branding[s.id]" class="btn btn-ghost" :disabled="!!brandBusy" @click="resetBrand(s.id)"><RotateCcw :size="15" />{{ t('admin.cssReset') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="admin-subtitle">{{ t('admin.cssTitle') }}</h2>
       <p class="stat-label">{{ t('admin.cssHint') }}</p>
       <textarea
         v-model="customCss"

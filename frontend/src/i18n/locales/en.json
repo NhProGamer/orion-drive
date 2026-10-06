@@ -111,7 +111,18 @@
     "cssSaveFailed": "Save failed",
     "cssTooLarge": "CSS too large (64 KB max)",
     "confirmResetCss": "Remove the instance's custom CSS?",
-    "cssSafeMode": "If a stylesheet makes the interface unusable, add ?safe=1 to the URL to disable it for the session."
+    "cssSafeMode": "If a stylesheet makes the interface unusable, add ?safe=1 to the URL to disable it for the session.",
+    "brandTitle": "Logo and banner",
+    "brandHint": "Replaces the favicon and the banner (sidebar, sign-in, share pages). PNG, JPEG, WebP, ICO or SVG, 512 KB max. A single banner serves both themes.",
+    "brandFavicon": "Favicon",
+    "brandBannerLight": "Banner (light theme)",
+    "brandBannerDark": "Banner (dark theme)",
+    "brandDefault": "Default",
+    "brandUpload": "Upload",
+    "brandSaved": "Image saved",
+    "brandFailed": "Failed to save the image",
+    "brandTooLarge": "Image too large (512 KB max)",
+    "cssTitle": "Custom CSS"
   },
   "webdav": {
     "loadError": "Unable to load WebDAV access",

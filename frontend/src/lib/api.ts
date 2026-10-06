@@ -85,6 +85,9 @@ export interface Me {
   admin: boolean
 }
 
+/** Custom branding image URLs by slot; a missing slot uses the built-in image. */
+export type SiteBranding = Partial<Record<'favicon' | 'banner-light' | 'banner-dark', string>>
+
 export interface AdminStats {
   users: number
   files: number
@@ -420,6 +423,11 @@ export const api = {
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
   adminAppearance: () => get<{ custom_css: string }>('/admin/appearance'),
   adminUpdateAppearance: (customCss: string) => put('/admin/appearance', { custom_css: customCss }),
+  siteBranding: () => get<SiteBranding>('/site/branding'),
+  // The raw file is the body; the server sniffs its type from the bytes.
+  adminPutBranding: (name: keyof SiteBranding, file: File) =>
+    put(`/admin/branding/${name}`, file, { headers: { 'Content-Type': 'application/octet-stream' } }),
+  adminDeleteBranding: (name: keyof SiteBranding) => http.delete(`/admin/branding/${name}`),
 }
 
 export type SharePermission = 'read' | 'write' | 'deposit'

@@ -1998,6 +1998,61 @@ html[data-halo='off'] body::before {
   flex-direction: column;
   gap: var(--s-3);
 }
+.admin-subtitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: var(--s-3) 0 0;
+  color: var(--fg-0);
+}
+.brand-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--s-3);
+}
+.brand-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+}
+.brand-slot-label {
+  font-weight: 500;
+  color: var(--fg-1);
+}
+/* Previews sit on a fixed light or dark ground, matching where the image is used. */
+.brand-preview {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-2);
+  border-radius: var(--radius-sm);
+  background: #f4f4f5;
+}
+.brand-preview.dark {
+  background: #18181b;
+}
+.brand-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.brand-preview.icon img {
+  width: 32px;
+  height: 32px;
+}
+.brand-slot-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.brand-slot-actions .disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
 .css-editor {
   min-height: 360px;
   resize: vertical;
@@ -2888,6 +2943,9 @@ html[data-halo='off'] body::before {
   width: 100%;
   max-width: 300px;
   height: auto;
+  /* A custom banner may not share ours' ~4.7:1 ratio: cap it, never distort. */
+  max-height: 64px;
+  object-fit: contain;
   display: block;
   margin: 0 auto;
 }

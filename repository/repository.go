@@ -19,6 +19,7 @@ type Repository struct {
 	APIToken   *APITokenRepo
 	FileChange *FileChangeRepo
 	Setting    *SettingRepo
+	SiteAsset  *SiteAssetRepo
 }
 
 // New builds a Repository bound to db.
@@ -37,5 +38,6 @@ func New(db *gorm.DB) *Repository {
 		APIToken:   &APITokenRepo{db: db},
 		FileChange: &FileChangeRepo{db: db},
 		Setting:    &SettingRepo{db: db},
+		SiteAsset:  &SiteAssetRepo{db: db},
 	}
 }
