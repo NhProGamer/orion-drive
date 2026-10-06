@@ -119,7 +119,18 @@ func (ctl *Controller) SiteBranding(c *gin.Context) {
 
 // SiteAsset serves one custom branding image.
 func (ctl *Controller) SiteAsset(c *gin.Context) {
-	a, err := ctl.dep.Repo.SiteAsset.Get(c.Request.Context(), c.Param("name"))
+	ctx, name := c.Request.Context(), c.Param("name")
+	// A revalidation usually ends in a 304: check the hash without reading
+	// the image, and load the data only when it has to be sent.
+	if inm := c.GetHeader("If-None-Match"); inm != "" {
+		meta, err := ctl.dep.Repo.SiteAsset.GetMeta(ctx, name)
+		if err == nil && inm == `"`+meta.ETag+`"` {
+			setSiteAssetHeaders(c, meta)
+			c.Status(http.StatusNotModified)
+			return
+		}
+	}
+	a, err := ctl.dep.Repo.SiteAsset.Get(ctx, name)
 	if errors.Is(err, repository.ErrNotFound) {
 		c.Status(http.StatusNotFound)
 		return
@@ -128,8 +139,14 @@ func (ctl *Controller) SiteAsset(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	etag := `"` + a.ETag + `"`
-	c.Header("ETag", etag)
+	// Headers come from the row actually sent, so they always match its bytes.
+	setSiteAssetHeaders(c, a)
+	c.Data(http.StatusOK, a.ContentType, a.Data)
+}
+
+// setSiteAssetHeaders sets the validator, cache policy and sandbox CSP.
+func setSiteAssetHeaders(c *gin.Context, a *model.SiteAsset) {
+	c.Header("ETag", `"`+a.ETag+`"`)
 	// SiteBranding hands out URLs carrying the content hash (?v=): such a URL
 	// always means these bytes, so the browser may keep it forever and never
 	// ask again. Any other URL (none or a stale hash) must revalidate.
@@ -139,11 +156,6 @@ func (ctl *Controller) SiteAsset(c *gin.Context) {
 		c.Header("Cache-Control", "no-cache")
 	}
 	c.Header("Content-Security-Policy", siteAssetCSP)
-	if c.GetHeader("If-None-Match") == etag {
-		c.Status(http.StatusNotModified)
-		return
-	}
-	c.Data(http.StatusOK, a.ContentType, a.Data)
 }
 
 // AdminPutSiteAsset replaces a branding image with the raw request body. The

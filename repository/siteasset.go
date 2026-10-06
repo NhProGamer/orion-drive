@@ -22,6 +22,17 @@ func (r *SiteAssetRepo) Get(ctx context.Context, name string) (*model.SiteAsset,
 	return &a, err
 }
 
+// GetMeta loads an asset without its image data, or ErrNotFound.
+func (r *SiteAssetRepo) GetMeta(ctx context.Context, name string) (*model.SiteAsset, error) {
+	var a model.SiteAsset
+	err := r.db.WithContext(ctx).Select("name", "content_type", "etag", "updated_at").
+		Where(&model.SiteAsset{Name: name}).First(&a).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrNotFound
+	}
+	return &a, err
+}
+
 // List returns every asset's metadata, without the image data.
 func (r *SiteAssetRepo) List(ctx context.Context) ([]model.SiteAsset, error) {
 	var out []model.SiteAsset

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"net/http/httptest"
 	"testing"
@@ -68,7 +69,13 @@ func TestSiteAssetCaching(t *testing.T) {
 			t.Errorf("%q: missing sandbox CSP", tc.query)
 		}
 	}
-	if w := serve("", `"abc123"`); w.Code != 304 {
-		t.Errorf("If-None-Match: status %d, want 304", w.Code)
+	if w := serve("", `"abc123"`); w.Code != 304 || w.Body.Len() != 0 || w.Header().Get("ETag") != `"abc123"` {
+		t.Errorf("If-None-Match: status %d, body %d bytes, ETag %q; want an empty 304", w.Code, w.Body.Len(), w.Header().Get("ETag"))
+	}
+	if w := serve("", `"old"`); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), a.Data) {
+		t.Errorf("stale If-None-Match: status %d, %d bytes; want 200 with the image", w.Code, w.Body.Len())
+	}
+	if w := serve("", ""); w.Code != 200 || !bytes.Equal(w.Body.Bytes(), a.Data) {
+		t.Errorf("plain GET: status %d, %d bytes; want 200 with the image", w.Code, w.Body.Len())
 	}
 }

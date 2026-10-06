@@ -219,6 +219,10 @@ func TestSiteAssetPutListDelete(t *testing.T) {
 	if err != nil || got.ETag != "bbb" || string(got.Data) != "bbb" {
 		t.Fatalf("get = %+v, %v; want the second upload", got, err)
 	}
+	meta, err := repo.SiteAsset.GetMeta(ctx, "favicon")
+	if err != nil || meta.ETag != "bbb" || meta.Data != nil {
+		t.Fatalf("getMeta = %+v, %v; want the hash without data", meta, err)
+	}
 	list, err := repo.SiteAsset.List(ctx)
 	if err != nil || len(list) != 1 || list[0].Data != nil {
 		t.Fatalf("list = %+v, %v; want one entry without data", list, err)
