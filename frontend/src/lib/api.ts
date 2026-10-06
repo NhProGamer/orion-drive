@@ -418,6 +418,8 @@ export const api = {
   adminPolicies: () => get<AdminPolicy[]>('/admin/policies'),
   adminCreatePolicy: (p: Omit<AdminPolicy, 'id'>) => post<{ id: number }>('/admin/policies', p),
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
+  adminAppearance: () => get<{ custom_css: string }>('/admin/appearance'),
+  adminUpdateAppearance: (customCss: string) => put('/admin/appearance', { custom_css: customCss }),
 }
 
 export type SharePermission = 'read' | 'write' | 'deposit'

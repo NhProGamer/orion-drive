@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { setCustomCssEnabled } from '@/lib/customCss'
 
 // Every view is lazily loaded so each ends up in its own chunk: a public
 // share-link visitor downloads only the small entry + the ShareView chunk,
@@ -11,3 +12,6 @@ export const router = createRouter({
     { path: '/s/:token', name: 'share', component: () => import('@/views/ShareView.vue') },
   ],
 })
+
+// The admin panel always renders without the custom CSS (see lib/customCss).
+router.afterEach((to) => setCustomCssEnabled(to.name !== 'admin'))

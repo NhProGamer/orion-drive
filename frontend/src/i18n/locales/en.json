@@ -101,7 +101,17 @@
     "basePathPrefix": "Base path (prefix)",
     "pathStyle": "Path-style (MinIO, etc.)",
     "nodeUrl": "Node URL",
-    "sharedSecret": "Shared secret"
+    "sharedSecret": "Shared secret",
+    "tabAppearance": "Appearance",
+    "cssHint": "Custom CSS applied across the whole instance, share pages included (except this admin panel). The variables in tokens.css (--accent, --font-sans, --r-md…) are the stable interface; class names may change between versions.",
+    "cssPreview": "Preview",
+    "cssStopPreview": "Stop preview",
+    "cssReset": "Reset",
+    "cssSaved": "Custom CSS saved",
+    "cssSaveFailed": "Save failed",
+    "cssTooLarge": "CSS too large (64 KB max)",
+    "confirmResetCss": "Remove the instance's custom CSS?",
+    "cssSafeMode": "If a stylesheet makes the interface unusable, add ?safe=1 to the URL to disable it for the session."
   },
   "webdav": {
     "loadError": "Unable to load WebDAV access",

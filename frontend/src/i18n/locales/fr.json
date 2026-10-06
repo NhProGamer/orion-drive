@@ -101,7 +101,17 @@
     "basePathPrefix": "Base path (préfixe)",
     "pathStyle": "Path-style (MinIO, etc.)",
     "nodeUrl": "URL du nœud",
-    "sharedSecret": "Secret partagé"
+    "sharedSecret": "Secret partagé",
+    "tabAppearance": "Apparence",
+    "cssHint": "CSS personnalisée appliquée à toute l'instance, pages de partage comprises (sauf ce panneau d'administration). Les variables de tokens.css (--accent, --font-sans, --r-md…) sont l'interface stable ; les noms de classes peuvent changer d'une version à l'autre.",
+    "cssPreview": "Aperçu",
+    "cssStopPreview": "Arrêter l'aperçu",
+    "cssReset": "Réinitialiser",
+    "cssSaved": "CSS personnalisée enregistrée",
+    "cssSaveFailed": "Échec de l'enregistrement",
+    "cssTooLarge": "CSS trop volumineuse (64 Ko max)",
+    "confirmResetCss": "Supprimer la CSS personnalisée de l'instance ?",
+    "cssSafeMode": "Si une CSS rend l'interface inutilisable, ajoutez ?safe=1 à l'URL pour la désactiver le temps de la session."
   },
   "webdav": {
     "loadError": "Chargement des accès WebDAV impossible",

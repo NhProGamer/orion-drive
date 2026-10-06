@@ -80,6 +80,9 @@ func New(dep *bootstrap.Dependency) (*gin.Engine, error) {
 	linkRL := middleware.RateLimit(dep.Cache, dep.Config.Security.SharePublicRate(), "link")
 	api.GET("/link/:token", linkRL, ctl.DirectLinkContent)
 
+	// Public: the admin-defined custom stylesheet, loaded by every page.
+	api.GET("/site/custom.css", ctl.SiteCustomCSS)
+
 	// WOPI host endpoints (called by the Office editor; authorised by token).
 	wopi := r.Group("/wopi/files")
 	wopi.GET("/:id", ctl.WopiCheckFileInfo)
@@ -258,6 +261,9 @@ func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	a.GET("/policies", ctl.AdminListPolicies)
 	a.POST("/policies", ctl.AdminCreatePolicy)
 	a.DELETE("/policies/:id", ctl.AdminDeletePolicy)
+
+	a.GET("/appearance", ctl.AdminGetAppearance)
+	a.PUT("/appearance", ctl.AdminUpdateAppearance)
 }
 
 func registerShareRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep *bootstrap.Dependency) {

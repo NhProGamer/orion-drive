@@ -186,3 +186,20 @@ func TestUserLookup(t *testing.T) {
 		t.Fatalf("unknown email must be ErrNotFound, got %v", err)
 	}
 }
+
+// TestSettingUpsert checks an unset key reads as "" and Set overwrites in place.
+func TestSettingUpsert(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	if v, err := repo.Setting.Get(ctx, "custom_css"); err != nil || v != "" {
+		t.Fatalf("unset key = %q, %v; want \"\", nil", v, err)
+	}
+	for _, want := range []string{"body{color:red}", ":root{--accent:#0f0}"} {
+		if err := repo.Setting.Set(ctx, "custom_css", want); err != nil {
+			t.Fatalf("set: %v", err)
+		}
+		if v, err := repo.Setting.Get(ctx, "custom_css"); err != nil || v != want {
+			t.Fatalf("get = %q, %v; want %q", v, err, want)
+		}
+	}
+}

@@ -1993,6 +1993,21 @@ html[data-halo='off'] body::before {
 .admin-actions {
   margin-bottom: var(--s-3);
 }
+.admin-appearance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.css-editor {
+  min-height: 360px;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+.admin-appearance .admin-maint {
+  margin-top: 0;
+}
 .admin-maint {
   display: flex;
   align-items: center;

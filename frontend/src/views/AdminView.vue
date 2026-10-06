@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench } from 'lucide-vue-next'
+import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench, Palette, Eye, EyeOff } from 'lucide-vue-next'
 import {
   api,
   type AdminStats,
@@ -11,6 +11,7 @@ import {
   type AdminPolicy,
 } from '@/lib/api'
 import { fmtSize } from '@/lib/format'
+import { reloadCustomCss } from '@/lib/customCss'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import AccessDialog from '@/components/drive/AccessDialog.vue'
@@ -21,7 +22,7 @@ const auth = useAuthStore()
 const ui = useUiStore()
 const { t } = useI18n()
 
-type Tab = 'dashboard' | 'users' | 'groups' | 'policies'
+type Tab = 'dashboard' | 'users' | 'groups' | 'policies' | 'appearance'
 const tab = ref<Tab>('dashboard')
 const ready = ref(false)
 
@@ -45,12 +46,15 @@ async function runMaintenance() {
 }
 
 async function loadAll() {
-  ;[stats.value, users.value, groups.value, policies.value] = await Promise.all([
+  let appearance: { custom_css: string }
+  ;[stats.value, users.value, groups.value, policies.value, appearance] = await Promise.all([
     api.adminStats(),
     api.adminUsers(),
     api.adminGroups(),
     api.adminPolicies(),
+    api.adminAppearance(),
   ])
+  customCss.value = appearance.custom_css
 }
 
 onMounted(async () => {
@@ -140,11 +144,59 @@ async function deletePolicy(p: AdminPolicy) {
   }
 }
 
+/* Appearance */
+// Must match maxCustomCSSBytes on the server.
+const CUSTOM_CSS_MAX_BYTES = 64000
+const customCss = ref('')
+const customCssBytes = computed(() => new TextEncoder().encode(customCss.value).length)
+const cssBusy = ref(false)
+const previewing = ref(false)
+const PREVIEW_ID = 'od-custom-css-preview'
+
+// The admin panel never loads the saved custom CSS; the preview injects the
+// draft here only, through textContent (never parsed as HTML), until toggled off.
+function setPreview(on: boolean) {
+  previewing.value = on
+  document.getElementById(PREVIEW_ID)?.remove()
+  if (!on) return
+  const style = document.createElement('style')
+  style.id = PREVIEW_ID
+  style.textContent = customCss.value
+  document.head.appendChild(style)
+}
+function onCssInput() {
+  if (previewing.value) setPreview(true)
+}
+async function saveCustomCss() {
+  if (customCssBytes.value > CUSTOM_CSS_MAX_BYTES) {
+    ui.toast(t('admin.cssTooLarge'), 'x')
+    return
+  }
+  cssBusy.value = true
+  try {
+    await api.adminUpdateAppearance(customCss.value)
+    reloadCustomCss()
+    ui.toast(t('admin.cssSaved'), 'check')
+  } catch (e: any) {
+    ui.toast(t('admin.cssSaveFailed') + (e?.message ? ` : ${e.message}` : ''), 'x')
+  } finally {
+    cssBusy.value = false
+  }
+}
+async function resetCustomCss() {
+  if (!confirm(t('admin.confirmResetCss'))) return
+  customCss.value = ''
+  setPreview(false)
+  await saveCustomCss()
+}
+onUnmounted(() => setPreview(false))
+
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'dashboard', label: t('admin.tabDashboard'), icon: LayoutDashboard },
   { id: 'users', label: t('admin.tabUsers'), icon: Users },
   { id: 'groups', label: t('admin.tabGroups'), icon: Shield },
   { id: 'policies', label: t('admin.tabStorage'), icon: HardDrive },
+  { id: 'appearance', label: t('admin.tabAppearance'), icon: Palette },
 ]
 </script>
 
@@ -245,6 +297,27 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
         </tbody>
       </table>
       </div>
+    </section>
+
+    <!-- Appearance -->
+    <section v-else-if="tab === 'appearance'" class="admin-appearance">
+      <p class="stat-label">{{ t('admin.cssHint') }}</p>
+      <textarea
+        v-model="customCss"
+        class="input mono css-editor"
+        spellcheck="false"
+        :placeholder="':root {\n  --accent: #7c5cff;\n}'"
+        @input="onCssInput"
+      ></textarea>
+      <div class="admin-maint">
+        <button class="btn btn-primary" :disabled="cssBusy" @click="saveCustomCss"><Check :size="15" />{{ t('common.save') }}</button>
+        <button class="btn btn-secondary" @click="setPreview(!previewing)">
+          <component :is="previewing ? EyeOff : Eye" :size="15" />{{ previewing ? t('admin.cssStopPreview') : t('admin.cssPreview') }}
+        </button>
+        <button class="btn btn-ghost" :disabled="cssBusy || !customCss" @click="resetCustomCss"><Trash2 :size="15" />{{ t('admin.cssReset') }}</button>
+        <span class="stat-label mono">{{ customCssBytes }} / {{ CUSTOM_CSS_MAX_BYTES }}</span>
+      </div>
+      <p class="stat-label">{{ t('admin.cssSafeMode') }}</p>
     </section>
   </div>
 
