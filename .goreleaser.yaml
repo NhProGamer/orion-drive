@@ -41,23 +41,36 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-# Build & push the container image from the already-compiled linux/amd64 binary
-# (SPA embedded), so Go is not recompiled and the frontend is not rebuilt a
-# second time. The runner must `docker login` to git.nhsoul.fr beforehand.
-dockers:
+# Build & push one multi-arch image (linux/amd64 + linux/arm64) from the
+# already-compiled linux binaries (SPA embedded), so Go is not recompiled and
+# the frontend is not rebuilt a second time. dockers_v2 builds every platform
+# in a single `docker buildx build --push` and publishes one manifest list, so
+# `docker pull` picks the right architecture. The runner needs buildx, QEMU
+# (the arm64 `apk add` runs emulated) and a `docker login` to git.nhsoul.fr.
+dockers_v2:
   - id: orion-drive
-    goos: linux
-    goarch: amd64
+    ids: [orion-drive]
     dockerfile: Dockerfile.release
-    image_templates:
+    images:
+      - "git.nhsoul.fr/nhpro/orion-drive"
+    tags:
       # .Tag keeps the leading "v" (v0.16.1), matching the previous image tags.
-      - "git.nhsoul.fr/nhpro/orion-drive:{{ .Tag }}"
-      - "git.nhsoul.fr/nhpro/orion-drive:latest"
-    build_flag_templates:
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.source=https://git.nhsoul.fr/nhpro/orion-drive"
+      - "{{ .Tag }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      "org.opencontainers.image.title": "{{ .ProjectName }}"
+      "org.opencontainers.image.version": "{{ .Version }}"
+      "org.opencontainers.image.revision": "{{ .FullCommit }}"
+      "org.opencontainers.image.source": "https://git.nhsoul.fr/nhpro/orion-drive"
+    # Keep the pushed index to the two images, as before: buildx's SBOM and
+    # provenance attestations each add an "unknown/unknown" entry that registry
+    # UIs show as an extra platform.
+    sbom: false
+    flags:
+      - "--provenance=false"
 
 changelog:
   sort: asc

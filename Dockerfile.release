@@ -1,4 +1,4 @@
-# Slim runtime image used by GoReleaser (see .goreleaser.yaml `dockers`). Unlike
+# Slim runtime image used by GoReleaser (see .goreleaser.yaml `dockers_v2`). Unlike
 # the top-level Dockerfile, this does NOT build anything: GoReleaser already
 # compiled the binary (with the SPA embedded) and drops it into the build
 # context, so the image is just the runtime layer + a COPY. This avoids
@@ -17,8 +17,11 @@ RUN apk add --no-cache \
  && mkdir -p /app/data \
  && chown -R orion:orion /app
 WORKDIR /app
-# GoReleaser places the prebuilt binary in the build context as `orion-drive`.
-COPY orion-drive /usr/local/bin/orion-drive
+# GoReleaser (dockers_v2) lays out one prebuilt binary per platform in the build
+# context, as <os>/<arch>/orion-drive; buildx sets TARGETPLATFORM to the one
+# being built (linux/amd64, linux/arm64).
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/orion-drive /usr/local/bin/orion-drive
 
 USER orion
 

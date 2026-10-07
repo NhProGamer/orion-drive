@@ -6,8 +6,9 @@ on:
 
 # On a tag, GoReleaser does it all in one job: build the frontend once (before
 # hook), cross-compile the binaries, cut the Forgejo release (archives +
-# checksums), AND build+push the container image from the already-compiled
-# linux/amd64 binary (see .goreleaser.yaml `dockers`). This avoids the previous
+# checksums), AND build+push the multi-arch container image from the
+# already-compiled linux/amd64 + linux/arm64 binaries (see .goreleaser.yaml
+# `dockers_v2`). This avoids the previous
 # duplicate Go compile + frontend build that a separate docker job incurred.
 # Third-party actions use full github.com URLs because the Forgejo runner
 # resolves bare `owner/repo` against data.forgejo.org, which only mirrors actions/*.
@@ -34,7 +35,14 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      # Log in so GoReleaser can push the image it builds from the binary.
+      # The image is multi-arch (amd64 + arm64): buildx builds both platforms in
+      # one go, and QEMU emulates arm64 for the runtime layer's `apk add` (the
+      # Go binary itself is cross-compiled, never emulated).
+      - uses: https://github.com/docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: https://github.com/docker/setup-buildx-action@v3
+      # Log in so GoReleaser can push the image it builds from the binaries.
       - uses: https://github.com/docker/login-action@v3
         with:
           registry: git.nhsoul.fr
