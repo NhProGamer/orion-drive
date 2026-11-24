@@ -251,7 +251,9 @@ func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 	a.Use(middleware.RequireAuth(), middleware.RequireAdmin(dep.Config.System.AdminEmailSet(), dep.Config.System.AdminGroupSet()))
 
 	a.GET("/stats", ctl.AdminStats)
-	a.POST("/maintenance", ctl.AdminRunMaintenance)
+	a.GET("/tasks", ctl.AdminListTasks)
+	a.POST("/tasks/:id/run", ctl.AdminRunTask)
+	a.POST("/tasks/:id/stop", ctl.AdminStopTask)
 
 	a.GET("/users", ctl.AdminListUsers)
 	a.PATCH("/users/:id", ctl.AdminUpdateUser)

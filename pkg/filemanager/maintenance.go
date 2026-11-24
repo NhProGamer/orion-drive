@@ -12,10 +12,20 @@ import (
 	"github.com/NhProGamer/orion-drive/repository"
 )
 
+// report publishes a maintenance job's progress to fn, which may be nil.
+func report(fn func(done, total int64), done, total int) {
+	if fn != nil {
+		fn(int64(done), int64(total))
+	}
+}
+
 // PurgeExpiredTrash permanently deletes files that have been in the trash longer
 // than retention, freeing their storage and adjusting each owner's usage. It
 // returns the number of files purged. A retention of 0 disables the job.
-func (m *Manager) PurgeExpiredTrash(ctx context.Context, retention time.Duration) (int, error) {
+//
+// Each file is purged whole before the next starts, so cancelling ctx stops the
+// job between two files and never leaves one half-deleted.
+func (m *Manager) PurgeExpiredTrash(ctx context.Context, retention time.Duration, progress func(done, total int64)) (int, error) {
 	if retention <= 0 {
 		return 0, nil
 	}
@@ -24,47 +34,54 @@ func (m *Manager) PurgeExpiredTrash(ctx context.Context, retention time.Duration
 	if err != nil || len(files) == 0 {
 		return 0, err
 	}
-
-	byOwner := map[uint][]uint{}
-	freed := map[uint]int64{}
+	// Per-file work runs to completion even once a stop is asked.
+	work := context.WithoutCancel(ctx)
+	users := map[uint]*model.User{}
+	purged := 0
 	for i := range files {
+		if err := ctx.Err(); err != nil {
+			return purged, err
+		}
+		report(progress, i, len(files))
 		f := &files[i]
-		byOwner[f.OwnerID] = append(byOwner[f.OwnerID], f.ID)
 		// Drop share links / direct links / thumbnail for the file.
-		_ = m.repo.Share.DeleteByFile(ctx, f.OwnerID, f.ID)
-		_ = m.repo.DirectLink.DeleteByFile(ctx, f.OwnerID, f.ID)
-		if t, err := m.repo.Entity.GetThumb(ctx, f.ID); err == nil {
-			m.removeEntity(ctx, t.ID)
+		_ = m.repo.Share.DeleteByFile(work, f.OwnerID, f.ID)
+		_ = m.repo.DirectLink.DeleteByFile(work, f.OwnerID, f.ID)
+		if t, err := m.repo.Entity.GetThumb(work, f.ID); err == nil {
+			m.removeEntity(work, t.ID)
 		}
 		// Remove every stored version and account for the freed bytes.
-		versions, _ := m.repo.Entity.ListVersions(ctx, f.ID)
+		var freed int64
+		versions, _ := m.repo.Entity.ListVersions(work, f.ID)
 		if len(versions) == 0 && f.PrimaryEntityID != nil {
-			m.removeEntity(ctx, *f.PrimaryEntityID)
-			freed[f.OwnerID] += f.Size
-			continue
+			m.removeEntity(work, *f.PrimaryEntityID)
+			freed = f.Size
 		}
 		for j := range versions {
-			m.removeEntity(ctx, versions[j].ID)
-			freed[f.OwnerID] += versions[j].Size
+			m.removeEntity(work, versions[j].ID)
+			freed += versions[j].Size
+		}
+		u, ok := users[f.OwnerID]
+		if !ok {
+			if u, _ = m.repo.User.GetByID(work, f.OwnerID); u != nil {
+				users[f.OwnerID] = u
+			}
+		}
+		if u != nil {
+			m.addStorage(work, u, -freed)
+		}
+		if err := m.repo.File.Purge(work, f.OwnerID, []uint{f.ID}); err == nil {
+			purged++
 		}
 	}
-
-	total := 0
-	for owner, ids := range byOwner {
-		if u, err := m.repo.User.GetByID(ctx, owner); err == nil {
-			m.addStorage(ctx, u, -freed[owner])
-		}
-		if err := m.repo.File.Purge(ctx, owner, ids); err == nil {
-			total += len(ids)
-		}
-	}
-	return total, nil
+	report(progress, len(files), len(files))
+	return purged, nil
 }
 
 // CleanupUploadTemp removes stale upload staging files left behind by upload
 // sessions that expired without completing or cancelling. Returns how many files
-// were removed.
-func (m *Manager) CleanupUploadTemp() (int, error) {
+// were removed; cancelling ctx stops it between two files.
+func (m *Manager) CleanupUploadTemp(ctx context.Context, progress func(done, total int64)) (int, error) {
 	entries, err := os.ReadDir(m.tmpDir)
 	if os.IsNotExist(err) {
 		return 0, nil
@@ -74,7 +91,11 @@ func (m *Manager) CleanupUploadTemp() (int, error) {
 	}
 	cutoff := time.Now().Add(-uploadSessionTTL)
 	n := 0
-	for _, e := range entries {
+	for i, e := range entries {
+		if err := ctx.Err(); err != nil {
+			return n, err
+		}
+		report(progress, i, len(entries))
 		if e.IsDir() {
 			continue
 		}
@@ -86,6 +107,7 @@ func (m *Manager) CleanupUploadTemp() (int, error) {
 			n++
 		}
 	}
+	report(progress, len(entries), len(entries))
 	return n, nil
 }
 
@@ -127,11 +149,16 @@ func (m *Manager) PolicyFileCount(ctx context.Context, policyID uint) (int, erro
 // (thumbnails, abandoned uploads) are dropped. Physical deletes on an
 // unreachable backend are best-effort; the rows go regardless. It returns the
 // number of files purged.
-func (m *Manager) PurgePolicy(ctx context.Context, policyID uint) (int, error) {
+//
+// Files are purged in small batches, each run to completion: cancelling ctx
+// stops between two batches, and the next call picks up what is left.
+func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(done, total int64)) (int, error) {
 	whole, partial, err := m.splitByPolicy(ctx, policyID)
 	if err != nil {
 		return 0, err
 	}
+	work := context.WithoutCancel(ctx)
+	total, done := len(whole)+len(partial), 0
 	users := map[uint]*model.User{}
 	owner := func(id uint) (*model.User, error) {
 		if u, ok := users[id]; ok {
@@ -153,41 +180,59 @@ func (m *Manager) PurgePolicy(ctx context.Context, policyID uint) (int, error) {
 	for _, f := range whole {
 		byOwner[f.OwnerID] = append(byOwner[f.OwnerID], f.ID)
 	}
+	const batch = 50
 	purged := 0
 	for id, ids := range byOwner {
 		u, err := owner(id)
 		if err != nil {
 			return purged, err
 		}
-		if err := m.Purge(ctx, u, ids); err != nil {
-			return purged, err
+		for len(ids) > 0 {
+			if err := ctx.Err(); err != nil {
+				return purged, err
+			}
+			chunk := ids[:min(batch, len(ids))]
+			ids = ids[len(chunk):]
+			if err := m.Purge(work, u, chunk); err != nil {
+				return purged, err
+			}
+			purged += len(chunk)
+			done += len(chunk)
+			report(progress, done, total)
 		}
-		purged += len(ids)
 	}
 
 	for _, f := range partial {
+		if err := ctx.Err(); err != nil {
+			return purged, err
+		}
 		u, err := owner(f.OwnerID)
 		if err != nil {
 			return purged, err
 		}
-		versions, err := m.repo.Entity.ListVersions(ctx, f.ID)
+		versions, err := m.repo.Entity.ListVersions(work, f.ID)
 		if err != nil {
 			return purged, err
 		}
 		for _, v := range versions {
 			if v.StoragePolicyID == policyID {
-				m.removeEntity(ctx, v.ID)
-				m.addStorage(ctx, u, -v.Size)
+				m.removeEntity(work, v.ID)
+				m.addStorage(work, u, -v.Size)
 			}
 		}
+		done++
+		report(progress, done, total)
 	}
 
-	rest, err := m.repo.Entity.ListByPolicy(ctx, policyID)
+	rest, err := m.repo.Entity.ListByPolicy(work, policyID)
 	if err != nil {
 		return purged, err
 	}
 	for _, e := range rest {
-		m.removeEntity(ctx, e.ID)
+		if err := ctx.Err(); err != nil {
+			return purged, err
+		}
+		m.removeEntity(work, e.ID)
 	}
 	return purged, nil
 }
@@ -206,7 +251,7 @@ var policyDeleteMu sync.Mutex
 // unreachable database) is finished by calling it again; the caller marks the
 // policy deleting first so ResumePolicyDeletions does that on its own. It
 // returns the number of files purged.
-func (m *Manager) DeletePolicy(ctx context.Context, policyID uint) (int, error) {
+func (m *Manager) DeletePolicy(ctx context.Context, policyID uint, progress func(done, total int64)) (int, error) {
 	if policyID == DefaultPolicyID {
 		return 0, errors.New("the default policy cannot be deleted")
 	}
@@ -216,7 +261,7 @@ func (m *Manager) DeletePolicy(ctx context.Context, policyID uint) (int, error) 
 	if err := m.repo.Group.ReassignPolicy(ctx, policyID, DefaultPolicyID); err != nil {
 		return 0, err
 	}
-	n, err := m.PurgePolicy(ctx, policyID)
+	n, err := m.PurgePolicy(ctx, policyID, progress)
 	if err != nil {
 		return n, err
 	}
@@ -224,8 +269,8 @@ func (m *Manager) DeletePolicy(ctx context.Context, policyID uint) (int, error) 
 }
 
 // ResumePolicyDeletions finishes every policy deletion that was started but
-// never completed. It returns how many policies it deleted.
-func (m *Manager) ResumePolicyDeletions(ctx context.Context) (int, error) {
+// never completed (or was stopped). It returns how many policies it deleted.
+func (m *Manager) ResumePolicyDeletions(ctx context.Context, progress func(done, total int64)) (int, error) {
 	policies, err := m.repo.Policy.List(ctx)
 	if err != nil {
 		return 0, err
@@ -235,7 +280,7 @@ func (m *Manager) ResumePolicyDeletions(ctx context.Context) (int, error) {
 		if !policies[i].Deleting() {
 			continue
 		}
-		if _, err := m.DeletePolicy(ctx, policies[i].ID); err != nil {
+		if _, err := m.DeletePolicy(ctx, policies[i].ID, progress); err != nil {
 			return done, err
 		}
 		done++

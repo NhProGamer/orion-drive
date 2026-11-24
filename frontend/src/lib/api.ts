@@ -133,6 +133,32 @@ export interface AdminPolicy {
   deleting?: boolean
 }
 
+/** One finished run of a maintenance task. */
+export interface AdminTaskRun {
+  started_at: string
+  duration_ms: number
+  status: 'done' | 'failed' | 'stopped'
+  count: number
+  error?: string
+}
+
+/** A maintenance task as the admin Tasks view shows it (pkg/crontab.State). */
+export interface AdminTask {
+  id: string
+  type: string
+  kind: 'scheduled' | 'once'
+  params?: Record<string, string>
+  interval_seconds?: number
+  status: 'idle' | 'running' | 'done' | 'failed' | 'stopped'
+  done?: number
+  total?: number
+  eta_seconds?: number
+  started_at?: string
+  next_run?: string
+  /** Newest first. */
+  history: AdminTaskRun[]
+}
+
 export interface Capacity {
   used: number
   total: number
@@ -412,7 +438,9 @@ export const api = {
 
   // Admin
   adminStats: () => get<AdminStats>('/admin/stats'),
-  adminRunMaintenance: () => post<{ purged_trash: number; cleaned_uploads: number }>('/admin/maintenance'),
+  adminTasks: () => get<AdminTask[]>('/admin/tasks'),
+  adminRunTask: (id: string) => post(`/admin/tasks/${id}/run`),
+  adminStopTask: (id: string) => post(`/admin/tasks/${id}/stop`),
   adminUsers: () => get<AdminUser[]>('/admin/users'),
   adminUpdateUser: (id: number, input: { group_id?: number; status?: number }) =>
     http.patch(`/admin/users/${id}`, input),

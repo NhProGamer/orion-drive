@@ -43,21 +43,17 @@
     "tabUsers": "Users",
     "tabGroups": "Groups",
     "tabStorage": "Storage",
+    "tabTasks": "Tasks",
     "statFiles": "Files",
     "statStorageUsed": "Storage used",
     "statShares": "Shares",
     "statPolicies": "Policies",
-    "runMaintenance": "Run maintenance",
-    "maintenanceRunning": "Maintenance…",
-    "maintenanceHint": "Purges expired trash and cleans up incomplete uploads.",
-    "maintenanceDone": "Maintenance: {purged} file(s) purged, {cleaned} upload(s) cleaned up",
-    "maintenanceFailed": "Maintenance failed",
     "loadFailed": "Failed to load admin data",
     "userUpdated": "User updated",
     "groupSaved": "Group saved",
     "policyCreated": "Policy created",
     "policyDeleting": "deleting",
-    "policyDeleteStarted": "Deletion started: files are being removed in the background",
+    "policyDeleteStarted": "Deletion started: follow it in the Tasks tab",
     "deleteFailed": "Deletion failed",
     "confirmDeleteGroup": "Delete the group “{name}”?",
     "confirmDeletePolicy": "Delete the policy “{name}”?",
@@ -568,5 +564,55 @@
     "compressing": "Compressing",
     "remaining": "{time} left",
     "cancel": "Cancel task"
+  },
+  "adminTasks": {
+    "scheduled": "Scheduled tasks",
+    "scheduledHint": "Live",
+    "once": "One-off tasks",
+    "onceHint": "Started by an admin action · kept 24 h",
+    "run": "Run",
+    "stop": "Stop",
+    "actionFailed": "Action failed",
+    "status": {
+      "idle": "Idle",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
+    "progress": "{done} / {total} · {pct}%",
+    "working": "Working…",
+    "scheduledEvery": "Runs",
+    "everyHours": "every hour | every {n} h",
+    "everyMinutes": "every {n} min",
+    "startedAt": "Started",
+    "lastRun": "Last run",
+    "nextRun": "Next",
+    "neverRun": "Never run",
+    "history": "History",
+    "hideHistory": "Hide",
+    "stoppedByHand": "Stopped by hand",
+    "startedBy": "Started by {by}",
+    "types": {
+      "trash-purge": {
+        "title": "Trash purge",
+        "desc": "Permanently deletes files left in the trash past the retention period.",
+        "result": "{n} file(s) purged"
+      },
+      "upload-cleanup": {
+        "title": "Abandoned upload cleanup",
+        "desc": "Removes expired upload chunks from the temporary folder.",
+        "result": "{n} file(s) removed"
+      },
+      "policy-deletion": {
+        "title": "Storage deletion resume",
+        "desc": "Finishes policy deletions that were interrupted or stopped (restart, unreachable slave).",
+        "result": "{n} policy(ies) deleted"
+      },
+      "policy-delete": {
+        "title": "Deleting policy “{name}”",
+        "result": "{n} file(s) deleted"
+      }
+    }
   }
 }

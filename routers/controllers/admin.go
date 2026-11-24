@@ -2,25 +2,43 @@ package controllers
 
 import (
 	"context"
-	"log/slog"
+	"errors"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/middleware"
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/crontab"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
 
-// AdminRunMaintenance runs the background maintenance jobs immediately and
-// returns what they did (also runs on a schedule; this is the manual trigger).
-func (ctl *Controller) AdminRunMaintenance(c *gin.Context) {
-	ctx := c.Request.Context()
-	retention := time.Duration(ctl.dep.Config.System.TrashRetentionDays) * 24 * time.Hour
-	purged, _ := ctl.dep.Files.PurgeExpiredTrash(ctx, retention)
-	cleaned, _ := ctl.dep.Files.CleanupUploadTemp()
-	policies, _ := ctl.dep.Files.ResumePolicyDeletions(ctx)
-	respond(c, serializer.OK(gin.H{"purged_trash": purged, "cleaned_uploads": cleaned, "deleted_policies": policies}))
+// AdminListTasks returns every maintenance task with its state, progress and
+// last runs, for the admin Tasks view (polled while it is open).
+func (ctl *Controller) AdminListTasks(c *gin.Context) {
+	respond(c, serializer.OK(ctl.dep.Cron.List()))
+}
+
+// AdminRunTask starts a periodic maintenance task now.
+func (ctl *Controller) AdminRunTask(c *gin.Context) {
+	switch err := ctl.dep.Cron.RunNow(c.Param("id")); {
+	case errors.Is(err, crontab.ErrUnknown):
+		respond(c, serializer.Err(serializer.CodeNotFound, err.Error()))
+	case errors.Is(err, crontab.ErrRunning):
+		respond(c, serializer.Err(serializer.CodeConflict, err.Error()))
+	default:
+		respond(c, serializer.OK(nil))
+	}
+}
+
+// AdminStopTask stops a running maintenance task between two items. A stopped
+// policy deletion stays pending and is resumed by the next "policy-deletion" run.
+func (ctl *Controller) AdminStopTask(c *gin.Context) {
+	if !ctl.dep.Cron.Stop(c.Param("id")) {
+		respond(c, serializer.Err(serializer.CodeConflict, "task is not running"))
+		return
+	}
+	respond(c, serializer.OK(nil))
 }
 
 // AdminStats returns dashboard counters.
@@ -328,7 +346,7 @@ func (ctl *Controller) AdminPolicyUsage(c *gin.Context) {
 
 // AdminDeletePolicy starts deleting a storage policy along with everything
 // stored on it (see Manager.DeletePolicy). The policy is marked deleting first,
-// then purged in the background: a large policy outlives the request, and a
+// then purged as a one-off task: a large policy outlives the request, and a
 // run cut short is finished by the scheduled resume.
 func (ctl *Controller) AdminDeletePolicy(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
@@ -352,15 +370,17 @@ func (ctl *Controller) AdminDeletePolicy(c *gin.Context) {
 			return
 		}
 	}
-	go func() {
-		n, err := ctl.dep.Files.DeletePolicy(context.Background(), id)
-		if err != nil {
-			slog.Error("policy deletion interrupted; it resumes on the next maintenance run", "policy_id", id, "files_purged", n, "error", err)
-			return
-		}
-		slog.Info("storage policy deleted", "policy_id", id, "files_purged", n)
-	}()
-	respond(c, serializer.OK(nil))
+	params := map[string]string{"name": p.Name}
+	if u := middleware.UserFrom(c); u != nil {
+		params["by"] = u.Email
+	}
+	// Followed in the admin Tasks view; if it fails or is stopped, the
+	// "policy-deletion" task resumes it.
+	task := ctl.dep.Cron.Once("policy-delete", params, func(ctx context.Context, r crontab.Report) (int64, error) {
+		n, err := ctl.dep.Files.DeletePolicy(ctx, id, r)
+		return int64(n), err
+	})
+	respond(c, serializer.OK(gin.H{"task": task}))
 }
 
 // checkGroupPolicy rejects a group pointed at a missing policy or one being

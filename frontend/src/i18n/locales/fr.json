@@ -43,21 +43,17 @@
     "tabUsers": "Utilisateurs",
     "tabGroups": "Groupes",
     "tabStorage": "Stockage",
+    "tabTasks": "Tâches",
     "statFiles": "Fichiers",
     "statStorageUsed": "Stockage utilisé",
     "statShares": "Partages",
     "statPolicies": "Policies",
-    "runMaintenance": "Lancer la maintenance",
-    "maintenanceRunning": "Maintenance…",
-    "maintenanceHint": "Purge la corbeille expirée et nettoie les uploads incomplets.",
-    "maintenanceDone": "Maintenance : {purged} fichier(s) purgé(s), {cleaned} upload(s) nettoyé(s)",
-    "maintenanceFailed": "Échec de la maintenance",
     "loadFailed": "Échec du chargement admin",
     "userUpdated": "Utilisateur mis à jour",
     "groupSaved": "Groupe enregistré",
     "policyCreated": "Policy créée",
     "policyDeleting": "suppression en cours",
-    "policyDeleteStarted": "Suppression lancée : les fichiers sont supprimés en arrière-plan",
+    "policyDeleteStarted": "Suppression lancée : suivez-la dans l’onglet Tâches",
     "deleteFailed": "Suppression impossible",
     "confirmDeleteGroup": "Supprimer le groupe « {name} » ?",
     "confirmDeletePolicy": "Supprimer la policy « {name} » ?",
@@ -568,5 +564,55 @@
     "compressing": "Compression",
     "remaining": "il reste {time}",
     "cancel": "Annuler la tâche"
+  },
+  "adminTasks": {
+    "scheduled": "Tâches planifiées",
+    "scheduledHint": "Mise à jour en direct",
+    "once": "Tâches ponctuelles",
+    "onceHint": "Lancées par une action admin · gardées 24 h",
+    "run": "Lancer",
+    "stop": "Arrêter",
+    "actionFailed": "Action impossible",
+    "status": {
+      "idle": "En attente",
+      "running": "En cours",
+      "done": "Terminé",
+      "failed": "Échec",
+      "stopped": "Arrêté"
+    },
+    "progress": "{done} / {total} · {pct} %",
+    "working": "En cours…",
+    "scheduledEvery": "Planifiée",
+    "everyHours": "toutes les heures | toutes les {n} h",
+    "everyMinutes": "toutes les {n} min",
+    "startedAt": "Démarrée",
+    "lastRun": "Dernier passage",
+    "nextRun": "Prochain",
+    "neverRun": "Jamais lancée",
+    "history": "Historique",
+    "hideHistory": "Masquer",
+    "stoppedByHand": "Arrêtée manuellement",
+    "startedBy": "Lancée par {by}",
+    "types": {
+      "trash-purge": {
+        "title": "Purge de la corbeille",
+        "desc": "Supprime définitivement les fichiers restés en corbeille au-delà de la durée de rétention.",
+        "result": "{n} fichier(s) purgé(s)"
+      },
+      "upload-cleanup": {
+        "title": "Nettoyage des envois abandonnés",
+        "desc": "Retire les fragments d’envois expirés du dossier temporaire.",
+        "result": "{n} fichier(s) supprimé(s)"
+      },
+      "policy-deletion": {
+        "title": "Reprise des suppressions de stockage",
+        "desc": "Termine les suppressions de policy interrompues ou arrêtées (redémarrage, slave injoignable).",
+        "result": "{n} policy(s) supprimée(s)"
+      },
+      "policy-delete": {
+        "title": "Suppression de la policy « {name} »",
+        "result": "{n} fichier(s) supprimé(s)"
+      }
+    }
   }
 }

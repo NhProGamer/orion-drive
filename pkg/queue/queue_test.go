@@ -149,13 +149,13 @@ func TestEstimateStaysSilentWithoutEnoughToGoOn(t *testing.T) {
 		{"only just started", time.Now(), 50, 100},
 	}
 	for _, c := range cases {
-		if got := estimate(c.startedAt, c.done, c.total); got != 0 {
+		if got := Estimate(c.startedAt, c.done, c.total); got != 0 {
 			t.Errorf("%s: estimate = %d, want 0", c.name, got)
 		}
 	}
 	// With real ground to stand on it does estimate: half of a job that took
 	// 10s has about 10s left.
-	if got := estimate(start, 50, 100); got < 8 || got > 12 {
+	if got := Estimate(start, 50, 100); got < 8 || got > 12 {
 		t.Errorf("estimate = %ds, want about 10", got)
 	}
 }

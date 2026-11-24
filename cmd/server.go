@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -36,33 +35,27 @@ var serverCmd = &cobra.Command{
 
 		srv := &http.Server{Addr: cfg.System.Listen, Handler: engine}
 
-		// Background maintenance: purge expired trash and clean stale upload temp.
-		sched := crontab.New(dep.Logger)
+		// Background maintenance, also listed (and run / stopped by hand) in the
+		// admin Tasks view.
+		sched := dep.Cron
 		retention := time.Duration(cfg.System.TrashRetentionDays) * 24 * time.Hour
-		sched.Add("trash-purge", 6*time.Hour, func(ctx context.Context) (string, error) {
-			n, err := dep.Files.PurgeExpiredTrash(ctx, retention)
-			return fmt.Sprintf("%d file(s) purged", n), err
+		sched.Add("trash-purge", 6*time.Hour, func(ctx context.Context, r crontab.Report) (int64, error) {
+			n, err := dep.Files.PurgeExpiredTrash(ctx, retention, r)
+			return int64(n), err
 		})
-		sched.Add("upload-cleanup", 6*time.Hour, func(context.Context) (string, error) {
-			n, err := dep.Files.CleanupUploadTemp()
-			return fmt.Sprintf("%d stale upload file(s) removed", n), err
+		sched.Add("upload-cleanup", 6*time.Hour, func(ctx context.Context, r crontab.Report) (int64, error) {
+			n, err := dep.Files.CleanupUploadTemp(ctx, r)
+			return int64(n), err
 		})
-		resumeDeletions := func(ctx context.Context) (string, error) {
-			n, err := dep.Files.ResumePolicyDeletions(ctx)
-			return fmt.Sprintf("%d pending policy deletion(s) finished", n), err
-		}
-		sched.Add("policy-deletion", 1*time.Hour, resumeDeletions)
+		sched.Add("policy-deletion", 1*time.Hour, func(ctx context.Context, r crontab.Report) (int64, error) {
+			n, err := dep.Files.ResumePolicyDeletions(ctx, r)
+			return int64(n), err
+		})
 		schedCtx, schedCancel := context.WithCancel(context.Background())
-		// The scheduler first fires after an interval: finish a policy deletion a
-		// restart cut short right away instead.
-		go func() {
-			if summary, err := resumeDeletions(schedCtx); err != nil {
-				dep.Logger.Error("maintenance job failed", "job", "policy-deletion", "error", err)
-			} else {
-				dep.Logger.Info("maintenance job", "job", "policy-deletion", "result", summary)
-			}
-		}()
 		sched.Start(schedCtx)
+		// The timers first fire after an interval: finish a policy deletion a
+		// restart cut short right away instead.
+		_ = sched.RunNow("policy-deletion")
 
 		go func() {
 			dep.Logger.Info("OrionDrive listening", "addr", cfg.System.Listen, "oidc", dep.Auth.Enabled())

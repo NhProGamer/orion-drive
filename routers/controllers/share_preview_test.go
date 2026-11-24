@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/NhProGamer/orion-drive/conf"
 	"github.com/NhProGamer/orion-drive/model"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
+	"github.com/NhProGamer/orion-drive/pkg/crontab"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/wopi"
 	"github.com/NhProGamer/orion-drive/repository"
@@ -54,6 +56,7 @@ func ogEnv(t *testing.T) (*Controller, *filemanager.Manager, *model.User) {
 		Shares: share.New(repo, mgr),
 		Cache:  cache.NewMemory(),
 		WOPI:   wopi.NewToken("test-secret-please-ignore-12345678901234567890"),
+		Cron:   crontab.New(slog.Default(), repo.Setting),
 	}
 	return New(dep), mgr, user
 }

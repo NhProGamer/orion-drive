@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Wrench, Palette, Eye, EyeOff, Upload, RotateCcw } from 'lucide-vue-next'
+import { ArrowLeft, LayoutDashboard, Users, Shield, HardDrive, Trash2, Plus, Ban, Check, Palette, Activity, Eye, EyeOff, Upload, RotateCcw } from 'lucide-vue-next'
 import {
   api,
   type AdminStats,
@@ -18,13 +18,14 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import AccessDialog from '@/components/drive/AccessDialog.vue'
 import AccessSwitch from '@/components/drive/AccessSwitch.vue'
+import AdminTasks from '@/components/admin/AdminTasks.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
 const ui = useUiStore()
 const { t } = useI18n()
 
-type Tab = 'dashboard' | 'users' | 'groups' | 'policies' | 'appearance'
+type Tab = 'dashboard' | 'users' | 'groups' | 'policies' | 'tasks' | 'appearance'
 const tab = ref<Tab>('dashboard')
 const ready = ref(false)
 
@@ -32,20 +33,6 @@ const stats = ref<AdminStats | null>(null)
 const users = ref<AdminUser[]>([])
 const groups = ref<AdminGroup[]>([])
 const policies = ref<AdminPolicy[]>([])
-
-const maintBusy = ref(false)
-async function runMaintenance() {
-  maintBusy.value = true
-  try {
-    const r = await api.adminRunMaintenance()
-    stats.value = await api.adminStats()
-    ui.toast(t('admin.maintenanceDone', { purged: r.purged_trash, cleaned: r.cleaned_uploads }), 'check')
-  } catch (e: any) {
-    ui.toast(t('admin.maintenanceFailed') + (e?.message ? ` : ${e.message}` : ''), 'x')
-  } finally {
-    maintBusy.value = false
-  }
-}
 
 async function loadAll() {
   let appearance: { custom_css: string }
@@ -254,6 +241,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: 'users', label: t('admin.tabUsers'), icon: Users },
   { id: 'groups', label: t('admin.tabGroups'), icon: Shield },
   { id: 'policies', label: t('admin.tabStorage'), icon: HardDrive },
+  { id: 'tasks', label: t('admin.tabTasks'), icon: Activity },
   { id: 'appearance', label: t('admin.tabAppearance'), icon: Palette },
 ]
 </script>
@@ -281,12 +269,6 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
       <div class="stat-card"><span class="stat-num">{{ stats.groups }}</span><span class="stat-label">{{ t('admin.tabGroups') }}</span></div>
       <div class="stat-card"><span class="stat-num">{{ stats.policies }}</span><span class="stat-label">{{ t('admin.statPolicies') }}</span></div>
     </section>
-    <div class="admin-maint">
-      <button class="btn btn-secondary" :disabled="maintBusy" @click="runMaintenance">
-        <Wrench :size="15" />{{ maintBusy ? t('admin.maintenanceRunning') : t('admin.runMaintenance') }}
-      </button>
-      <span class="stat-label">{{ t('admin.maintenanceHint') }}</span>
-    </div>
     </template>
 
     <!-- Users -->
@@ -356,6 +338,9 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
       </table>
       </div>
     </section>
+
+    <!-- Tasks: mounted only while shown, so it polls only then -->
+    <AdminTasks v-else-if="tab === 'tasks'" />
 
     <!-- Appearance -->
     <section v-else-if="tab === 'appearance'" class="admin-appearance">

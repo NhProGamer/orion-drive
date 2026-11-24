@@ -17,6 +17,7 @@ import (
 	"github.com/NhProGamer/orion-drive/pkg/auth"
 	"github.com/NhProGamer/orion-drive/pkg/board"
 	"github.com/NhProGamer/orion-drive/pkg/cache"
+	"github.com/NhProGamer/orion-drive/pkg/crontab"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/local"  // register the local storage backend
 	_ "github.com/NhProGamer/orion-drive/pkg/filemanager/driver/remote" // register the remote (slave) storage backend
@@ -33,14 +34,17 @@ import (
 
 // Dependency is the application's injected dependency container.
 type Dependency struct {
-	Config   *conf.Config
-	Logger   *slog.Logger
-	DB       *gorm.DB
-	Cache    cache.Store
-	Repo     *repository.Repository
-	Files    *filemanager.Manager
-	Shares   *share.Service
-	Tasks    *queue.Queue
+	Config *conf.Config
+	Logger *slog.Logger
+	DB     *gorm.DB
+	Cache  cache.Store
+	Repo   *repository.Repository
+	Files  *filemanager.Manager
+	Shares *share.Service
+	Tasks  *queue.Queue
+	// Cron runs the maintenance tasks shown in the admin Tasks view; its
+	// periodic jobs are registered and started by the server command.
+	Cron     *crontab.Scheduler
 	Auth     *auth.Authenticator
 	Signer   *auth.Signer
 	WOPI     *wopi.Token
@@ -134,6 +138,7 @@ func Init(cfg *conf.Config) (*Dependency, error) {
 		Files:    files,
 		Shares:   share.New(repo, files),
 		Tasks:    tasks,
+		Cron:     crontab.New(logger, repo.Setting),
 		Auth:     authn,
 		Signer:   auth.NewSigner(cfg.System.SessionSecret),
 		WOPI:     wopi.NewToken(cfg.WOPI.TokenSecret(cfg.System.SessionSecret)),

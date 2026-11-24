@@ -250,7 +250,7 @@ func (q *Queue) run(t task) {
 			}
 			j.Done = p.Done
 			j.Total = p.Total
-			j.ETASeconds = estimate(j.startedAt, p.Done, p.Total)
+			j.ETASeconds = Estimate(j.startedAt, p.Done, p.Total)
 		})
 	}
 	defer func() {
@@ -308,11 +308,11 @@ func (q *Queue) Cancel(userID uint, id string) bool {
 	return true
 }
 
-// estimate extrapolates the time left from how long the work so far took. It
+// Estimate extrapolates the time left from how long the work so far took. It
 // returns 0 while there is nothing to extrapolate from — no total, nothing done
 // yet, or a job that has only just started — so the UI shows no estimate rather
 // than a wild one.
-func estimate(startedAt time.Time, done, total int64) int {
+func Estimate(startedAt time.Time, done, total int64) int {
 	if startedAt.IsZero() || total <= 0 || done <= 0 || done >= total {
 		return 0
 	}

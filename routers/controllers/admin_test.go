@@ -13,6 +13,7 @@ import (
 
 	"github.com/NhProGamer/orion-drive/middleware"
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/crontab"
 	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
@@ -137,24 +138,54 @@ func TestAdminUpdateUser(t *testing.T) {
 	}
 }
 
-func TestAdminRunMaintenance(t *testing.T) {
+func TestAdminTasks(t *testing.T) {
 	ctl, _, user := ogEnv(t)
-	c, w := authReq(user, "POST", "/admin/maintenance", "")
-	ctl.AdminRunMaintenance(c)
-	e := decode(t, w)
-	if e.Code != serializer.CodeOK {
-		t.Fatalf("AdminRunMaintenance code = %d (%s)", e.Code, w.Body.String())
+	started := make(chan struct{})
+	ctl.dep.Cron.Add("demo", time.Hour, func(ctx context.Context, r crontab.Report) (int64, error) {
+		r(3, 10)
+		close(started)
+		<-ctx.Done()
+		return 3, ctx.Err()
+	})
+	call := func(h gin.HandlerFunc, id string) envelope {
+		c, w := authReq(user, "POST", "/admin/tasks/"+id, "")
+		c.Params = gin.Params{{Key: "id", Value: id}}
+		h(c)
+		return decode(t, w)
 	}
-	var body struct {
-		PurgedTrash    int `json:"purged_trash"`
-		CleanedUploads int `json:"cleaned_uploads"`
+	list := func() []crontab.State {
+		c, w := authReq(user, "GET", "/admin/tasks", "")
+		ctl.AdminListTasks(c)
+		var out []crontab.State
+		if err := json.Unmarshal(decode(t, w).Data, &out); err != nil || len(out) != 1 {
+			t.Fatalf("tasks = %s", w.Body.String())
+		}
+		return out
 	}
-	if err := json.Unmarshal(e.Data, &body); err != nil {
-		t.Fatalf("decode: %v", err)
+
+	if e := call(ctl.AdminRunTask, "nope"); e.Code != serializer.CodeNotFound {
+		t.Fatalf("unknown task code = %d", e.Code)
 	}
-	// Nothing to purge on a fresh DB, but the counters must be present (>= 0).
-	if body.PurgedTrash != 0 {
-		t.Fatalf("purged_trash = %d, want 0 on fresh db", body.PurgedTrash)
+	if e := call(ctl.AdminRunTask, "demo"); e.Code != serializer.CodeOK {
+		t.Fatalf("run code = %d", e.Code)
+	}
+	<-started
+	if e := call(ctl.AdminRunTask, "demo"); e.Code != serializer.CodeConflict {
+		t.Fatalf("second run code = %d, want conflict", e.Code)
+	}
+	if st := list()[0]; st.Status != crontab.StatusRunning || st.Done != 3 || st.Total != 10 {
+		t.Fatalf("running state = %+v", st)
+	}
+	if e := call(ctl.AdminStopTask, "demo"); e.Code != serializer.CodeOK {
+		t.Fatalf("stop code = %d", e.Code)
+	}
+	for deadline := time.Now().Add(5 * time.Second); list()[0].Status == crontab.StatusRunning; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("task did not stop")
+		}
+	}
+	if st := list()[0]; st.Status != crontab.StatusStopped || len(st.History) != 1 {
+		t.Fatalf("stopped state = %+v", st)
 	}
 }
 
@@ -354,7 +385,7 @@ func TestResumePolicyDeletion(t *testing.T) {
 		t.Fatal("group created on a deleting policy")
 	}
 
-	if n, err := mgr.ResumePolicyDeletions(ctx); err != nil || n != 1 {
+	if n, err := mgr.ResumePolicyDeletions(ctx, nil); err != nil || n != 1 {
 		t.Fatalf("resume = %d, %v; want 1 policy", n, err)
 	}
 	if _, err := repo.Policy.GetByID(ctx, gone.ID); err == nil {
