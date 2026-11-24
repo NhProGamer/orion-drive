@@ -1,10 +1,13 @@
 package controllers
 
 import (
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/middleware"
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +19,8 @@ func (ctl *Controller) AdminRunMaintenance(c *gin.Context) {
 	retention := time.Duration(ctl.dep.Config.System.TrashRetentionDays) * 24 * time.Hour
 	purged, _ := ctl.dep.Files.PurgeExpiredTrash(ctx, retention)
 	cleaned, _ := ctl.dep.Files.CleanupUploadTemp()
-	respond(c, serializer.OK(gin.H{"purged_trash": purged, "cleaned_uploads": cleaned}))
+	policies, _ := ctl.dep.Files.ResumePolicyDeletions(ctx)
+	respond(c, serializer.OK(gin.H{"purged_trash": purged, "cleaned_uploads": cleaned, "deleted_policies": policies}))
 }
 
 // AdminStats returns dashboard counters.
@@ -179,6 +183,9 @@ func (ctl *Controller) AdminCreateGroup(c *gin.Context) {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid body"))
 		return
 	}
+	if !ctl.checkGroupPolicy(c, req.StoragePolicyID) {
+		return
+	}
 	g := &model.Group{}
 	req.apply(g)
 	if err := ctl.dep.Repo.Group.Create(c.Request.Context(), g); err != nil {
@@ -204,6 +211,11 @@ func (ctl *Controller) AdminUpdateGroup(c *gin.Context) {
 	g, err := ctl.dep.Repo.Group.GetByID(ctx, id)
 	if err != nil {
 		fail(c, err)
+		return
+	}
+	// Only a policy change is checked: a group can still be renamed while it
+	// waits for its old policy's deletion to move it.
+	if req.StoragePolicyID != g.StoragePolicyID && !ctl.checkGroupPolicy(c, req.StoragePolicyID) {
 		return
 	}
 	req.apply(g)
@@ -250,6 +262,7 @@ func (ctl *Controller) AdminListPolicies(c *gin.Context) {
 		out = append(out, gin.H{
 			"id": p.ID, "name": p.Name, "type": p.Type, "server": p.Server,
 			"bucket_name": p.BucketName, "base_path": p.BasePath, "settings": p.Settings,
+			"deleting": p.Deleting(),
 		})
 	}
 	respond(c, serializer.OK(out))
@@ -291,21 +304,72 @@ func (ctl *Controller) AdminCreatePolicy(c *gin.Context) {
 	respond(c, serializer.OK(gin.H{"id": p.ID}))
 }
 
-// AdminDeletePolicy removes a storage policy not referenced by any group.
-func (ctl *Controller) AdminDeletePolicy(c *gin.Context) {
+// AdminPolicyUsage reports what deleting a storage policy would affect: the
+// groups moved to the default policy and the files deleted with it.
+func (ctl *Controller) AdminPolicyUsage(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
 		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
 		return
 	}
 	ctx := c.Request.Context()
-	if n, _ := ctl.dep.Repo.Policy.GroupsUsing(ctx, id); n > 0 {
-		respond(c, serializer.Err(serializer.CodeConflict, "policy is still used by a group"))
-		return
-	}
-	if err := ctl.dep.Repo.Policy.Delete(ctx, id); err != nil {
+	groups, err := ctl.dep.Repo.Policy.GroupsUsing(ctx, id)
+	if err != nil {
 		fail(c, err)
 		return
 	}
+	files, err := ctl.dep.Files.PolicyFileCount(ctx, id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	respond(c, serializer.OK(gin.H{"groups": groups, "files": files}))
+}
+
+// AdminDeletePolicy starts deleting a storage policy along with everything
+// stored on it (see Manager.DeletePolicy). The policy is marked deleting first,
+// then purged in the background: a large policy outlives the request, and a
+// run cut short is finished by the scheduled resume.
+func (ctl *Controller) AdminDeletePolicy(c *gin.Context) {
+	id, err := parseUint(c.Param("id"))
+	if err != nil {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "invalid id"))
+		return
+	}
+	if id == filemanager.DefaultPolicyID {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "the default policy cannot be deleted"))
+		return
+	}
+	ctx := c.Request.Context()
+	p, err := ctl.dep.Repo.Policy.GetByID(ctx, id)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if !p.Deleting() {
+		if err := ctl.dep.Repo.Policy.MarkDeleting(ctx, p); err != nil {
+			fail(c, err)
+			return
+		}
+	}
+	go func() {
+		n, err := ctl.dep.Files.DeletePolicy(context.Background(), id)
+		if err != nil {
+			slog.Error("policy deletion interrupted; it resumes on the next maintenance run", "policy_id", id, "files_purged", n, "error", err)
+			return
+		}
+		slog.Info("storage policy deleted", "policy_id", id, "files_purged", n)
+	}()
 	respond(c, serializer.OK(nil))
+}
+
+// checkGroupPolicy rejects a group pointed at a missing policy or one being
+// deleted, whose data is about to go.
+func (ctl *Controller) checkGroupPolicy(c *gin.Context, policyID uint) bool {
+	p, err := ctl.dep.Repo.Policy.GetByID(c.Request.Context(), policyID)
+	if err != nil || p.Deleting() {
+		respond(c, serializer.Err(serializer.CodeBadRequest, "unknown or deleting storage policy"))
+		return false
+	}
+	return true
 }

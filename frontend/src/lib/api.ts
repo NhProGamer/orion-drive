@@ -129,6 +129,8 @@ export interface AdminPolicy {
   bucket_name: string
   base_path: string
   settings: Record<string, unknown>
+  /** Deletion started; its data is being purged in the background. */
+  deleting?: boolean
 }
 
 export interface Capacity {
@@ -420,6 +422,7 @@ export const api = {
   adminDeleteGroup: (id: number) => http.delete(`/admin/groups/${id}`),
   adminPolicies: () => get<AdminPolicy[]>('/admin/policies'),
   adminCreatePolicy: (p: Omit<AdminPolicy, 'id'>) => post<{ id: number }>('/admin/policies', p),
+  adminPolicyUsage: (id: number) => get<{ groups: number; files: number }>(`/admin/policies/${id}/usage`),
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
   adminAppearance: () => get<{ custom_css: string }>('/admin/appearance'),
   adminUpdateAppearance: (customCss: string) => put('/admin/appearance', { custom_css: customCss }),

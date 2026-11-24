@@ -47,7 +47,21 @@ var serverCmd = &cobra.Command{
 			n, err := dep.Files.CleanupUploadTemp()
 			return fmt.Sprintf("%d stale upload file(s) removed", n), err
 		})
+		resumeDeletions := func(ctx context.Context) (string, error) {
+			n, err := dep.Files.ResumePolicyDeletions(ctx)
+			return fmt.Sprintf("%d pending policy deletion(s) finished", n), err
+		}
+		sched.Add("policy-deletion", 1*time.Hour, resumeDeletions)
 		schedCtx, schedCancel := context.WithCancel(context.Background())
+		// The scheduler first fires after an interval: finish a policy deletion a
+		// restart cut short right away instead.
+		go func() {
+			if summary, err := resumeDeletions(schedCtx); err != nil {
+				dep.Logger.Error("maintenance job failed", "job", "policy-deletion", "error", err)
+			} else {
+				dep.Logger.Info("maintenance job", "job", "policy-deletion", "result", summary)
+			}
+		}()
 		sched.Start(schedCtx)
 
 		go func() {

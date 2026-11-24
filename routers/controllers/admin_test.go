@@ -3,11 +3,17 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/NhProGamer/orion-drive/middleware"
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager"
 	"github.com/NhProGamer/orion-drive/pkg/serializer"
 	"github.com/gin-gonic/gin"
 )
@@ -207,5 +213,157 @@ func TestRequireAdminGate(t *testing.T) {
 	gate(c2)
 	if c2.IsAborted() {
 		t.Fatalf("admin user should pass RequireAdmin (body %s)", w2.Body.String())
+	}
+}
+
+// slavePolicy creates a second local policy and returns it with a helper that
+// points the user's group at a policy (reloading the user).
+func slavePolicy(t *testing.T, ctl *Controller, user **model.User) (*model.StoragePolicy, func(uint)) {
+	t.Helper()
+	ctx := context.Background()
+	repo := ctl.dep.Repo
+	p := &model.StoragePolicy{Name: "slave", Type: model.PolicyTypeLocal, BasePath: filepath.Join(t.TempDir(), "s2")}
+	if err := repo.Policy.Create(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	return p, func(id uint) {
+		t.Helper()
+		if err := repo.Group.SetStoragePolicy(ctx, (*user).GroupID, id); err != nil {
+			t.Fatal(err)
+		}
+		*user, _ = repo.User.GetByID(ctx, (*user).ID)
+	}
+}
+
+// TestAdminDeletePolicyPurgesItsFiles: deleting a policy that still holds data
+// moves its groups to the default policy, deletes files whose current version
+// lives there, and only strips older versions from files living elsewhere.
+func TestAdminDeletePolicyPurgesItsFiles(t *testing.T) {
+	ctl, mgr, user := ogEnv(t)
+	ctx := context.Background()
+	repo := ctl.dep.Repo
+	gone, usePolicy := slavePolicy(t, ctl, &user)
+
+	usePolicy(gone.ID)
+	a, err := mgr.WriteFile(ctx, user, nil, "a.txt", strings.NewReader("aaaa"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := mgr.WriteFile(ctx, user, nil, "b.txt", strings.NewReader("old"), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	usePolicy(filemanager.DefaultPolicyID)
+	if _, err := mgr.SaveVersion(ctx, user, b.ID, []byte("newer")); err != nil {
+		t.Fatal(err)
+	}
+	usePolicy(gone.ID)
+
+	params := gin.Params{{Key: "id", Value: strconv.Itoa(int(gone.ID))}}
+	cu, wu := authReq(user, "GET", "/admin/policies/x/usage", "")
+	cu.Params = params
+	ctl.AdminPolicyUsage(cu)
+	var usage struct{ Groups, Files int }
+	if e := decode(t, wu); e.Code != serializer.CodeOK || json.Unmarshal(e.Data, &usage) != nil || usage.Groups != 1 || usage.Files != 1 {
+		t.Fatalf("usage = %+v (%s), want 1 group / 1 file", usage, wu.Body.String())
+	}
+
+	cd, wd := authReq(user, "DELETE", "/admin/policies/x", "")
+	cd.Params = params
+	ctl.AdminDeletePolicy(cd)
+	if e := decode(t, wd); e.Code != serializer.CodeOK {
+		t.Fatalf("delete code = %d (%s)", e.Code, wd.Body.String())
+	}
+	// The purge runs in the background; the policy row is the last thing to go.
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := repo.Policy.GetByID(ctx, gone.ID); err != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("policy still exists")
+		}
+	}
+
+	if _, err := repo.File.GetByIDUnscoped(ctx, user.ID, a.ID); err == nil {
+		t.Fatal("file stored on the deleted policy survived")
+	}
+	if vs, _ := repo.Entity.ListVersions(ctx, b.ID); len(vs) != 1 || vs[0].StoragePolicyID != filemanager.DefaultPolicyID {
+		t.Fatalf("b versions = %+v, want only the one on the default policy", vs)
+	}
+	if left, _ := repo.Entity.ListByPolicy(ctx, gone.ID); len(left) != 0 {
+		t.Fatalf("%d entities left on the deleted policy", len(left))
+	}
+	user, _ = repo.User.GetByID(ctx, user.ID)
+	if user.Group.StoragePolicyID != filemanager.DefaultPolicyID {
+		t.Fatalf("group policy = %d, want default", user.Group.StoragePolicyID)
+	}
+	if user.StorageUsed != 5 {
+		t.Fatalf("storage used = %d, want 5 (only \"newer\")", user.StorageUsed)
+	}
+
+	// The default policy itself is protected.
+	c1, w1 := authReq(user, "DELETE", "/admin/policies/1", "")
+	c1.Params = gin.Params{{Key: "id", Value: "1"}}
+	ctl.AdminDeletePolicy(c1)
+	if e := decode(t, w1); e.Code == serializer.CodeOK {
+		t.Fatal("default policy was deleted")
+	}
+}
+
+// TestResumePolicyDeletion: a deletion cut short mid-purge (entities already
+// gone, file rows left) is finished by the scheduled resume, including files
+// whose owner account no longer exists; groups cannot be pointed at it meanwhile.
+func TestResumePolicyDeletion(t *testing.T) {
+	ctl, mgr, user := ogEnv(t)
+	ctx := context.Background()
+	repo := ctl.dep.Repo
+	gone, usePolicy := slavePolicy(t, ctl, &user)
+	usePolicy(gone.ID)
+
+	half, err := mgr.WriteFile(ctx, user, nil, "half.txt", strings.NewReader("x"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ghost := &model.User{Email: "ghost@example.com", Subject: "ghost", GroupID: user.GroupID}
+	if err := repo.User.Create(ctx, ghost); err != nil {
+		t.Fatal(err)
+	}
+	ghost, _ = repo.User.GetByID(ctx, ghost.ID)
+	orphan, err := mgr.WriteFile(ctx, ghost, nil, "orphan.txt", strings.NewReader("y"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate the crash: deletion started, half.txt lost its entities but not its
+	// row, and the ghost account was removed.
+	if err := repo.Policy.MarkDeleting(ctx, gone); err != nil {
+		t.Fatal(err)
+	}
+	if err := ctl.dep.DB.Exec("DELETE FROM entities WHERE file_id = ?", half.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ctl.dep.DB.Exec("DELETE FROM users WHERE id = ?", ghost.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// A group cannot be moved onto a policy being deleted.
+	body := fmt.Sprintf(`{"name":"g","storage_policy_id":%d}`, gone.ID)
+	cg, wg := authReq(user, "POST", "/admin/groups", body)
+	ctl.AdminCreateGroup(cg)
+	if e := decode(t, wg); e.Code == serializer.CodeOK {
+		t.Fatal("group created on a deleting policy")
+	}
+
+	if n, err := mgr.ResumePolicyDeletions(ctx); err != nil || n != 1 {
+		t.Fatalf("resume = %d, %v; want 1 policy", n, err)
+	}
+	if _, err := repo.Policy.GetByID(ctx, gone.ID); err == nil {
+		t.Fatal("policy still exists")
+	}
+	if _, err := repo.File.GetByIDUnscoped(ctx, user.ID, half.ID); err == nil {
+		t.Fatal("half-purged file row survived")
+	}
+	if _, err := repo.File.GetByIDUnscoped(ctx, ghost.ID, orphan.ID); err == nil {
+		t.Fatal("file of a deleted owner survived")
 	}
 }

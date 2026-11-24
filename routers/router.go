@@ -263,6 +263,7 @@ func registerAdminRoutes(api *gin.RouterGroup, ctl *controllers.Controller, dep 
 
 	a.GET("/policies", ctl.AdminListPolicies)
 	a.POST("/policies", ctl.AdminCreatePolicy)
+	a.GET("/policies/:id/usage", ctl.AdminPolicyUsage)
 	a.DELETE("/policies/:id", ctl.AdminDeletePolicy)
 
 	a.GET("/appearance", ctl.AdminGetAppearance)

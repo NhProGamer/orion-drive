@@ -284,3 +284,17 @@ func (r *FileRepo) CountAll(ctx context.Context) (int64, error) {
 		Where("type = ?", model.FileTypeFile).Count(&n).Error
 	return n, err
 }
+
+// ListStoredOn returns every file (any owner, trashed included) that has at
+// least one version stored on the given policy — current or older — or whose
+// own policy column names it, which still finds a file whose entities were
+// already removed by an interrupted purge.
+func (r *FileRepo) ListStoredOn(ctx context.Context, policyID uint) ([]model.File, error) {
+	onPolicy := r.db.Model(&model.Entity{}).Where("storage_policy_id = ? AND type = ?", policyID, model.EntityTypeVersion)
+	var files []model.File
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("id IN (?) OR primary_entity_id IN (?) OR (type = ? AND storage_policy_id = ?)",
+			onPolicy.Select("file_id"), onPolicy.Select("id"), model.FileTypeFile, policyID).
+		Find(&files).Error
+	return files, err
+}

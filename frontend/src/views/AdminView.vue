@@ -138,10 +138,16 @@ async function savePolicy() {
   ui.toast(t('admin.policyCreated'), 'check')
 }
 async function deletePolicy(p: AdminPolicy) {
-  if (!confirm(t('admin.confirmDeletePolicy', { name: p.name }))) return
   try {
+    const usage = await api.adminPolicyUsage(p.id)
+    let msg = t('admin.confirmDeletePolicy', { name: p.name })
+    if (usage.files > 0) msg += '\n\n' + t('admin.confirmDeletePolicyFiles', { n: usage.files })
+    if (usage.groups > 0) msg += '\n\n' + t('admin.confirmDeletePolicyGroups', { n: usage.groups })
+    if (!confirm(msg)) return
     await api.adminDeletePolicy(p.id)
-    policies.value = await api.adminPolicies()
+    ui.toast(t('admin.policyDeleteStarted'), 'check')
+    // Groups may have been moved to the default policy.
+    ;[policies.value, groups.value] = await Promise.all([api.adminPolicies(), api.adminGroups()])
   } catch (e: any) {
     ui.toast(e?.message || t('admin.deleteFailed'), 'x')
   }
@@ -340,11 +346,11 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
         <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('admin.colType') }}</th><th>{{ t('admin.colServerBucket') }}</th><th>{{ t('admin.colBasePath') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="p in policies" :key="p.id">
-            <td>{{ p.name }}</td>
+            <td>{{ p.name }} <span v-if="p.deleting" class="badge">{{ t('admin.policyDeleting') }}</span></td>
             <td><span class="badge">{{ p.type }}</span></td>
             <td class="mono">{{ p.server }}{{ p.bucket_name ? ' · ' + p.bucket_name : '' }}</td>
             <td class="mono">{{ p.base_path || '—' }}</td>
-            <td class="row-actions"><button class="icon-btn danger" :title="t('common.delete')" @click="deletePolicy(p)"><Trash2 :size="15" /></button></td>
+            <td class="row-actions"><button v-if="p.id !== 1 && !p.deleting" class="icon-btn danger" :title="t('common.delete')" @click="deletePolicy(p)"><Trash2 :size="15" /></button></td>
           </tr>
         </tbody>
       </table>
@@ -401,7 +407,7 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
       <div class="acc-field">
         <label>{{ t('admin.storagePolicy') }}</label>
         <select v-model="gForm.storage_policy_id" class="input">
-          <option v-for="p in policies" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-for="p in policies" :key="p.id" :value="p.id" :disabled="p.deleting">{{ p.name }}</option>
         </select>
       </div>
       <div class="acc-row">

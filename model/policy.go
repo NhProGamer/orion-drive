@@ -20,3 +20,15 @@ type StoragePolicy struct {
 	NodeID     uint   `json:"node_id"`
 	Settings   JSON   `gorm:"type:json" json:"settings"`
 }
+
+// Deleting reports whether the policy's deletion has started (Settings key
+// "deleting", set by PolicyRepo.MarkDeleting): it takes no new data, and
+// Manager.ResumePolicyDeletions finishes the deletion if it was interrupted.
+// shortcut: a Settings key instead of a column to skip a migration per dialect; promote to a column if policies grow a status.
+func (p *StoragePolicy) Deleting() bool {
+	var s struct {
+		Deleting bool `json:"deleting"`
+	}
+	_ = p.Settings.Unmarshal(&s)
+	return s.Deleting
+}

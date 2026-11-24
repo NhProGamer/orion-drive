@@ -81,3 +81,10 @@ func (r *GroupRepo) SetPermissions(ctx context.Context, groupID uint, perms mode
 		Where("id = ?", groupID).
 		Update("permissions", perms).Error
 }
+
+// ReassignPolicy moves every group using policy from onto policy to.
+func (r *GroupRepo) ReassignPolicy(ctx context.Context, from, to uint) error {
+	return r.db.WithContext(ctx).Model(&model.Group{}).
+		Where("storage_policy_id = ?", from).
+		Update("storage_policy_id", to).Error
+}

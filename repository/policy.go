@@ -49,3 +49,14 @@ func (r *PolicyRepo) GroupsUsing(ctx context.Context, policyID uint) (int64, err
 	err := r.db.WithContext(ctx).Model(&model.Group{}).Where("storage_policy_id = ?", policyID).Count(&n).Error
 	return n, err
 }
+
+// MarkDeleting flags a policy as being deleted (see StoragePolicy.Deleting).
+func (r *PolicyRepo) MarkDeleting(ctx context.Context, p *model.StoragePolicy) error {
+	s := map[string]any{}
+	if err := p.Settings.Unmarshal(&s); err != nil {
+		return err
+	}
+	s["deleting"] = true
+	p.Settings = model.MustJSON(s)
+	return r.Update(ctx, p)
+}

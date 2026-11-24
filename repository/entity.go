@@ -113,3 +113,10 @@ func (r *EntityRepo) ListVersions(ctx context.Context, fileID uint) ([]model.Ent
 func (r *EntityRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&model.Entity{}, id).Error
 }
+
+// ListByPolicy returns every entity stored on a storage policy.
+func (r *EntityRepo) ListByPolicy(ctx context.Context, policyID uint) ([]model.Entity, error) {
+	var es []model.Entity
+	err := r.db.WithContext(ctx).Where("storage_policy_id = ?", policyID).Find(&es).Error
+	return es, err
+}

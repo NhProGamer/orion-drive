@@ -48,6 +48,7 @@ func ogEnv(t *testing.T) (*Controller, *filemanager.Manager, *model.User) {
 	mgr := filemanager.NewManager(repo, cache.NewMemory(), dir, nil, nil)
 	dep := &bootstrap.Dependency{
 		Config: cfg,
+		DB:     db,
 		Repo:   repo,
 		Files:  mgr,
 		Shares: share.New(repo, mgr),

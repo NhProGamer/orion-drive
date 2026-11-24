@@ -82,6 +82,7 @@ func (m *Manager) RestoreVersion(ctx context.Context, user *model.User, fileID, 
 	}
 	f.PrimaryEntityID = &e.ID
 	f.Size = e.Size
+	f.StoragePolicyID = e.StoragePolicyID
 	if err := m.repo.File.Update(ctx, f); err != nil {
 		return nil, err
 	}
