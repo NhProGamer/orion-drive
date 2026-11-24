@@ -3,12 +3,14 @@ package filemanager
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/NhProGamer/orion-drive/model"
+	"github.com/NhProGamer/orion-drive/pkg/filemanager/driver"
 	"github.com/NhProGamer/orion-drive/repository"
 )
 
@@ -137,6 +139,59 @@ func (m *Manager) splitByPolicy(ctx context.Context, policyID uint) (whole, part
 	return whole, partial, nil
 }
 
+// pingTimeout bounds a reachability probe of a storage backend: an offline node
+// must not hold the admin's confirmation dialog for long.
+const pingTimeout = 5 * time.Second
+
+// ping probes h if it can tell whether it is reachable; other backends count
+// as online.
+func ping(ctx context.Context, h driver.Handler) error {
+	p, ok := h.(driver.Pinger)
+	if !ok {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, pingTimeout)
+	defer cancel()
+	return p.Ping(ctx)
+}
+
+// PolicyOnline reports whether a policy's storage backend answers right now,
+// i.e. whether deleting the policy would also erase the stored data.
+func (m *Manager) PolicyOnline(ctx context.Context, policyID uint) bool {
+	p, err := m.repo.Policy.GetByID(ctx, policyID)
+	if err != nil {
+		return false
+	}
+	h, err := m.driverForPolicy(p)
+	return err == nil && ping(ctx, h) == nil
+}
+
+// departingStore wraps the backend of a policy being deleted, where physical
+// deletes are best-effort: once the backend is offline (from the start, or
+// after a delete fails) the remaining ones are skipped and counted, so an
+// offline node costs nothing per object instead of a connection timeout each.
+// Used by one PurgePolicy run at a time, so it needs no lock.
+type departingStore struct {
+	driver.Handler // nil when the backend could not even be built
+	policyID       uint
+	offline        bool
+	skipped        int
+}
+
+func (d *departingStore) Delete(ctx context.Context, srcs ...string) ([]string, error) {
+	if d.offline || d.Handler == nil {
+		d.skipped += len(srcs)
+		return srcs, nil
+	}
+	failed, err := d.Handler.Delete(ctx, srcs...)
+	if err != nil {
+		slog.Warn("policy deletion: storage unreachable, deleting metadata only from now on", "policy_id", d.policyID, "error", err)
+		d.offline = true
+		d.skipped += len(srcs)
+	}
+	return failed, err
+}
+
 // PolicyFileCount returns how many files PurgePolicy would delete outright.
 func (m *Manager) PolicyFileCount(ctx context.Context, policyID uint) (int, error) {
 	whole, _, err := m.splitByPolicy(ctx, policyID)
@@ -147,11 +202,11 @@ func (m *Manager) PolicyFileCount(ctx context.Context, policyID uint) (int, erro
 // of the policy's removal: files whose current version is there are purged
 // whole, other files only lose the older versions stored there, and leftovers
 // (thumbnails, abandoned uploads) are dropped. Physical deletes on an
-// unreachable backend are best-effort; the rows go regardless. It returns the
-// number of files purged.
+// offline backend are skipped (see departingStore): only the metadata goes, and
+// the objects stay on the node. It returns the number of files purged.
 //
-// Files are purged in small batches, each run to completion: cancelling ctx
-// stops between two batches, and the next call picks up what is left.
+// Each file is purged whole before the next starts: cancelling ctx stops
+// between two files, and the next call picks up what is left.
 func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(done, total int64)) (int, error) {
 	whole, partial, err := m.splitByPolicy(ctx, policyID)
 	if err != nil {
@@ -159,6 +214,20 @@ func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(
 	}
 	work := context.WithoutCancel(ctx)
 	total, done := len(whole)+len(partial), 0
+
+	store := &departingStore{policyID: policyID}
+	if p, err := m.repo.Policy.GetByID(ctx, policyID); err == nil {
+		store.Handler, _ = m.driverForPolicy(p)
+	}
+	if store.Handler == nil || ping(ctx, store.Handler) != nil {
+		store.offline = true
+	}
+	dcache := map[uint]driver.Handler{policyID: store}
+	defer func() {
+		if store.skipped > 0 {
+			slog.Warn("policy deletion: objects left on the unreachable storage", "policy_id", policyID, "objects", store.skipped)
+		}
+	}()
 	users := map[uint]*model.User{}
 	owner := func(id uint) (*model.User, error) {
 		if u, ok := users[id]; ok {
@@ -180,24 +249,21 @@ func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(
 	for _, f := range whole {
 		byOwner[f.OwnerID] = append(byOwner[f.OwnerID], f.ID)
 	}
-	const batch = 50
 	purged := 0
 	for id, ids := range byOwner {
 		u, err := owner(id)
 		if err != nil {
 			return purged, err
 		}
-		for len(ids) > 0 {
+		for _, fileID := range ids {
 			if err := ctx.Err(); err != nil {
 				return purged, err
 			}
-			chunk := ids[:min(batch, len(ids))]
-			ids = ids[len(chunk):]
-			if err := m.Purge(work, u, chunk); err != nil {
+			if err := m.purge(work, u, []uint{fileID}, dcache); err != nil {
 				return purged, err
 			}
-			purged += len(chunk)
-			done += len(chunk)
+			purged++
+			done++
 			report(progress, done, total)
 		}
 	}
@@ -216,7 +282,7 @@ func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(
 		}
 		for _, v := range versions {
 			if v.StoragePolicyID == policyID {
-				m.removeEntity(work, v.ID)
+				m.removeEntityWith(work, v.ID, dcache)
 				m.addStorage(work, u, -v.Size)
 			}
 		}
@@ -232,7 +298,7 @@ func (m *Manager) PurgePolicy(ctx context.Context, policyID uint, progress func(
 		if err := ctx.Err(); err != nil {
 			return purged, err
 		}
-		m.removeEntity(work, e.ID)
+		m.removeEntityWith(work, e.ID, dcache)
 	}
 	return purged, nil
 }

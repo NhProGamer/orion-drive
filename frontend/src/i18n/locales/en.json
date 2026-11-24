@@ -58,6 +58,7 @@
     "confirmDeleteGroup": "Delete the group “{name}”?",
     "confirmDeletePolicy": "Delete the policy “{name}”?",
     "confirmDeletePolicyFiles": "⚠ {n} file(s) stored on this policy will be permanently deleted, along with any older versions stored there. This cannot be undone.",
+    "confirmDeletePolicyOffline": "⚠ The storage node is OFFLINE: only the metadata will be deleted ({n} file(s), their versions, shares and links). The data stored on the node will NOT be erased; remove it by hand if the node comes back.",
     "confirmDeletePolicyGroups": "{n} group(s) using this policy will be moved to the default policy.",
     "colEmail": "Email",
     "colGroup": "Group",
@@ -578,7 +579,8 @@
       "running": "Running",
       "done": "Done",
       "failed": "Failed",
-      "stopped": "Stopped"
+      "stopped": "Stopped",
+      "stopping": "Stopping…"
     },
     "progress": "{done} / {total} · {pct}%",
     "working": "Working…",
@@ -613,6 +615,7 @@
         "title": "Deleting policy “{name}”",
         "result": "{n} file(s) deleted"
       }
-    }
+    },
+    "metadataOnly": "metadata only"
   }
 }

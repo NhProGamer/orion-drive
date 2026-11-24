@@ -53,6 +53,13 @@ type Handler interface {
 	Capabilities() *Capabilities
 }
 
+// Pinger is an optional Handler capability: a backend on another machine that
+// can tell whether it answers right now (and accepts our credentials). Backends
+// that cannot be unreachable on their own (local disk) don't implement it.
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 // Adopter is an optional Handler capability: a backend that can take ownership of
 // an already-staged local file by moving it into place (os.Rename on the same
 // filesystem — metadata only), rather than re-reading and re-writing its bytes.

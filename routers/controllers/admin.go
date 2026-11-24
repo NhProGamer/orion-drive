@@ -323,7 +323,8 @@ func (ctl *Controller) AdminCreatePolicy(c *gin.Context) {
 }
 
 // AdminPolicyUsage reports what deleting a storage policy would affect: the
-// groups moved to the default policy and the files deleted with it.
+// groups moved to the default policy, the files deleted with it, and whether
+// its storage answers -- when it does not, only the metadata can be deleted.
 func (ctl *Controller) AdminPolicyUsage(c *gin.Context) {
 	id, err := parseUint(c.Param("id"))
 	if err != nil {
@@ -341,7 +342,8 @@ func (ctl *Controller) AdminPolicyUsage(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	respond(c, serializer.OK(gin.H{"groups": groups, "files": files}))
+	online := ctl.dep.Files.PolicyOnline(ctx, id)
+	respond(c, serializer.OK(gin.H{"groups": groups, "files": files, "online": online}))
 }
 
 // AdminDeletePolicy starts deleting a storage policy along with everything
@@ -371,6 +373,9 @@ func (ctl *Controller) AdminDeletePolicy(c *gin.Context) {
 		}
 	}
 	params := map[string]string{"name": p.Name}
+	if !ctl.dep.Files.PolicyOnline(ctx, id) {
+		params["offline"] = "1"
+	}
 	if u := middleware.UserFrom(c); u != nil {
 		params["by"] = u.Email
 	}

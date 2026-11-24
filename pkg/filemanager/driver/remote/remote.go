@@ -181,6 +181,27 @@ func responseSize(resp *http.Response, off int64) (int64, error) {
 	return resp.ContentLength, nil
 }
 
+// Ping checks the slave answers and accepts our signature, with a signed delete
+// of nothing: no endpoint of its own, so it works against any slave version.
+func (d *Driver) Ping(ctx context.Context) error {
+	body, _ := json.Marshal(deleteRequest{Paths: []string{}})
+	u := d.signedURL(http.MethodPost, EndpointDelete, url.Values{}, time.Minute)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("remote: ping: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("remote: ping: %s", statusError(resp))
+	}
+	return nil
+}
+
 // Delete removes objects on the slave, returning the keys it failed to delete.
 func (d *Driver) Delete(ctx context.Context, srcs ...string) ([]string, error) {
 	if len(srcs) == 0 {

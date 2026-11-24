@@ -150,6 +150,8 @@ export interface AdminTask {
   params?: Record<string, string>
   interval_seconds?: number
   status: 'idle' | 'running' | 'done' | 'failed' | 'stopped'
+  /** A stop was asked; the task finishes the file in hand first. */
+  stopping?: boolean
   done?: number
   total?: number
   eta_seconds?: number
@@ -450,7 +452,7 @@ export const api = {
   adminDeleteGroup: (id: number) => http.delete(`/admin/groups/${id}`),
   adminPolicies: () => get<AdminPolicy[]>('/admin/policies'),
   adminCreatePolicy: (p: Omit<AdminPolicy, 'id'>) => post<{ id: number }>('/admin/policies', p),
-  adminPolicyUsage: (id: number) => get<{ groups: number; files: number }>(`/admin/policies/${id}/usage`),
+  adminPolicyUsage: (id: number) => get<{ groups: number; files: number; online: boolean }>(`/admin/policies/${id}/usage`),
   adminDeletePolicy: (id: number) => http.delete(`/admin/policies/${id}`),
   adminAppearance: () => get<{ custom_css: string }>('/admin/appearance'),
   adminUpdateAppearance: (customCss: string) => put('/admin/appearance', { custom_css: customCss }),

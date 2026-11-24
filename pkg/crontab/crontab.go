@@ -75,12 +75,14 @@ type State struct {
 	Params          map[string]string `json:"params,omitempty"`
 	IntervalSeconds int64             `json:"interval_seconds,omitempty"`
 	Status          Status            `json:"status"`
-	Done            int64             `json:"done,omitempty"`
-	Total           int64             `json:"total,omitempty"`
-	ETASeconds      int               `json:"eta_seconds,omitempty"`
-	StartedAt       *time.Time        `json:"started_at,omitempty"`
-	NextRun         *time.Time        `json:"next_run,omitempty"`
-	History         []Run             `json:"history"`
+	// Stopping is set once a stop was asked and the task has not wound down yet.
+	Stopping   bool       `json:"stopping,omitempty"`
+	Done       int64      `json:"done,omitempty"`
+	Total      int64      `json:"total,omitempty"`
+	ETASeconds int        `json:"eta_seconds,omitempty"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	NextRun    *time.Time `json:"next_run,omitempty"`
+	History    []Run      `json:"history"`
 }
 
 // Store persists periodic tasks' history (repository.SettingRepo fits).
@@ -316,6 +318,7 @@ func (t *task) state() State {
 	if t.running {
 		started := t.started
 		st.Status, st.Done, st.Total, st.StartedAt = StatusRunning, t.done, t.total, &started
+		st.Stopping = t.stopAsked
 		st.ETASeconds = queue.Estimate(t.started, t.done, t.total)
 	}
 	if !t.next.IsZero() {

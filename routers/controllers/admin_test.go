@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -396,5 +398,81 @@ func TestResumePolicyDeletion(t *testing.T) {
 	}
 	if _, err := repo.File.GetByIDUnscoped(ctx, ghost.ID, orphan.ID); err == nil {
 		t.Fatal("file of a deleted owner survived")
+	}
+}
+
+// TestDeleteOfflinePolicyMetadataOnly: a node that does not answer is not
+// asked to delete each object (a connection timeout apiece made deleting a
+// dead node take hours); only the metadata goes, and the usage endpoint says
+// the node is offline. A node that fails mid-way is given up on the same way.
+func TestDeleteOfflinePolicyMetadataOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		pingOK    bool
+		wantCalls int32
+	}{
+		{"offline from the start", false, 1}, // the ping only
+		{"fails on first delete", true, 2},   // ping, then one delete
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctl, mgr, user := ogEnv(t)
+			ctx := context.Background()
+			repo := ctl.dep.Repo
+			var calls atomic.Int32
+			slave := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				n := calls.Add(1)
+				if n == 1 && tc.pingOK {
+					_, _ = w.Write([]byte(`{"failed":[]}`))
+					return
+				}
+				http.Error(w, "down", http.StatusBadGateway)
+			}))
+			defer slave.Close()
+
+			gone, usePolicy := slavePolicy(t, ctl, &user)
+			usePolicy(gone.ID)
+			var ids []uint
+			for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+				f, err := mgr.WriteFile(ctx, user, nil, name, strings.NewReader("x"), 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids = append(ids, f.ID)
+			}
+			// The files were written locally; from here on the policy is a remote node.
+			if err := ctl.dep.DB.Exec("UPDATE storage_policies SET type = ?, server = ?, secret_key = ? WHERE id = ?",
+				model.PolicyTypeRemote, slave.URL, "s3cret", gone.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if !tc.pingOK {
+				cu, wu := authReq(user, "GET", "/admin/policies/x/usage", "")
+				cu.Params = gin.Params{{Key: "id", Value: strconv.Itoa(int(gone.ID))}}
+				ctl.AdminPolicyUsage(cu)
+				var usage struct{ Online bool }
+				if e := decode(t, wu); e.Code != serializer.CodeOK || json.Unmarshal(e.Data, &usage) != nil || usage.Online {
+					t.Fatalf("usage = %s, want offline", wu.Body.String())
+				}
+				calls.Store(0)
+			}
+
+			start := time.Now()
+			if n, err := mgr.DeletePolicy(ctx, gone.ID, nil); err != nil || n != 3 {
+				t.Fatalf("DeletePolicy = %d, %v; want 3 files", n, err)
+			}
+			if time.Since(start) > 5*time.Second {
+				t.Fatalf("took %s", time.Since(start))
+			}
+			if got := calls.Load(); got != tc.wantCalls {
+				t.Fatalf("slave got %d requests, want %d", got, tc.wantCalls)
+			}
+			for _, id := range ids {
+				if _, err := repo.File.GetByIDUnscoped(ctx, user.ID, id); err == nil {
+					t.Fatalf("file %d survived", id)
+				}
+			}
+			if _, err := repo.Policy.GetByID(ctx, gone.ID); err == nil {
+				t.Fatal("policy still exists")
+			}
+		})
 	}
 }

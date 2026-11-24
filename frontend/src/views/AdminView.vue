@@ -128,7 +128,10 @@ async function deletePolicy(p: AdminPolicy) {
   try {
     const usage = await api.adminPolicyUsage(p.id)
     let msg = t('admin.confirmDeletePolicy', { name: p.name })
-    if (usage.files > 0) msg += '\n\n' + t('admin.confirmDeletePolicyFiles', { n: usage.files })
+    // An offline node cannot erase what it stores: say plainly that only the
+    // listing goes, and the data stays on the node.
+    if (!usage.online) msg += '\n\n' + t('admin.confirmDeletePolicyOffline', { n: usage.files })
+    else if (usage.files > 0) msg += '\n\n' + t('admin.confirmDeletePolicyFiles', { n: usage.files })
     if (usage.groups > 0) msg += '\n\n' + t('admin.confirmDeletePolicyGroups', { n: usage.groups })
     if (!confirm(msg)) return
     await api.adminDeletePolicy(p.id)

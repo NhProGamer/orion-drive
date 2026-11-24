@@ -466,6 +466,12 @@ func (m *Manager) EmptyTrash(ctx context.Context, user *model.User) (int, error)
 
 // Purge permanently deletes files and their physical entities.
 func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error {
+	return m.purge(ctx, user, ids, map[uint]driver.Handler{})
+}
+
+// purge is Purge with the storage Handlers to use, keyed by policy id (see
+// removeEntityWith); PurgePolicy seeds it to make physical deletes best-effort.
+func (m *Manager) purge(ctx context.Context, user *model.User, ids []uint, dcache map[uint]driver.Handler) error {
 	all, err := m.expandSubtrees(ctx, user.ID, ids, true)
 	if err != nil {
 		return err
@@ -491,8 +497,7 @@ func (m *Manager) Purge(ctx context.Context, user *model.User, ids []uint) error
 	if err := m.repo.DirectLink.DeleteByFiles(ctx, user.ID, all); err != nil {
 		slog.Warn("purge: removing direct links failed", "error", err)
 	}
-	// One storage Handler per policy is reused across every entity in the batch.
-	dcache := map[uint]driver.Handler{}
+	// One storage Handler per policy (dcache) is reused across every entity in the batch.
 	var freed int64
 	for _, id := range all {
 		f, err := m.repo.File.GetByIDUnscoped(ctx, user.ID, id)

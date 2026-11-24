@@ -58,6 +58,7 @@
     "confirmDeleteGroup": "Supprimer le groupe « {name} » ?",
     "confirmDeletePolicy": "Supprimer la policy « {name} » ?",
     "confirmDeletePolicyFiles": "⚠ {n} fichier(s) stocké(s) sur cette policy seront supprimés définitivement, ainsi que les anciennes versions qui y sont stockées. Cette action est irréversible.",
+    "confirmDeletePolicyOffline": "⚠ Le nœud de stockage est HORS LIGNE : seules les métadonnées seront supprimées ({n} fichier(s), leurs versions, partages et liens). Les données stockées sur le nœud ne seront PAS effacées ; il faudra les supprimer à la main si le nœud revient.",
     "confirmDeletePolicyGroups": "{n} groupe(s) utilisant cette policy basculeront sur la policy par défaut.",
     "colEmail": "Email",
     "colGroup": "Groupe",
@@ -578,7 +579,8 @@
       "running": "En cours",
       "done": "Terminé",
       "failed": "Échec",
-      "stopped": "Arrêté"
+      "stopped": "Arrêté",
+      "stopping": "Arrêt en cours…"
     },
     "progress": "{done} / {total} · {pct} %",
     "working": "En cours…",
@@ -613,6 +615,7 @@
         "title": "Suppression de la policy « {name} »",
         "result": "{n} fichier(s) supprimé(s)"
       }
-    }
+    },
+    "metadataOnly": "métadonnées uniquement"
   }
 }

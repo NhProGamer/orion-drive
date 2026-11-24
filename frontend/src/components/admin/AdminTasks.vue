@@ -108,7 +108,10 @@ const BADGE: Record<string, string> = { running: 'run', done: 'ok', failed: 'dan
           <div class="task-main">
             <div class="task-name">
               {{ title(tk) }}
-              <span class="badge task-badge" :class="BADGE[tk.status]">{{ t(`adminTasks.status.${tk.status}`) }}</span>
+              <span class="badge task-badge" :class="tk.stopping ? 'warn' : BADGE[tk.status]">
+                {{ tk.stopping ? t('adminTasks.status.stopping') : t(`adminTasks.status.${tk.status}`) }}
+              </span>
+              <span v-if="tk.params?.offline" class="badge task-badge warn">{{ t('adminTasks.metadataOnly') }}</span>
             </div>
             <div class="task-desc">{{ desc(tk) }}</div>
           </div>
@@ -121,7 +124,7 @@ const BADGE: Record<string, string> = { running: 'run', done: 'ok', failed: 'dan
             >
               <Play :size="14" />{{ t('adminTasks.run') }}
             </button>
-            <button v-if="tk.status === 'running'" class="btn btn-secondary task-stop" :disabled="busy[tk.id]" @click="act(tk, 'stop')">
+            <button v-if="tk.status === 'running'" class="btn btn-secondary task-stop" :disabled="busy[tk.id] || tk.stopping" @click="act(tk, 'stop')">
               <Square :size="14" />{{ t('adminTasks.stop') }}
             </button>
           </div>
